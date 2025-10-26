@@ -34,7 +34,13 @@ jobs:
         run: |
           [ -f debug-overlay.js ] || echo "// noop overlay" > debug-overlay.js
 
-      # Build Vite con base /gestore/ (senza toccare i tuoi file in repo)
+      - name: Patch known AI Studio import typos
+        run: |
+          # Corregge "import React, 'react';"
+          grep -RIl "import React, 'react';" . | xargs -r sed -i "s/import React, 'react';/import React from 'react';/g"
+          # Corregge "import React, from 'react';"
+          grep -RIl "import React, from 'react';" . | xargs -r sed -i "s/import React, from 'react';/import React from 'react';/g"
+
       - name: Build (Vite for Pages)
         env:
           VITE_GEMINI_API_KEY: ${{ secrets.VITE_GEMINI_API_KEY }}
