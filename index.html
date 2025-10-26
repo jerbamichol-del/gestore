@@ -61,7 +61,7 @@
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/gestore/service-worker.js?v=6', { scope: '/gestore/' })
+          navigator.serviceWorker.register('/gestore/service-worker.js?v=7', { scope: '/gestore/' })
             .then(r => console.log('SW scope:', r.scope))
             .catch(console.error);
         });
