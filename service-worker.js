@@ -163,8 +163,5 @@ self.addEventListener('fetch', event => {
 });
 
 // ✅ Update su richiesta dal banner (serve per mostrare “Aggiornamento disponibile”)
-self.addEventListener('message', (event) => {
-  if (event.data && (event.data === 'SKIP_WAITING' || event.data.type === 'SKIP_WAITING')) {
-    
-  }
-});
+
+self.addEventListener('message', (event) => { if (event.data && (event.data === 'SKIP_WAITING' || event.data.type === 'SKIP_WAITING')) { self.skipWaiting(); } });
