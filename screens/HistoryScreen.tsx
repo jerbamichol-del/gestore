@@ -1,4 +1,5 @@
 
+
 import React, { useMemo, useState } from 'react';
 import { Expense, Account } from '../types';
 import { getCategoryStyle } from '../utils/categoryStyles';
@@ -183,7 +184,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({ expenses, accounts, onEdi
         <div className="h-full flex flex-col animate-fade-in-up">
             <div className="flex-shrink-0 pt-4 md:pt-8">
                 <div className="mb-6 px-4 md:px-8">
-                    <h1 className="text-2xl font-bold text-slate-800">Storico Spese</h1>
+                    <h1 className="text-xl font-bold text-slate-700">Storico Spese</h1>
                 </div>
             </div>
 
