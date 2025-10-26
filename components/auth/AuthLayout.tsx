@@ -1,5 +1,5 @@
 import React from 'react';
-import { WalletIcon } from '../icons/WalletIcon';
+import { AppLogoIcon } from '../icons/AppLogoIcon';
 
 interface AuthLayoutProps {
   children: React.ReactNode;
@@ -63,18 +63,12 @@ const Header: React.FC = () => (
   <div style={{ textAlign: 'center' }}>
     <div
       style={{
-        background: '#fff',
-        padding: 16,
-        borderRadius: 16,
-        boxShadow: '0 6px 16px rgba(0,0,0,0.08)',
         margin: '0 auto 12px',
         width: 64,
         height: 64,
-        display: 'grid',
-        placeItems: 'center',
       }}
     >
-      <WalletIcon className="w-12 h-12 text-indigo-600" />
+      <AppLogoIcon style={{ width: '100%', height: '100%' }} />
     </div>
     <h1 style={{ fontSize: 28, fontWeight: 800, color: '#0f172a', margin: 0 }}>
       Gestore Spese
