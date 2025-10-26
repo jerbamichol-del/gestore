@@ -2,6 +2,7 @@
 importScripts('https://cdn.jsdelivr.net/npm/idb@8/build/iife/index-min.js');
 
 const CACHE_NAME = 'expense-manager-cache-v31';
+// Aggiunta la pagina di share-target al caching
 const urlsToCache = [
   '/',
   '/index.html',
@@ -9,6 +10,7 @@ const urlsToCache = [
   '/icon-192.svg',
   '/icon-512.svg',
   '/share-target/',
+  // Key CDN dependencies
   'https://cdn.tailwindcss.com',
   'https://esm.sh/react@18.3.1',
   'https://esm.sh/react-dom@18.3.1/client',
@@ -17,7 +19,7 @@ const urlsToCache = [
   'https://cdn.jsdelivr.net/npm/idb@8/+esm'
 ];
 
-// --- Helper IndexedDB (come prima) ---
+// --- Funzioni Helper per IndexedDB (replicate da db.ts per l'uso nel Service Worker) ---
 const DB_NAME = 'expense-manager-db';
 const STORE_NAME = 'offline-images';
 const DB_VERSION = 1;
@@ -32,107 +34,125 @@ const getDb = () => {
   });
 };
 
-const fileToBase64 = (file) => new Promise((resolve, reject) => {
-  const reader = new FileReader();
-  reader.readAsDataURL(file);
-  reader.onload = () => resolve(reader.result.split(',')[1]);
-  reader.onerror = (error) => reject(error);
-});
+const fileToBase64 = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = (error) => reject(error);
+  });
+};
 
-// Calcola il path di scope (es. "/gestore/")
-const SCOPE_PATH = new URL(self.registration.scope).pathname;
-
-// INSTALL: niente skipWaiting automatico → chiederemo noi all’utente
-self.addEventListener('install', (event) => {
+// Install event
+self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then((cache) => cache.addAll(urlsToCache))
-      // NON: 
+      .then(cache => {
+        console.log('Opened cache, caching app shell');
+        return cache.addAll(urlsToCache);
+      })
+      
   );
 });
 
-// ACTIVATE: prendi controllo subito delle pagine esistenti
-self.addEventListener('activate', (event) => {
-  const whitelist = [CACHE_NAME];
+// Activate event
+self.addEventListener('activate', event => {
+  const cacheWhitelist = [CACHE_NAME];
   event.waitUntil(
-    caches.keys().then((names) =>
-      Promise.all(names.map((n) => (whitelist.includes(n) ? undefined : caches.delete(n))))
-    ).then(() => self.clients.claim())
+    caches.keys().then(cacheNames => {
+      return Promise.all(
+        cacheNames.map(cacheName => {
+          if (cacheWhitelist.indexOf(cacheName) === -1) {
+            return caches.delete(cacheName);
+          }
+        })
+      );
+    }).then(() => self.clients.claim())
   );
 });
 
-// MESSAGGI dalla pagina: attiva subito il nuovo worker (update su richiesta)
-self.addEventListener('message', (event) => {
-  if (event.data && (event.data === 'SKIP_WAITING' || event.data.type === 'SKIP_WAITING')) {
-    self.skipWaiting();
-  }
-});
-
-self.addEventListener('fetch', (event) => {
+self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // --- Gestione Share Target (supporta sia "/share-target/" che "/gestore/share-target/")
-  const shareTargetA = '/share-target/';
-  const shareTargetB = SCOPE_PATH.replace(/\/?$/, '/') + 'share-target/';
-
-  if (event.request.method === 'POST' && (url.pathname === shareTargetA || url.pathname === shareTargetB)) {
-    // Redirect immediato alla home nello scope corretto
-    const home = SCOPE_PATH || '/';
-    event.respondWith(Response.redirect(home));
-
-    event.waitUntil((async function () {
+  // --- Gestione Share Target ---
+  if (event.request.method === 'POST' && url.pathname === '/share-target/') {
+    event.respondWith(Response.redirect('/')); // Rispondi subito con un redirect
+    
+    event.waitUntil(async function() {
       try {
         const formData = await event.request.formData();
         const file = formData.get('screenshot');
-
-        if (!file || !file.type?.startsWith('image/')) {
-          console.warn('Share target: no valid image file.');
-          return;
+        
+        if (!file || !file.type.startsWith('image/')) {
+            console.warn('Share target: No valid image file received.');
+            return;
         }
 
         const base64Image = await fileToBase64(file);
+        
         const db = await getDb();
-        await db.add(STORE_NAME, { id: crypto.randomUUID(), base64Image, mimeType: file.type });
+        await db.add(STORE_NAME, {
+            id: crypto.randomUUID(),
+            base64Image,
+            mimeType: file.type,
+        });
+        
+        console.log('Image from share target saved to IndexedDB.');
 
-        const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+        // Cerca un client (tab/finestra) esistente dell'app e mettilo a fuoco
+        const clients = await self.clients.matchAll({
+            type: 'window',
+            includeUncontrolled: true,
+        });
+
         if (clients.length > 0) {
-          await clients[0].focus();
+            await clients[0].focus();
         } else {
-          self.clients.openWindow(home);
+            self.clients.openWindow('/');
         }
-      } catch (err) {
-        console.error('Error handling share target:', err);
+      } catch (error) {
+          console.error('Error handling share target:', error);
       }
-    })());
+    }());
+    return;
+  }
+  
+  if (event.request.method !== 'GET') {
     return;
   }
 
-  if (event.request.method !== 'GET') return;
-
-  // Navigations: network first con fallback a cache
+  // Strategy: Network falling back to cache for navigation
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request)
-        .then((res) => {
-          const clone = res.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-          return res;
+        .then(response => {
+          const responseToCache = response.clone();
+          caches.open(CACHE_NAME).then(cache => {
+            cache.put(event.request, responseToCache);
+          });
+          return response;
         })
         .catch(() => caches.match(event.request))
     );
     return;
   }
 
-  // Assets: cache first
+  // Strategy: Cache first for all other assets
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request).then((res) => {
-        if (!res || res.status !== 200 || res.type === 'opaque') return res;
-        const clone = res.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-        return res;
-      });
-    })
+    caches.match(event.request)
+      .then(cachedResponse => {
+        return cachedResponse || fetch(event.request).then(
+          networkResponse => {
+            if (!networkResponse || networkResponse.status !== 200 || networkResponse.type === 'opaque') {
+              return networkResponse;
+            }
+            const responseToCache = networkResponse.clone();
+            caches.open(CACHE_NAME).then(cache => {
+              cache.put(event.request, responseToCache);
+            });
+            return networkResponse;
+          }
+        );
+      })
   );
-});
+});self.addEventListener('message', (event) => { if (event.data && (event.data === 'SKIP_WAITING' || event.data.type === 'SKIP_WAITING')) { self.skipWaiting(); } });
