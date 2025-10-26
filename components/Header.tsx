@@ -44,9 +44,12 @@ const Header: React.FC<HeaderProps> = ({ pendingSyncs, isOnline, onLogout, activ
         <div className="py-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
               <WalletIcon className="w-8 h-8 text-indigo-600" />
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-slate-800">
-                Gestore Spese
-              </h1>
+              <div className="flex items-baseline gap-2">
+                <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-slate-800">
+                  Gestore Spese
+                </h1>
+                <span className="text-base font-bold text-indigo-500">1</span>
+              </div>
           </div>
           <div className="flex items-center gap-4">
               {!isOnline && (
