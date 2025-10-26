@@ -86,74 +86,34 @@ const AuthLayout: React.FC<AuthLayoutProps> = ({ children }) => {
   useStableViewportHeight();
   const isStudio = useIsStudio();
 
+  const mainContainerStyle: React.CSSProperties = {
+    minHeight: 'calc(var(--vh, 1vh) * 100)',
+    height: '100dvh',
+    background: '#f1f5f9',
+    fontFamily:
+      'system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif',
+    WebkitTapHighlightColor: 'transparent',
+    display: 'flex',
+    flexDirection: 'column',
+    padding: 16,
+    overflow: 'auto', // Allow scrolling on small viewports
+  };
+  
   if (isStudio) {
-    // ===== Modalità AI Studio (iframe): bottom-aligned + fixed full screen =====
-    return (
-      <div
-        style={{
-          position: 'fixed',
-          inset: 0,
-          minHeight: 'calc(var(--vh, 1vh) * 100)',
-          height: '100dvh',
-          background: '#f1f5f9',
-          fontFamily:
-            'system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif',
-          WebkitTapHighlightColor: 'transparent',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'visible',
-        }}
-      >
-        <div style={{ flex: 1, minHeight: '24px' }} /> {/* Spacer */}
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'center',
-            paddingBottom: 16,
-            overflow: 'visible',
-          }}
-        >
-          <Header />
-        </div>
-
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'center',
-            padding: '0 16px',
-            paddingBottom: 'clamp(16px, 4vh, 32px)',
-            overflow: 'visible',
-          }}
-        >
-          <div style={{ width: '100%', maxWidth: 480 }}>
-            <Card>{children}</Card>
-          </div>
-        </div>
-      </div>
-    );
+    mainContainerStyle.position = 'fixed';
+    mainContainerStyle.inset = 0;
   }
 
-  // ===== Modalità App/Export: bottom-aligned =====
+  // ===== Layout unificato e centrato =====
   return (
     <div
-      style={{
-        minHeight: 'calc(var(--vh, 1vh) * 100)',
-        height: '100dvh',
-        background: '#f1f5f9',
-        fontFamily:
-          'system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif',
-        WebkitTapHighlightColor: 'transparent',
-        display: 'flex',
-        flexDirection: 'column',
-        padding: 16,
-        overflow: 'visible',
-      }}
+      style={mainContainerStyle}
     >
       <div
         style={{
           display: 'flex',
           flex: 1,
-          alignItems: 'flex-end',
+          alignItems: 'center', // Centrato verticalmente
           justifyContent: 'center',
           overflow: 'visible',
           position: 'relative',
