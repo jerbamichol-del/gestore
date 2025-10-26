@@ -21,12 +21,12 @@ jobs:
         with:
           node-version: 20
       - run: npm install
+
       - name: Build (Vite)
         run: npm run build
         env:
-        VITE_GEMINI_API_KEY: ${{ AIzaSyC6J8z8MYJFt5eGLSLJOvMCViLgXeypIvc }}
+          VITE_GEMINI_API_KEY: ${{ secrets.VITE_GEMINI_API_KEY }}
 
-      # Copia asset PWA dalla root nella build
       - name: Copy PWA root assets to dist
         run: |
           mkdir -p dist/icons
