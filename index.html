@@ -5,12 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Gestore Spese - Nuovo Inizio</title>
 
-    <!-- Manifest relativo (necessario su GitHub Pages in /gestore/) -->
+    <!-- Manifest relativo (obbligatorio per Pages in /gestore/) -->
     <link rel="manifest" href="./manifest.json" />
     <meta name="theme-color" content="#4f46e5" />
+    <meta name="application-name" content="Gestore Spese" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Gestore" />
 
-    <script type="module" src="./debug-overlay.js"></script>
-    <!-- Tailwind da CDN (ok) -->
+    <!-- Icone (opzionali ma utili per iOS) -->
+    <link rel="icon" href="./icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+
+    <!-- Tailwind da CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
 
     <style>
@@ -22,13 +28,12 @@
         padding-left: env(safe-area-inset-left, 0px);
         overscroll-behavior-y: contain;
       }
-      /* Fix for browser autofill background color */
       input:-webkit-autofill,
       input:-webkit-autofill:hover,
       input:-webkit-autofill:focus,
       input:-webkit-autofill:active {
         -webkit-box-shadow: 0 0 0 30px white inset !important;
-        -webkit-text-fill-color: #0f172a !important; /* slate-900 */
+        -webkit-text-fill-color: #0f172a !important;
       }
       @keyframes fade-in-up { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
       .animate-fade-in-up { animation: fade-in-up 0.12s ease-out forwards; }
@@ -36,13 +41,12 @@
       .animate-fade-in-down { animation: fade-in-down 0.2s ease-out forwards; }
       @keyframes pulse-subtle { 0%,100% { transform: scale(1) translateY(-50%); opacity: .8; } 50% { transform: scale(1.05) translateY(-50%); opacity: 1; } }
       .animate-pulse-subtle { animation: pulse-subtle 2.5s ease-in-out infinite; }
-
-      .recharts-pie-sector:focus, .recharts-pie-sector:focus-visible,
-      .recharts-pie-sector path:focus, .recharts-pie-sector path:focus-visible { outline: none !important; }
-
+      .recharts-pie-sector:focus,
+      .recharts-pie-sector:focus-visible,
+      .recharts-pie-sector path:focus,
+      .recharts-pie-sector path:focus-visible { outline: none !important; }
       .swipe-container { display: flex; overflow-x: hidden; width: 100%; will-change: transform; }
       .swipe-view { width: 100%; flex-shrink: 0; will-change: transform; }
-
       [contenteditable][data-placeholder]:empty::before { content: attr(data-placeholder); color: #94a3b8; pointer-events: none; }
       .num-pad { touch-action: pan-y; overscroll-behavior-x: contain; -webkit-user-select: none; user-select: none; }
     </style>
@@ -50,14 +54,14 @@
   <body class="bg-slate-100 overflow-hidden">
     <div id="root"></div>
 
-    <!-- ENTRY: usa il file reale in root -->
+    <!-- Entry dell'app -->
     <script type="module" src="./index.tsx"></script>
 
-    <!-- Service Worker relativo -->
+    <!-- Service Worker con scope limitato a ./ (la sottocartella /gestore/) -->
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('./service-worker.js')
+          navigator.serviceWorker.register('./service-worker.js', { scope: './' })
             .then(r => console.log('SW scope:', r.scope))
             .catch(console.error);
         });
