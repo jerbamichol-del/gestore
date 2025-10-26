@@ -1,0 +1,94 @@
+name: PWA Deploy (self-healing)
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency: pages
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+
+      # Se index.tsx importa ./debug-overlay.js ma il file non c'è, creiamo un no-op
+      - name: Ensure no-op debug overlay
+        run: |
+          [ -f debug-overlay.js ] || echo "// noop overlay" > debug-overlay.js
+
+      # 🔧 Patch automatica dei typo che AI Studio ogni tanto introduce
+      - name: Patch known AI Studio import typos
+        run: |
+          grep -RIl "import React, 'react';" . | xargs -r sed -i "s/import React, 'react';/import React from 'react';/g"
+          grep -RIl "import React, from 'react';" . | xargs -r sed -i "s/import React, from 'react';/import React from 'react';/g"
+
+      # Build Vite con base /gestore/ (senza toccare i tuoi file)
+      - name: Build (Vite for Pages)
+        env:
+          VITE_GEMINI_API_KEY: ${{ secrets.VITE_GEMINI_API_KEY }}
+        run: |
+          cat > vite.pages.config.mjs << 'EOF'
+          import react from '@vitejs/plugin-react'
+          import { defineConfig } from 'vite'
+          export default defineConfig({
+            base: '/gestore/',
+            plugins: [react()],
+            build: { outDir: 'dist' },
+            define: { 'process.env.API_KEY': JSON.stringify(process.env.VITE_GEMINI_API_KEY || '') },
+          })
+          EOF
+          npx vite build -c vite.pages.config.mjs
+
+      # Copia manifest/SW/icone e patcha manifest per /gestore/ preservando share_target e icons
+      - name: Copy PWA assets & patch
+        run: |
+          mkdir -p dist
+          [ -f manifest.json ] && cp -v manifest.json dist/ || true
+          [ -f service-worker.js ] && cp -v service-worker.js dist/ || true
+          for f in icon-192.svg icon-512.svg; do [ -f "$f" ] && cp -v "$f" dist/ || true; done
+          [ -d icons ] && cp -rv icons dist/ || true
+
+          node -e "
+          const fs=require('fs'); const p='dist/manifest.json';
+          if (!fs.existsSync(p)) process.exit(0);
+          const m=JSON.parse(fs.readFileSync(p,'utf8'));
+          m.id='/gestore/'; m.start_url='/gestore/'; m.scope='/gestore/';
+          if (Array.isArray(m.icons)) {
+            m.icons=m.icons.map(ic=>{ if(ic?.src){ if(!ic.src.startsWith('/gestore/')){ const clean=ic.src.replace(/^\\.?\\/*/,''); ic.src='/gestore/'+clean.replace(/^\\//,''); } } return ic; });
+          }
+          if (m.share_target?.action){ const a=m.share_target.action; m.share_target.action = a.startsWith('/gestore/') ? a : '/gestore/'+a.replace(/^\\/+/, ''); }
+          fs.writeFileSync(p, JSON.stringify(m,null,2));
+          "
+
+      # Patch index.html per manifest/SW su /gestore/ + fallback SPA
+      - name: Patch index.html & SPA fallback
+        run: |
+          RUN="${{ github.run_number }}"
+          sed -i -E "s#<link rel=\"manifest\"[^>]*>#<link rel=\"manifest\" href=\"/gestore/manifest.json?v=${RUN}\" />#" dist/index.html || true
+          sed -i -E "s#serviceWorker\\.register\\([^)]*\\)#serviceWorker.register('/gestore/service-worker.js?v=${RUN}', { scope: '/gestore/' })#" dist/index.html || true
+          cp -v dist/index.html dist/404.html
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
