@@ -24,7 +24,7 @@ const urlsToCache = [
   'https://cdn.jsdelivr.net/npm/idb@8/+esm'
 ];
 
-// --- Funzioni Helper per IndexedDB (replicate da db.ts per l'uso nel Service Worker) ---
+// --- Funzioni Helper per IndexedDB ---
 const DB_NAME = 'expense-manager-db';
 const STORE_NAME = 'offline-images';
 const DB_VERSION = 1;
@@ -56,7 +56,7 @@ self.addEventListener('install', event => {
         console.log('Opened cache, caching app shell', { scope: self.registration.scope, BASE });
         return cache.addAll(urlsToCache);
       })
-      // ❌ Niente skipWaiting automatico: lo facciamo solo su richiesta con il banner
+      // ❌ niente skipWaiting automatico: lo facciamo solo su richiesta con il banner
   );
 });
 
@@ -142,7 +142,7 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Strategy: Cache first for all other assets
+  // Strategy: Cache first per gli altri asset
   event.respondWith(
     caches.match(event.request)
       .then(cachedResponse => {
@@ -162,7 +162,7 @@ self.addEventListener('fetch', event => {
   );
 });
 
-// ✅ Update su richiesta dal banner
+// ✅ Update su richiesta dal banner (serve per mostrare “Aggiornamento disponibile”)
 self.addEventListener('message', (event) => {
   if (event.data && (event.data === 'SKIP_WAITING' || event.data.type === 'SKIP_WAITING')) {
     self.skipWaiting();
