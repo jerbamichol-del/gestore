@@ -6,7 +6,7 @@
     <title>Gestore Spese - Nuovo Inizio</title>
 
     <!-- Manifest relativo (obbligatorio per Pages in /gestore/) -->
-    <link rel="manifest" href="./manifest.json" />
+    <link rel="manifest" href="/gestore/manifest.json?v=6" />
     <meta name="theme-color" content="#4f46e5" />
     <meta name="application-name" content="Gestore Spese" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -61,7 +61,7 @@
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('./service-worker.js', { scope: './' })
+          navigator.serviceWorker.register('/gestore/service-worker.js?v=6', { scope: '/gestore/' })
             .then(r => console.log('SW scope:', r.scope))
             .catch(console.error);
         });
