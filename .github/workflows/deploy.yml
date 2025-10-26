@@ -25,7 +25,7 @@ jobs:
       - name: Build (Vite)
         run: npm run build
         env:
-          VITE_GEMINI_API_KEY: ${{ AIzaSyC6J8z8MYJFt5eGLSLJOvMCViLgXeypIvc }}
+          VITE_GEMINI_API_KEY: ${{ secrets.VITE_GEMINI_API_KEY }}
 
       - name: Copy PWA root assets to dist
         run: |
