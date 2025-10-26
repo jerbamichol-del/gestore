@@ -1,3 +1,4 @@
+// Mostra errori JS/Promise in pagina
 (function () {
   function show(msg) {
     let box = document.getElementById('__debug_overlay__');
