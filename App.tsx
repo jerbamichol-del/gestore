@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Expense, Account } from './types';
 import { useLocalStorage } from './hooks/useLocalStorage';
@@ -342,7 +343,7 @@ const handleInstallClick = async () => {
                   transition: isSwiping ? 'none' : 'transform 0.2s ease-out',
                 }}
             >
-                <div className="w-1/2 h-full overflow-y-auto p-4 md:p-8 space-y-6 swipe-view" style={{ touchAction: 'pan-y' }}>
+                <div className="w-1/2 h-full overflow-y-auto space-y-6 swipe-view" style={{ touchAction: 'pan-y' }}>
                     <Dashboard expenses={expenses} />
                     <PendingImages 
                         images={pendingImages}

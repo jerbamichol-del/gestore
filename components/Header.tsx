@@ -1,5 +1,4 @@
 
-
 import React from 'react';
 import { WalletIcon } from './icons/WalletIcon';
 import { PhotoIcon } from './icons/PhotoIcon';
@@ -40,8 +39,8 @@ const NavItem = ({ label, icon, isActive, onClick }: { label: string, icon: Reac
 const Header: React.FC<HeaderProps> = ({ pendingSyncs, isOnline, onLogout, activeView, onNavigate, onInstallClick, installPromptEvent }) => {
   return (
     <header className="bg-white shadow-md sticky top-0 z-20">
-      <div className="px-4 md:px-8">
-        <div className="py-4 flex items-center justify-between gap-3">
+      <div>
+        <div className="py-4 flex items-center justify-between gap-3 px-4 md:px-8">
           <div className="flex items-center gap-3">
               <WalletIcon className="w-8 h-8 text-indigo-600" />
               <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-slate-800">

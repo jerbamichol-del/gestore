@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 
 type DateFilter = 'all' | '7d' | '30d' | '6m' | '1y';
@@ -66,7 +67,7 @@ const CustomDateFilter: React.FC<{
   };
 
   return (
-    <div className="flex items-center justify-center gap-2 py-3 bg-slate-100 border border-slate-400 h-[51px] box-border">
+    <div className="flex items-center justify-center gap-2 py-3 bg-slate-100 border border-slate-400 h-[51px] box-border px-2">
       <div className="flex items-center gap-1 flex-1 min-w-0">
         <label htmlFor="start-date" className="text-sm font-semibold text-slate-700 shrink-0">Da:</label>
         <input
@@ -199,7 +200,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = ({
   return (
     <div className="flex-shrink-0 z-30">
       <div className="bg-white/95 backdrop-blur-sm shadow-[0_-8px_20px_-5px_rgba(0,0,0,0.08)]">
-        <div className="max-w-4xl mx-auto px-4 pt-3 pb-2 rounded-t-2xl">
+        <div className="mx-auto pt-3 pb-2 rounded-t-2xl">
           <div
             className="overflow-hidden"
             ref={swipeContainerRef}
@@ -214,14 +215,14 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = ({
                 transition: dragging ? 'none' : 'transform 0.16s ease-out'
               }}
             >
-              <div className="w-1/2 flex-shrink-0">
+              <div className="w-1/2 flex-shrink-0 px-4">
                 <QuickFilterTable
                   onSelect={onSelectQuickFilter}
                   currentValue={currentQuickFilter}
                   isCustomActive={isCustomRangeActive}
                 />
               </div>
-              <div className="w-1/2 flex-shrink-0">
+              <div className="w-1/2 flex-shrink-0 px-4">
                 <CustomDateFilter
                   onChange={onCustomRangeChange}
                   currentRange={currentCustomRange}

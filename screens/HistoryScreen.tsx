@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState } from 'react';
 import { Expense, Account } from '../types';
 import { getCategoryStyle } from '../utils/categoryStyles';
@@ -19,7 +20,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
     const style = getCategoryStyle(expense.category);
     const accountName = accounts.find(a => a.id === expense.accountId)?.name || 'Sconosciuto';
     return (
-        <div className="flex items-center gap-4 py-3 px-2">
+        <div className="flex items-center gap-4 py-3 px-4">
             <span className={`w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center ${style.bgColor}`}>
                 <style.Icon className={`w-6 h-6 ${style.color}`} />
             </span>
@@ -180,23 +181,23 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({ expenses, accounts, onEdi
 
     return (
         <div className="h-full flex flex-col animate-fade-in-up">
-            <div className="flex-shrink-0 px-4 md:px-8 pt-4 md:pt-8">
-                <div className="mb-6">
+            <div className="flex-shrink-0 pt-4 md:pt-8">
+                <div className="mb-6 px-4 md:px-8">
                     <h1 className="text-2xl font-bold text-slate-800">Storico Spese</h1>
                 </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-4 md:px-8 pb-28" style={{ touchAction: 'pan-y' }}>
+            <div className="flex-1 overflow-y-auto pb-28" style={{ touchAction: 'pan-y' }}>
                 {historyData.length > 0 ? (
                     <div className="space-y-6">
                         {historyData.map(({ weekKey, weekLabel, weekTotal, days }) => (
                             <div key={weekKey}>
-                                <div className="p-4 flex justify-between items-baseline bg-slate-100 border-b border-slate-200">
+                                <div className="p-4 flex justify-between items-baseline bg-slate-100 border-b border-slate-200 sticky top-0 z-10">
                                     <h2 className="text-xl font-bold text-slate-700 capitalize">{weekLabel}</h2>
                                     <p className="text-lg font-semibold text-indigo-600">{formatCurrency(weekTotal)}</p>
                                 </div>
                                 
-                                <div className="bg-white rounded-b-xl shadow-sm">
+                                <div className="bg-white">
                                     {days.map(({ date, dailyTotal, items }) => (
                                         <div key={date} className="p-2">
                                             <div className="flex justify-between items-center py-2 px-2">
@@ -223,7 +224,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({ expenses, accounts, onEdi
                         ))}
                     </div>
                 ) : (
-                    <div className="text-center text-slate-500 py-20 bg-white rounded-2xl shadow-lg">
+                    <div className="text-center text-slate-500 py-20 bg-white rounded-2xl shadow-lg mx-4 md:mx-8">
                         <p className="text-lg">{noExpensesMessage.title}</p>
                         <p className="text-sm mt-2">{noExpensesMessage.subtitle}</p>
                     </div>
