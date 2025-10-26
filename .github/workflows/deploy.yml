@@ -1,4 +1,4 @@
-name: PWA Deploy (Vite)
+name: PWA Deploy (self-healing)
 
 on:
   push:
@@ -16,31 +16,70 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm install
 
-      - name: Build (Vite)
-        run: npm run build
+      - name: Install deps
+        run: npm install
+
+      # Overlay: se index.tsx importa ./debug-overlay.js e il file non c'è, creiamo un no-op.
+      - name: Ensure no-op debug overlay
+        run: |
+          [ -f debug-overlay.js ] || echo "// noop overlay in CI" > debug-overlay.js
+
+      # Build con una config Vite "effimera" fatta apposta per Pages
+      - name: Build with Pages config
         env:
           VITE_GEMINI_API_KEY: ${{ secrets.VITE_GEMINI_API_KEY }}
-
-      - name: Copy PWA root assets to dist
         run: |
-          mkdir -p dist/icons
+          cat > vite.pages.config.mjs << 'EOF'
+          import react from '@vitejs/plugin-react'
+          import { defineConfig } from 'vite'
+
+          export default defineConfig({
+            base: '/gestore/',
+            plugins: [react()],
+            build: { outDir: 'dist' },
+            // Se nel codice c'è process.env.API_KEY, lo rimpiazziamo a build time.
+            define: {
+              'process.env.API_KEY': JSON.stringify(process.env.VITE_GEMINI_API_KEY || ''),
+            },
+          })
+          EOF
+
+          npx vite build -c vite.pages.config.mjs
+
+      # Patch post-build: link manifest e service worker a /gestore/ e bump cache
+      - name: Patch dist/index.html for Pages
+        run: |
+          RUN="${{ github.run_number }}"
+          # Link manifest a /gestore/ con cache-bust
+          sed -i -E "s#<link rel=\"manifest\"[^>]*>#<link rel=\"manifest\" href=\"/gestore/manifest.json?v=${RUN}\" />#" dist/index.html || true
+          # Forza registrazione SW su /gestore/ con scope corretto e cache-bust
+          sed -i -E "s#serviceWorker\\.register\\([^)]*\\)#serviceWorker.register('/gestore/service-worker.js?v=${RUN}', { scope: '/gestore/' })#" dist/index.html || true
+
+      # Copia asset PWA dalla root nella build (manifest, sw, icone)
+      - name: Copy PWA assets
+        run: |
+          mkdir -p dist
           [ -f manifest.json ] && cp -v manifest.json dist/ || true
           [ -f service-worker.js ] && cp -v service-worker.js dist/ || true
-          for f in icon-192.png icon-512.png icon-192.svg icon-512.svg; do
+          # Se usi SVG in root:
+          for f in icon-192.svg icon-512.svg; do
             [ -f "$f" ] && cp -v "$f" dist/ || true
           done
-          [ -d icons ] && cp -rv icons/. dist/icons/ || true
+          # Se un domani metti PNG in /icons
+          [ -d icons ] && cp -rv icons dist/ || true
+          # Fallback SPA (refresh su rotte client)
+          cp -v dist/index.html dist/404.html
 
-      - name: SPA fallback
-        run: cp -v dist/index.html dist/404.html
-
-      - uses: actions/upload-pages-artifact@v3
+      - name: Upload artifact to Pages
+        uses: actions/upload-pages-artifact@v3
         with:
           path: dist
 
