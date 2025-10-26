@@ -1,4 +1,4 @@
-import React from 'react';
+import React, 'react';
 import App from './App';
 import LoginScreen from './screens/LoginScreen';
 import SetupScreen from './screens/SetupScreen';

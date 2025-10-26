@@ -25,9 +25,9 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
             </span>
             <div className="flex-grow min-w-0">
                 <p className="font-semibold text-slate-800 truncate" title={expense.description}>{expense.description || 'Senza descrizione'}</p>
-                <p className="text-sm text-slate-500">{expense.subcategory || style.label} • {accountName}</p>
+                <p className="text-sm text-slate-500 truncate">{expense.subcategory || style.label} • {accountName}</p>
             </div>
-            <p className="font-bold text-slate-900 text-lg text-right shrink-0">{formatCurrency(Number(expense.amount) || 0)}</p>
+            <p className="font-bold text-slate-900 text-lg text-right shrink-0 whitespace-nowrap">{formatCurrency(Number(expense.amount) || 0)}</p>
             <div className="flex items-center gap-1">
                  <button onClick={() => onEdit(expense)} className="p-2 text-slate-500 hover:text-indigo-600 rounded-full hover:bg-indigo-50 transition-colors" aria-label="Modifica">
                     <PencilSquareIcon className="w-5 h-5" />

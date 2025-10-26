@@ -1,25 +1,13 @@
-import './debug-overlay.js';
 import React from 'react';
-import { createRoot } from 'react-dom/client';
+import ReactDOM from 'react-dom/client';
+import AuthGate from './AuthGate';
 
-const el = document.getElementById('root')!;
-const root = createRoot(el);
+const rootElement = document.getElementById('root');
+if (!rootElement) {
+  throw new Error("Could not find root element to mount to");
+}
 
-// mostro qualcosa SUBITO
+const root = ReactDOM.createRoot(rootElement);
 root.render(
-  <div style={{padding:16,fontFamily:'system-ui'}}>Caricamento app…</div>
+  <AuthGate />
 );
-
-// import dinamico dell’app vera
-import('./App')
-  .then(({ default: App }) => {
-    root.render(
-      <React.StrictMode>
-        <App onLogout={() => { /* TODO */ }} />
-      </React.StrictMode>
-    );
-  })
-  .catch((e) => {
-    el.innerHTML = `<pre style="white-space:pre-wrap;color:#b91c1c;background:#fee2e2;padding:8px">Boot error: ${String(e)}</pre>`;
-    console.error(e);
-  });

@@ -66,20 +66,20 @@ const CustomDateFilter: React.FC<{
   };
 
   return (
-    <div className="flex items-center justify-center gap-4 py-3 bg-slate-100 border border-slate-400 h-[51px] box-border">
-      <div className="flex items-center gap-2">
-        <label htmlFor="start-date" className="text-sm font-semibold text-slate-700">Da:</label>
+    <div className="flex items-center justify-center gap-2 py-3 bg-slate-100 border border-slate-400 h-[51px] box-border">
+      <div className="flex items-center gap-1 flex-1 min-w-0">
+        <label htmlFor="start-date" className="text-sm font-semibold text-slate-700 shrink-0">Da:</label>
         <input
           type="date"
           id="start-date"
           value={currentRange.start || ''}
           onChange={e => handleDateChange('start', e.target.value)}
           max={today}
-          className="w-36 text-sm rounded-md border border-slate-300 bg-white py-1 px-2 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+          className="w-full text-sm rounded-md border border-slate-300 bg-white py-1 px-2 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
         />
       </div>
-      <div className="flex items-center gap-2">
-        <label htmlFor="end-date" className="text-sm font-semibold text-slate-700">A:</label>
+      <div className="flex items-center gap-1 flex-1 min-w-0">
+        <label htmlFor="end-date" className="text-sm font-semibold text-slate-700 shrink-0">A:</label>
         <input
           type="date"
           id="end-date"
@@ -87,7 +87,7 @@ const CustomDateFilter: React.FC<{
           onChange={e => handleDateChange('end', e.target.value)}
           max={today}
           min={currentRange.start || undefined}
-          className="w-36 text-sm rounded-md border border-slate-300 bg-white py-1 px-2 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+          className="w-full text-sm rounded-md border border-slate-300 bg-white py-1 px-2 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
         />
       </div>
     </div>
