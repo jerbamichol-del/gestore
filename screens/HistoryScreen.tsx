@@ -23,7 +23,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
             <span className={`w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center ${style.bgColor}`}>
                 <style.Icon className={`w-6 h-6 ${style.color}`} />
             </span>
-            <div className="flex-grow min-w-0">
+            <div className="flex-grow min-w-0 overflow-hidden">
                 <p className="font-semibold text-slate-800 truncate">{expense.subcategory || style.label} • {accountName}</p>
                 <p className="text-sm text-slate-500 truncate" title={expense.description}>{expense.description || 'Senza descrizione'}</p>
             </div>

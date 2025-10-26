@@ -75,7 +75,7 @@ const CustomDateFilter: React.FC<{
           value={currentRange.start || ''}
           onChange={e => handleDateChange('start', e.target.value)}
           max={today}
-          className="w-full text-sm rounded-md border border-slate-300 bg-white py-1 px-2 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+          className="w-full min-w-0 text-sm rounded-md border border-slate-300 bg-white py-1 px-2 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
         />
       </div>
       <div className="flex items-center gap-1 flex-1 min-w-0">
@@ -87,7 +87,7 @@ const CustomDateFilter: React.FC<{
           onChange={e => handleDateChange('end', e.target.value)}
           max={today}
           min={currentRange.start || undefined}
-          className="w-full text-sm rounded-md border border-slate-300 bg-white py-1 px-2 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+          className="w-full min-w-0 text-sm rounded-md border border-slate-300 bg-white py-1 px-2 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
         />
       </div>
     </div>
