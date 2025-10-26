@@ -1,4 +1,5 @@
 
+
 import React, { useMemo, useState } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Sector } from 'recharts';
 import { Expense } from '../types';
@@ -102,7 +103,14 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, onLogout }) => {
             <div className="lg:col-span-1 bg-white p-6 rounded-2xl shadow-lg flex flex-col justify-between">
                 <div>
                     <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-xl font-bold text-slate-700">Spesa Totale</h3>
+                        <div className="flex items-center gap-2">
+                            <h3 className="text-xl font-bold text-slate-700">Spesa Totale</h3>
+                            {expenses.length > 0 && (
+                                <span className="flex items-center justify-center min-w-[24px] h-6 px-2 text-sm font-semibold text-indigo-600 bg-indigo-100 rounded-md">
+                                    {expenses.length}
+                                </span>
+                            )}
+                        </div>
                         <button
                             onClick={onLogout}
                             className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-100 rounded-full transition-colors"

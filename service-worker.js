@@ -1,20 +1,15 @@
 // Importa la libreria idb per un accesso più semplice a IndexedDB
 importScripts('https://cdn.jsdelivr.net/npm/idb@8/build/iife/index-min.js');
 
-// ⚠️ Bump per invalidare i vecchi cache una volta
-const CACHE_NAME = 'expense-manager-cache-v32';
-
-// 🔧 Base dinamica dallo scope del SW (es. '/gestore')
-const BASE = (self.registration && new URL(self.registration.scope).pathname.replace(/\/$/, '')) || '';
-
-// Aggiunta la pagina di share-target e gli asset con prefisso BASE
+const CACHE_NAME = 'expense-manager-cache-v31';
+// Aggiunta la pagina di share-target al caching
 const urlsToCache = [
-  `${BASE}/`,
-  `${BASE}/index.html`,
-  `${BASE}/manifest.json`,
-  `${BASE}/icon-192.svg`,
-  `${BASE}/icon-512.svg`,
-  `${BASE}/share-target/`,
+  '/',
+  '/index.html',
+  '/manifest.json',
+  '/icon-192.svg',
+  '/icon-512.svg',
+  '/share-target/',
   // Key CDN dependencies
   'https://cdn.tailwindcss.com',
   'https://esm.sh/react@18.3.1',
@@ -24,7 +19,7 @@ const urlsToCache = [
   'https://cdn.jsdelivr.net/npm/idb@8/+esm'
 ];
 
-// --- Funzioni Helper per IndexedDB ---
+// --- Funzioni Helper per IndexedDB (replicate da db.ts per l'uso nel Service Worker) ---
 const DB_NAME = 'expense-manager-db';
 const STORE_NAME = 'offline-images';
 const DB_VERSION = 1;
@@ -53,10 +48,10 @@ self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
-        console.log('Opened cache, caching app shell', { scope: self.registration.scope, BASE });
+        console.log('Opened cache, caching app shell');
         return cache.addAll(urlsToCache);
       })
-      // ❌ niente skipWaiting automatico: lo facciamo solo su richiesta con il banner
+      .then(() => self.skipWaiting())
   );
 });
 
@@ -67,7 +62,7 @@ self.addEventListener('activate', event => {
     caches.keys().then(cacheNames => {
       return Promise.all(
         cacheNames.map(cacheName => {
-          if (!cacheWhitelist.includes(cacheName)) {
+          if (cacheWhitelist.indexOf(cacheName) === -1) {
             return caches.delete(cacheName);
           }
         })
@@ -80,48 +75,48 @@ self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
   // --- Gestione Share Target ---
-  if (event.request.method === 'POST' && url.pathname === `${BASE}/share-target/`) {
-    event.respondWith(Response.redirect(`${BASE}/`)); // Rispondi subito con un redirect
-
-    event.waitUntil(async function () {
+  if (event.request.method === 'POST' && url.pathname === '/share-target/') {
+    event.respondWith(Response.redirect('/')); // Rispondi subito con un redirect
+    
+    event.waitUntil(async function() {
       try {
         const formData = await event.request.formData();
         const file = formData.get('screenshot');
-
+        
         if (!file || !file.type.startsWith('image/')) {
-          console.warn('Share target: No valid image file received.');
-          return;
+            console.warn('Share target: No valid image file received.');
+            return;
         }
 
         const base64Image = await fileToBase64(file);
-
+        
         const db = await getDb();
         await db.add(STORE_NAME, {
-          id: crypto.randomUUID(),
-          base64Image,
-          mimeType: file.type,
+            id: crypto.randomUUID(),
+            base64Image,
+            mimeType: file.type,
         });
-
+        
         console.log('Image from share target saved to IndexedDB.');
 
         // Cerca un client (tab/finestra) esistente dell'app e mettilo a fuoco
         const clients = await self.clients.matchAll({
-          type: 'window',
-          includeUncontrolled: true,
+            type: 'window',
+            includeUncontrolled: true,
         });
 
         if (clients.length > 0) {
-          await clients[0].focus();
+            await clients[0].focus();
         } else {
-          self.clients.openWindow(`${BASE}/`);
+            self.clients.openWindow('/');
         }
       } catch (error) {
-        console.error('Error handling share target:', error);
+          console.error('Error handling share target:', error);
       }
     }());
     return;
   }
-
+  
   if (event.request.method !== 'GET') {
     return;
   }
@@ -142,7 +137,7 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Strategy: Cache first per gli altri asset
+  // Strategy: Cache first for all other assets
   event.respondWith(
     caches.match(event.request)
       .then(cachedResponse => {
@@ -160,11 +155,4 @@ self.addEventListener('fetch', event => {
         );
       })
   );
-});
-
-// ✅ Update su richiesta dal banner (serve per mostrare “Aggiornamento disponibile”)
-self.addEventListener('message', (event) => {
-  if (event.data && (event.data === 'SKIP_WAITING' || event.data.type === 'SKIP_WAITING')) {
-    self.skipWaiting();
-  }
 });
