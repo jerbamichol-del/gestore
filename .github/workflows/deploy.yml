@@ -1,0 +1,57 @@
+name: PWA Deploy (Vite)
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency: pages
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - name: Build (Vite)
+        run: npm run build
+        # Se ti serve la chiave:
+        # env:
+        #   GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        #   VITE_GEMINI_API_KEY: ${{ secrets.VITE_GEMINI_API_KEY }}
+
+      # Copia asset PWA dalla root nella build
+      - name: Copy PWA root assets to dist
+        run: |
+          mkdir -p dist/icons
+          [ -f manifest.json ] && cp -v manifest.json dist/ || true
+          [ -f service-worker.js ] && cp -v service-worker.js dist/ || true
+          for f in icon-192.png icon-512.png icon-192.svg icon-512.svg; do
+            [ -f "$f" ] && cp -v "$f" dist/ || true
+          done
+          [ -d icons ] && cp -rv icons/. dist/icons/ || true
+
+      - name: SPA fallback
+        run: cp -v dist/index.html dist/404.html
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
