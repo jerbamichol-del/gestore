@@ -1,6 +1,6 @@
 {
-  "name": "Gestore Spese Intuitivo",
-  "short_name": "Gestore Spese",
+  "name": "Gestore Spese",
+  "short_name": "Gestore",
   "description": "Una semplice applicazione per tracciare le spese, con funzionalità offline.",
   "start_url": "/",
   "display": "standalone",
