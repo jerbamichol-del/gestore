@@ -112,27 +112,37 @@ export function useSwipe(
         st.current.armed = true;
         st.current.intent = dx < 0 ? "left" : "right";
 
+        const hasHandler =
+          (st.current.intent === 'left' && handlersRef.current.onSwipeLeft) ||
+          (st.current.intent === 'right' && handlersRef.current.onSwipeRight);
+
         const sc = st.current.scroller;
         if (sc) {
           // Politica: nav solo Left@RightEdge (storico); Right@LeftEdge opzionale (default off)
           if (st.current.intent === "left") {
-            st.current.mode = enableLeftAtRightEdge && atEnd(sc) ? "page" : "scroll";
+            st.current.mode = enableLeftAtRightEdge && atEnd(sc) && hasHandler ? "page" : "scroll";
             if (st.current.mode === "page") {
               st.current.handoffX = e.clientX;
               try { root.setPointerCapture?.((e as any).pointerId ?? 1); } catch {}
             }
-          } else {
-            st.current.mode = enableRightAtLeftEdge && atStart(sc) ? "page" : "scroll";
+          } else { // intent === 'right'
+            st.current.mode = enableRightAtLeftEdge && atStart(sc) && hasHandler ? "page" : "scroll";
             if (st.current.mode === "page") {
               st.current.handoffX = e.clientX;
               try { root.setPointerCapture?.((e as any).pointerId ?? 1); } catch {}
             }
           }
         } else {
-          // nessuno scroller: è swipe di pagina
-          st.current.mode = "page";
-          st.current.handoffX = e.clientX;
-          try { root.setPointerCapture?.((e as any).pointerId ?? 1); } catch {}
+          // nessuno scroller: è swipe di pagina, only if handler exists
+          if (hasHandler) {
+             st.current.mode = "page";
+             st.current.handoffX = e.clientX;
+             try { root.setPointerCapture?.((e as any).pointerId ?? 1); } catch {}
+          } else {
+             // No handler, no scroller. This swipe does nothing.
+             st.current.armed = false;
+             st.current.intent = null;
+          }
         }
       }
 
@@ -141,8 +151,12 @@ export function useSwipe(
       // 2) Se siamo in modalità "scroll", controlla se raggiungiamo il bordo giusto DURANTE lo stesso gesto
       if (st.current.mode === "scroll" && st.current.scroller) {
         const sc = st.current.scroller;
+        const hasHandler =
+          (st.current.intent === 'left' && handlersRef.current.onSwipeLeft) ||
+          (st.current.intent === 'right' && handlersRef.current.onSwipeRight);
 
         if (
+          hasHandler && // Check handler before handoff
           st.current.intent === "left" &&
           enableLeftAtRightEdge &&
           atEnd(sc)
@@ -152,6 +166,7 @@ export function useSwipe(
           st.current.handoffX = e.clientX; // zero locale per progress
           try { root.setPointerCapture?.((e as any).pointerId ?? 1); } catch {}
         } else if (
+          hasHandler && // Check handler before handoff
           st.current.intent === "right" &&
           enableRightAtLeftEdge &&
           atStart(sc)

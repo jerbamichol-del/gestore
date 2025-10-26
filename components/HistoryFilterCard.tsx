@@ -30,10 +30,10 @@ const QuickFilterTable: React.FC<{
           {filters.map(filter => {
             const isActive = !isCustomActive && currentValue === filter.value;
             return (
-              <td key={filter.value} className="border border-slate-400 p-0">
+              <td key={filter.value} className="border border-slate-400 p-0 h-11">
                 <button
                   onClick={() => onSelect(currentValue === filter.value ? 'all' : filter.value)}
-                  className={`w-full py-3 px-2 text-center font-semibold text-sm transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500 ${
+                  className={`w-full h-full flex items-center justify-center px-2 text-center font-semibold text-sm transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500 ${
                     isActive ? 'bg-indigo-600 text-white'
                              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                   }`}
@@ -67,7 +67,7 @@ const CustomDateFilter: React.FC<{
   };
 
   return (
-    <div className="flex items-center justify-center gap-2 py-3 bg-slate-100 border border-slate-400 h-[51px] box-border px-2">
+    <div className="flex items-center justify-center gap-2 bg-slate-100 border border-slate-400 h-11 box-border px-2">
       <div className="flex items-center gap-1 flex-1 min-w-0">
         <label htmlFor="start-date" className="text-sm font-semibold text-slate-700 shrink-0">Da:</label>
         <input

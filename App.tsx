@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Expense, Account } from './types';
 import { useLocalStorage } from './hooks/useLocalStorage';
@@ -114,10 +115,96 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const pendingImagesCountRef = useRef(0);
   const [installPromptEvent, setInstallPromptEvent] = useState<any>(null);
+  const backPressExitTimeoutRef = useRef<number | null>(null);
+
+
+  const showToast = useCallback((toastMessage: ToastMessage) => {
+    setToast(toastMessage);
+  }, []);
 
   const handleNavigation = useCallback((targetView: NavView) => {
+    if (activeView === targetView) return;
     setActiveView(targetView);
-  }, []);
+    window.history.pushState({ view: targetView }, '');
+  }, [activeView]);
+
+  // Back button handling logic
+  useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+        event.preventDefault();
+
+        // Always push a new state to re-enable our listener for the next back press
+        const pushStateAfterHandling = () => window.history.pushState({ view: activeView }, '');
+
+        // Priorità 1: Chiudere le modali aperte
+        if (isCalculatorContainerOpen) {
+            setIsCalculatorContainerOpen(false);
+            pushStateAfterHandling();
+            return;
+        }
+        if (isFormOpen) {
+            setIsFormOpen(false);
+            pushStateAfterHandling();
+            return;
+        }
+        if (isImageSourceModalOpen) {
+            setIsImageSourceModalOpen(false);
+            pushStateAfterHandling();
+            return;
+        }
+        if (isVoiceModalOpen) {
+            setIsVoiceModalOpen(false);
+            pushStateAfterHandling();
+            return;
+        }
+        if (isConfirmDeleteModalOpen) {
+            setIsConfirmDeleteModalOpen(false);
+            pushStateAfterHandling();
+            return;
+        }
+        if (isMultipleExpensesModalOpen) {
+            setIsMultipleExpensesModalOpen(false);
+            pushStateAfterHandling();
+            return;
+        }
+
+        // Priorità 2: Tornare alla Home se non ci siamo già
+        if (activeView !== 'home') {
+            handleNavigation('home');
+            // handleNavigation already pushes state
+            return;
+        }
+
+        // Priorità 3: Uscire dall'app se si è in Home
+        if (backPressExitTimeoutRef.current) {
+            clearTimeout(backPressExitTimeoutRef.current);
+            backPressExitTimeoutRef.current = null;
+            window.close(); // Tenta di chiudere la PWA
+        } else {
+            showToast({ message: 'Premi di nuovo per uscire.', type: 'info' });
+            backPressExitTimeoutRef.current = window.setTimeout(() => {
+                backPressExitTimeoutRef.current = null;
+            }, 2000);
+            pushStateAfterHandling();
+        }
+    };
+    
+    // Setup initial history state
+    window.history.pushState({ view: 'home' }, '');
+    window.addEventListener('popstate', handlePopState);
+
+    return () => {
+        window.removeEventListener('popstate', handlePopState);
+        if (backPressExitTimeoutRef.current) {
+            clearTimeout(backPressExitTimeoutRef.current);
+        }
+    };
+}, [
+    activeView, handleNavigation, showToast,
+    isCalculatorContainerOpen, isFormOpen, isImageSourceModalOpen,
+    isVoiceModalOpen, isConfirmDeleteModalOpen, isMultipleExpensesModalOpen
+]);
+
 
   const swipeContainerRef = useRef<HTMLDivElement>(null);
   const { progress, isSwiping } = useSwipe(
@@ -133,10 +220,6 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       angle: 45,
     }
   );
-  
-  const showToast = useCallback((toastMessage: ToastMessage) => {
-    setToast(toastMessage);
-  }, []);
   
   useEffect(() => {
     const handleBeforeInstallPrompt = (e: Event) => {
@@ -324,7 +407,6 @@ const handleInstallClick = async () => {
             <Header
               pendingSyncs={pendingImages.length}
               isOnline={isOnline}
-              onLogout={onLogout}
               activeView={activeView}
               onNavigate={handleNavigation}
               onInstallClick={handleInstallClick}
@@ -344,7 +426,7 @@ const handleInstallClick = async () => {
                 }}
             >
                 <div className="w-1/2 h-full overflow-y-auto space-y-6 swipe-view" style={{ touchAction: 'pan-y' }}>
-                    <Dashboard expenses={expenses} />
+                    <Dashboard expenses={expenses} onLogout={onLogout} />
                     <PendingImages 
                         images={pendingImages}
                         onAnalyze={handleAnalyzeImage}

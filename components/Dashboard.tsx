@@ -4,6 +4,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Sector } from 'recharts';
 import { Expense } from '../types';
 import { formatCurrency } from './icons/formatters';
 import { getCategoryStyle } from '../utils/categoryStyles';
+import { LockClosedIcon } from './icons/LockClosedIcon';
 
 const categoryHexColors: Record<string, string> = {
     'Alimentari': '#16a34a', // green-600
@@ -51,9 +52,10 @@ const renderActiveShape = (props: any) => {
 
 interface DashboardProps {
   expenses: Expense[];
+  onLogout: () => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ expenses }) => {
+const Dashboard: React.FC<DashboardProps> = ({ expenses, onLogout }) => {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const activeIndex = selectedIndex;
 
@@ -99,7 +101,17 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses }) => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-1 bg-white p-6 rounded-2xl shadow-lg flex flex-col justify-between">
                 <div>
-                    <h3 className="text-xl font-bold text-slate-700 mb-4">Spesa Totale</h3>
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-xl font-bold text-slate-700">Spesa Totale</h3>
+                        <button
+                            onClick={onLogout}
+                            className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-100 rounded-full transition-colors"
+                            aria-label="Logout"
+                            title="Logout"
+                        >
+                            <LockClosedIcon className="w-6 h-6" />
+                        </button>
+                    </div>
                     <p className="text-4xl font-extrabold text-indigo-600">{formatCurrency(totalExpenses)}</p>
                 </div>
                 <div className="mt-6 pt-4 border-t border-slate-200">
