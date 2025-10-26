@@ -10,9 +10,18 @@ export const formatCurrency = (amount: number): string => {
 };
 
 export const formatDate = (date: Date): string => {
-  return new Intl.DateTimeFormat('it-IT', {
+  const options: Intl.DateTimeFormatOptions = {
     year: 'numeric',
-    month: 'long',
+    month: 'short',
     day: 'numeric',
-  }).format(date);
+  };
+  const formatter = new Intl.DateTimeFormat('it-IT', options);
+  // Usiamo formatToParts per poter aggiungere il punto al mese abbreviato.
+  // Questo approccio è robusto e rispetta l'ordine dei componenti della data per la lingua specificata.
+  return formatter.formatToParts(date).map(({ type, value }) => {
+    if (type === 'month') {
+      return `${value}.`;
+    }
+    return value;
+  }).join('');
 };
