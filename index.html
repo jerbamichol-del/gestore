@@ -5,16 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Gestore Spese - Nuovo Inizio</title>
 
-    <!-- Manifest relativo (obbligatorio per Pages in /gestore/) -->
-    <link rel="manifest" href="/gestore/manifest.json?v=6" />
+    <!-- Manifest su /gestore/ con cache-bust -->
+    <link rel="manifest" href="/gestore/manifest.json?v=10" />
     <meta name="theme-color" content="#4f46e5" />
     <meta name="application-name" content="Gestore Spese" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Gestore" />
 
-    <!-- Icone (opzionali ma utili per iOS) -->
-    <link rel="icon" href="./icons/icon-192.png" />
-    <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+    <!-- Icone: usi gli SVG in root di /gestore/ -->
+    <link rel="icon" href="/gestore/icon-192.svg" />
+    <link rel="apple-touch-icon" href="/gestore/icon-192.svg" />
 
     <!-- Tailwind da CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -54,14 +54,14 @@
   <body class="bg-slate-100 overflow-hidden">
     <div id="root"></div>
 
-    <!-- Entry dell'app -->
+    <!-- Entry dell'app (Vite userà questo come entry point) -->
     <script type="module" src="./index.tsx"></script>
 
-    <!-- Service Worker con scope limitato a ./ (la sottocartella /gestore/) -->
+    <!-- Service Worker con scope limitato a /gestore/ + cache-bust -->
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/gestore/service-worker.js?v=8', { scope: '/gestore/' })
+          navigator.serviceWorker.register('/gestore/service-worker.js?v=10', { scope: '/gestore/' })
             .then(r => console.log('SW scope:', r.scope))
             .catch(console.error);
         });
@@ -69,3 +69,4 @@
     </script>
   </body>
 </html>
+
