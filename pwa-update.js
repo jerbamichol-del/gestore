@@ -4,7 +4,7 @@
   var scopeGuess = '/gestore/';
   var FLAG = 'pwa-skip-waiting';
   var PERIOD_MS = 15 * 60 * 1000; // 15 minuti
-  var FIRST_START_DELAY = 2000;    // 2s dopo l'apertura
+  var FIRST_START_DELAY = 2000;    // 2s dopo l'avvio
 
   function banner(onAccept,onDismiss){
     var w=document.createElement('div');
