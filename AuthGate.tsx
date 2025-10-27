@@ -1,4 +1,4 @@
-import React, 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import App from './App';
 import LoginScreen from './screens/LoginScreen';
 import SetupScreen from './screens/SetupScreen';
@@ -7,9 +7,12 @@ import { useLocalStorage } from './hooks/useLocalStorage';
 
 type AuthView = 'login' | 'register' | 'forgotPassword';
 
+const LOCK_TIMEOUT_MS = 5000; // 5 secondi
+
 const AuthGate: React.FC = () => {
-  const [sessionToken, setSessionToken] = React.useState<string | null>(null);
+  const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [, setLastActiveUser] = useLocalStorage<string | null>('last_active_user_email', null);
+  const hiddenTimestampRef = useRef<number | null>(null);
   
   // Controlla se esiste un database di utenti per decidere la schermata iniziale.
   const hasUsers = () => {
@@ -21,18 +24,42 @@ const AuthGate: React.FC = () => {
     }
   };
 
-  const [authView, setAuthView] = React.useState<AuthView>(hasUsers() ? 'login' : 'register');
+  const [authView, setAuthView] = useState<AuthView>(hasUsers() ? 'login' : 'register');
 
   const handleAuthSuccess = (token: string, email: string) => {
     setSessionToken(token);
     setLastActiveUser(email.toLowerCase());
   };
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     setSessionToken(null);
     setLastActiveUser(null);
     setAuthView(hasUsers() ? 'login' : 'register');
-  };
+  }, [setLastActiveUser]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        if (sessionToken) {
+           hiddenTimestampRef.current = Date.now();
+        }
+      } else if (document.visibilityState === 'visible') {
+        if (sessionToken && hiddenTimestampRef.current) {
+          const elapsed = Date.now() - hiddenTimestampRef.current;
+          if (elapsed > LOCK_TIMEOUT_MS) {
+            handleLogout();
+          }
+        }
+        hiddenTimestampRef.current = null;
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [sessionToken, handleLogout]);
   
   if (sessionToken) {
     return <App onLogout={handleLogout} />;

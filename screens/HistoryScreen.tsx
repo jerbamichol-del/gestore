@@ -428,7 +428,7 @@ const HistoryScreen = forwardRef<HistoryScreenHandles, HistoryScreenProps>(({ ex
                     <div className="space-y-6">
                         {historyData.map(({ weekKey, weekLabel, weekTotal, days }) => (
                             <div key={weekKey}>
-                                <div className="p-4 flex justify-between items-baseline bg-slate-100 border-b border-slate-200 sticky top-0 z-10">
+                                <div className="p-4 flex justify-between items-baseline bg-slate-100 border-b border-slate-200">
                                     <h2 className="text-xl font-bold text-slate-700 capitalize">{weekLabel}</h2>
                                     <p className="text-lg font-semibold text-indigo-600">{formatCurrency(weekTotal)}</p>
                                 </div>
