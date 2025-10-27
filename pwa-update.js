@@ -5,8 +5,11 @@
   var FLAG = 'pwa-skip-waiting';
   var PERIOD_MS = 15 * 60 * 1000; // 15 minuti
   var FIRST_START_DELAY = 2000;    // 2s dopo l'avvio
+  var VERSION_URL = scopeGuess + 'version.json?ts=' + Date.now();
+  var LAST_SEEN_KEY = 'pwa-last-version-run';
 
   function banner(onAccept,onDismiss){
+    if (document.getElementById('pwa-update-banner')) return;
     var w=document.createElement('div');
     w.id='pwa-update-banner';
     w.className='fixed bottom-4 left-1/2 -translate-x-1/2 z-[9999] w-[92%] max-w-md rounded-xl border border-slate-200 bg-white shadow-xl p-4 flex items-start gap-3';
@@ -20,6 +23,7 @@
     };
   }
 
+  // Ricarica SOLO se l'utente ha accettato
   navigator.serviceWorker.addEventListener('controllerchange', function(){
     try {
       if (sessionStorage.getItem(FLAG) === '1') {
@@ -30,22 +34,39 @@
   });
 
   function wire(reg){
-    function maybeShow(){
+    // Percorso standard: mostra banner se c'è un SW in waiting
+    function showIfWaiting(){
       if(reg.waiting && navigator.serviceWorker.controller){
         banner(function(){ reg.waiting && reg.waiting.postMessage({type:'SKIP_WAITING'}); }, function(){});
       }
     }
-
-    maybeShow();
-
+    showIfWaiting();
     reg.addEventListener('updatefound', function(){
       var nw = reg.installing;
       nw && nw.addEventListener('statechange', function(){
-        if(nw.state==='installed' && navigator.serviceWorker.controller){ maybeShow(); }
+        if(nw.state==='installed' && navigator.serviceWorker.controller){ showIfWaiting(); }
       });
     });
 
-    var check = function(){ reg.update().catch(function(){}); };
+    // Fallback a versione: se build nuova ma niente waiting → proponi reload gentile
+    function checkVersion(){
+      fetch(VERSION_URL, { cache: 'no-store' })
+        .then(r=>r.json())
+        .then(v=>{
+          var last = 0; try { last = parseInt(localStorage.getItem(LAST_SEEN_KEY)||'0',10); } catch(e){}
+          var cur = parseInt(v && v.run || 0,10);
+          if (cur && cur > last) {
+            if (!reg.waiting) {
+              banner(function(){
+                try { localStorage.setItem(LAST_SEEN_KEY, String(cur)); } catch(e){}
+                location.reload();
+              }, function(){});
+            }
+          }
+        }).catch(function(){});
+    }
+
+    var check = function(){ reg.update().catch(function(){}); checkVersion(); };
 
     setTimeout(check, FIRST_START_DELAY);
     window.addEventListener('focus', check);
