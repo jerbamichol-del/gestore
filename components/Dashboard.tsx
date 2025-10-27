@@ -105,11 +105,6 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, onLogout }) => {
                     <div className="flex justify-between items-center mb-4">
                         <div className="flex items-center gap-2">
                             <h3 className="text-xl font-bold text-slate-700">Spesa Totale</h3>
-                            {expenses.length > 0 && (
-                                <span className="flex items-center justify-center min-w-[24px] h-6 px-2 text-sm font-semibold text-indigo-600 bg-indigo-100 rounded-md">
-                                    {expenses.length}
-                                </span>
-                            )}
                         </div>
                         <button
                             onClick={onLogout}
