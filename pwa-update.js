@@ -1,11 +1,13 @@
 (function(){
   if(!('serviceWorker' in navigator)) return;
+
   var scopeGuess = '/gestore/';
   var FLAG = 'pwa-skip-waiting';
-  var PERIOD_MS = 15 * 60 * 1000;
-  var FIRST_START_DELAY = 2000;
+  var PERIOD_MS = 15 * 60 * 1000; // 15 minuti
+  var FIRST_START_DELAY = 2000;    // 2s dopo l'avvio
   var VERSION_URL = scopeGuess + 'version.json?ts=' + Date.now();
   var LAST_SEEN_KEY = 'pwa-last-version-run';
+
   function banner(onAccept,onDismiss){
     if (document.getElementById('pwa-update-banner')) return;
     var w=document.createElement('div');
@@ -15,14 +17,24 @@
     document.body.appendChild(w);
     document.getElementById('pwa-update-later').onclick=function(){ w.remove(); onDismiss&&onDismiss(); };
     document.getElementById('pwa-update-now').onclick=function(){
-      w.remove(); try { sessionStorage.setItem(FLAG,'1'); } catch(e){}
+      w.remove();
+      try { sessionStorage.setItem(FLAG,'1'); } catch(e){}
       onAccept&&onAccept();
     };
   }
+
+  // Ricarica SOLO se l'utente ha accettato
   navigator.serviceWorker.addEventListener('controllerchange', function(){
-    try { if (sessionStorage.getItem(FLAG) === '1') { sessionStorage.removeItem(FLAG); location.reload(); } } catch(e){}
+    try {
+      if (sessionStorage.getItem(FLAG) === '1') {
+        sessionStorage.removeItem(FLAG);
+        location.reload();
+      }
+    } catch(e){}
   });
+
   function wire(reg){
+    // Percorso standard: mostra banner se c'è un SW in waiting
     function showIfWaiting(){
       if(reg.waiting && navigator.serviceWorker.controller){
         banner(function(){ reg.waiting && reg.waiting.postMessage({type:'SKIP_WAITING'}); }, function(){});
@@ -35,23 +47,35 @@
         if(nw.state==='installed' && navigator.serviceWorker.controller){ showIfWaiting(); }
       });
     });
+
+    // Fallback a versione: se build nuova ma niente waiting → proponi reload gentile
     function checkVersion(){
       fetch(VERSION_URL, { cache: 'no-store' })
         .then(r=>r.json())
         .then(v=>{
-          var last = 0; try { last = parseInt(localStorage.getItem('pwa-last-version-run')||'0',10); } catch(e){}
+          var last = 0; try { last = parseInt(localStorage.getItem(LAST_SEEN_KEY)||'0',10); } catch(e){}
           var cur = parseInt(v && v.run || 0,10);
           if (cur && cur > last) {
-            if (!reg.waiting) banner(function(){ try { localStorage.setItem('pwa-last-version-run', String(cur)); } catch(e){}; location.reload(); }, function(){});
+            if (!reg.waiting) {
+              banner(function(){
+                try { localStorage.setItem(LAST_SEEN_KEY, String(cur)); } catch(e){}
+                location.reload();
+              }, function(){});
+            }
           }
         }).catch(function(){});
     }
+
     var check = function(){ reg.update().catch(function(){}); checkVersion(); };
+
     setTimeout(check, FIRST_START_DELAY);
     window.addEventListener('focus', check);
-    document.addEventListener('visibilitychange', function(){ if(document.visibilityState === 'visible') check(); });
+    document.addEventListener('visibilitychange', function(){
+      if(document.visibilityState === 'visible') check();
+    });
     setInterval(check, PERIOD_MS);
   }
+
   window.addEventListener('load', function(){
     (navigator.serviceWorker.getRegistration(scopeGuess).catch(function(){}) )
       .then(function(reg){ return reg || navigator.serviceWorker.getRegistration(); })
