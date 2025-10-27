@@ -1,6 +1,4 @@
-
-
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { Expense, Account } from '../types';
 import { getCategoryStyle } from '../utils/categoryStyles';
 import { formatCurrency, formatDate } from '../components/icons/formatters';
@@ -15,28 +13,178 @@ interface ExpenseItemProps {
   accounts: Account[];
   onEdit: (expense: Expense) => void;
   onDelete: (id: string) => void;
+  isOpen: boolean;
+  onOpen: (id: string) => void;
+  onInteractionChange: (isInteracting: boolean) => void;
 }
 
-const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, onDelete }) => {
+const ACTION_WIDTH = 144; // 9rem in pixels (w-36)
+
+const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, onDelete, isOpen, onOpen, onInteractionChange }) => {
     const style = getCategoryStyle(expense.category);
     const accountName = accounts.find(a => a.id === expense.accountId)?.name || 'Sconosciuto';
+    
+    const itemRef = useRef<HTMLDivElement>(null);
+    const dragState = useRef({
+      isDragging: false,
+      isLocked: false,
+      startX: 0,
+      startY: 0,
+      startTime: 0,
+      initialTranslateX: 0,
+    });
+    
+    const getTranslateX = (element: HTMLElement | null): number => {
+      if (!element) return 0;
+      const style = window.getComputedStyle(element);
+      const matrix = new DOMMatrix(style.transform);
+      return matrix.m41;
+    };
+
+    const setTranslateX = useCallback((x: number, animated: boolean) => {
+        if (itemRef.current) {
+            itemRef.current.style.transition = animated ? 'transform 0.2s cubic-bezier(0.22, 0.61, 0.36, 1)' : 'none';
+            itemRef.current.style.transform = `translateX(${x}px)`;
+        }
+    }, []);
+
+    const handlePointerDown = (e: React.PointerEvent) => {
+        if ((e.target as HTMLElement).closest('button')) return;
+        
+        const currentTranslateX = getTranslateX(itemRef.current);
+        dragState.current = {
+            isDragging: true,
+            isLocked: false,
+            startX: e.clientX,
+            startY: e.clientY,
+            startTime: performance.now(),
+            initialTranslateX: currentTranslateX,
+        };
+        
+        setTranslateX(currentTranslateX, false);
+    };
+
+    const handlePointerMove = (e: React.PointerEvent) => {
+        if (!dragState.current.isDragging) return;
+
+        const deltaX = e.clientX - dragState.current.startX;
+        const deltaY = e.clientY - dragState.current.startY;
+
+        if (!dragState.current.isLocked) {
+          const SLOP = 5;
+          if (Math.abs(deltaX) <= SLOP && Math.abs(deltaY) <= SLOP) {
+            return;
+          }
+
+          const isHorizontal = Math.abs(deltaX) > Math.abs(deltaY);
+
+          if (isHorizontal) {
+            if (dragState.current.initialTranslateX === 0 && deltaX > 0) {
+                dragState.current.isDragging = false;
+                return;
+            }
+
+            dragState.current.isLocked = true;
+            onInteractionChange(true);
+            e.stopPropagation();
+            try { itemRef.current?.setPointerCapture(e.pointerId); } catch {}
+          } else {
+            dragState.current.isDragging = false;
+            return;
+          }
+        }
+        
+        if (dragState.current.isLocked) {
+            e.stopPropagation();
+            let newX = dragState.current.initialTranslateX + deltaX;
+
+            if (newX > 0) newX = Math.tanh(newX / 50) * 25;
+            if (newX < -ACTION_WIDTH) newX = -ACTION_WIDTH - Math.tanh((-newX - ACTION_WIDTH) / 50) * 25;
+
+            setTranslateX(newX, false);
+        }
+    };
+
+    const handlePointerUp = (e: React.PointerEvent) => {
+      if (!dragState.current.isDragging) return;
+      
+      const wasLocked = dragState.current.isLocked;
+      
+      if (wasLocked) {
+        onInteractionChange(false);
+        try { itemRef.current?.releasePointerCapture(e.pointerId); } catch {}
+      
+        const elapsed = performance.now() - dragState.current.startTime;
+        const deltaX = e.clientX - dragState.current.startX;
+        const velocityX = elapsed > 10 ? deltaX / elapsed : 0;
+
+        const wasOpen = dragState.current.initialTranslateX < -1;
+        let shouldOpen: boolean;
+
+        const flickedRight = velocityX > 0.2 && deltaX > 15;
+        const draggedFarRight = deltaX > ACTION_WIDTH * 0.4;
+        const flickedLeft = velocityX < -0.2 && deltaX < -15;
+        const draggedFarLeft = deltaX < -ACTION_WIDTH * 0.4;
+
+        if (wasOpen) {
+          shouldOpen = !(flickedRight || draggedFarRight);
+        } else {
+          shouldOpen = flickedLeft || draggedFarLeft;
+        }
+        
+        onOpen(shouldOpen ? expense.id : '');
+      }
+      
+      dragState.current.isDragging = false;
+      dragState.current.isLocked = false;
+    };
+    
+    useEffect(() => {
+        if (!dragState.current.isDragging) {
+            setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
+        }
+    }, [isOpen, setTranslateX]);
+
     return (
-        <div className="flex items-center gap-4 py-3 px-4">
-            <span className={`w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center ${style.bgColor}`}>
-                <style.Icon className={`w-6 h-6 ${style.color}`} />
-            </span>
-            <div className="flex-grow min-w-0 overflow-hidden">
-                <p className="font-semibold text-slate-800 truncate">{expense.subcategory || style.label} • {accountName}</p>
-                <p className="text-sm text-slate-500 truncate" title={expense.description}>{expense.description || 'Senza descrizione'}</p>
+        <div className="relative bg-white overflow-hidden">
+            {/* Actions Layer (underneath) */}
+            <div className="absolute top-0 right-0 h-full flex items-center z-0">
+                <button
+                    onClick={() => onEdit(expense)}
+                    className="w-[72px] h-full flex flex-col items-center justify-center bg-indigo-500 text-white hover:bg-indigo-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white"
+                    aria-label="Modifica spesa"
+                >
+                    <PencilSquareIcon className="w-6 h-6" />
+                    <span className="text-xs mt-1">Modifica</span>
+                </button>
+                <button
+                    onClick={() => onDelete(expense.id)}
+                    className="w-[72px] h-full flex flex-col items-center justify-center bg-red-500 text-white hover:bg-red-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white"
+                    aria-label="Elimina spesa"
+                >
+                    <TrashIcon className="w-6 h-6" />
+                    <span className="text-xs mt-1">Elimina</span>
+                </button>
             </div>
-            <p className="font-bold text-slate-900 text-lg text-right shrink-0 whitespace-nowrap">{formatCurrency(Number(expense.amount) || 0)}</p>
-            <div className="flex items-center gap-1">
-                 <button onClick={() => onEdit(expense)} className="p-2 text-slate-500 hover:text-indigo-600 rounded-full hover:bg-indigo-50 transition-colors" aria-label="Modifica">
-                    <PencilSquareIcon className="w-5 h-5" />
-                </button>
-                <button onClick={() => onDelete(expense.id)} className="p-2 text-slate-500 hover:text-red-600 rounded-full hover:bg-red-50 transition-colors" aria-label="Elimina">
-                    <TrashIcon className="w-5 h-5" />
-                </button>
+            
+            {/* Content Layer (swipeable) */}
+            <div
+                ref={itemRef}
+                onPointerDown={handlePointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                onPointerCancel={handlePointerUp}
+                className="relative flex items-center gap-4 py-3 px-4 bg-white z-10"
+                style={{ touchAction: 'pan-y' }}
+            >
+                <span className={`w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center ${style.bgColor}`}>
+                    <style.Icon className={`w-6 h-6 ${style.color}`} />
+                </span>
+                <div className="flex-grow min-w-0">
+                    <p className="font-semibold text-slate-800 truncate">{expense.subcategory || style.label} • {accountName}</p>
+                    <p className="text-sm text-slate-500 truncate" title={expense.description}>{expense.description || 'Senza descrizione'}</p>
+                </div>
+                <p className="font-bold text-slate-900 text-lg text-right shrink-0 whitespace-nowrap min-w-[90px]">{formatCurrency(Number(expense.amount) || 0)}</p>
             </div>
         </div>
     );
@@ -47,6 +195,11 @@ interface HistoryScreenProps {
   accounts: Account[];
   onEditExpense: (expense: Expense) => void;
   onDeleteExpense: (id: string) => void;
+  onItemStateChange: (state: { isOpen: boolean, isInteracting: boolean }) => void;
+}
+
+interface HistoryScreenHandles {
+  closeOpenItem: () => void;
 }
 
 // Helper per ottenere l'anno e il numero della settimana ISO 8601
@@ -71,9 +224,21 @@ const getWeekLabel = (year: number, week: number): string => {
 };
 
 
-const HistoryScreen: React.FC<HistoryScreenProps> = ({ expenses, accounts, onEditExpense, onDeleteExpense }) => {
+const HistoryScreen = forwardRef<HistoryScreenHandles, HistoryScreenProps>(({ expenses, accounts, onEditExpense, onDeleteExpense, onItemStateChange }, ref) => {
     const [dateFilter, setDateFilter] = useState<DateFilter>('all');
     const [customRange, setCustomRange] = useState<{ start: string | null, end: string | null }>({ start: null, end: null });
+    const [openItemId, setOpenItemId] = useState<string | null>(null);
+    const [isInteracting, setIsInteracting] = useState(false);
+
+    useImperativeHandle(ref, () => ({
+      closeOpenItem: () => {
+        setOpenItemId(null);
+      }
+    }));
+
+    useEffect(() => {
+        onItemStateChange({ isOpen: openItemId !== null, isInteracting });
+    }, [openItemId, isInteracting, onItemStateChange]);
 
     const isCustomRangeActive = customRange.start !== null && customRange.end !== null;
     
@@ -169,6 +334,10 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({ expenses, accounts, onEdi
         setCustomRange(range);
         setDateFilter('all');
     };
+    
+    const handleItemOpen = useCallback((id: string) => {
+        setOpenItemId(id || null);
+    }, []);
 
     const noExpensesMessage = (dateFilter === 'all' && !isCustomRangeActive) 
     ? {
@@ -215,6 +384,9 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({ expenses, accounts, onEdi
                                                         accounts={accounts}
                                                         onEdit={onEditExpense}
                                                         onDelete={onDeleteExpense}
+                                                        isOpen={openItemId === expense.id}
+                                                        onOpen={handleItemOpen}
+                                                        onInteractionChange={setIsInteracting}
                                                     />
                                                 ))}
                                             </div>
@@ -241,6 +413,6 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({ expenses, accounts, onEdi
             />
         </div>
     );
-};
+});
 
 export default HistoryScreen;

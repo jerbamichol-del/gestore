@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Expense, Account } from './types';
 import { useLocalStorage } from './hooks/useLocalStorage';
@@ -29,6 +27,10 @@ import CalculatorContainer from './components/CalculatorContainer';
 type NavView = 'home' | 'history';
 
 type ToastMessage = { message: string; type: 'success' | 'info' | 'error' };
+
+interface HistoryScreenHandles {
+  closeOpenItem: () => void;
+}
 
 const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -116,6 +118,9 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const pendingImagesCountRef = useRef(0);
   const [installPromptEvent, setInstallPromptEvent] = useState<any>(null);
   const backPressExitTimeoutRef = useRef<number | null>(null);
+  const [isHistoryItemOpen, setIsHistoryItemOpen] = useState(false);
+  const [isHistoryItemInteracting, setIsHistoryItemInteracting] = useState(false);
+  const historyScreenRef = useRef<HistoryScreenHandles>(null);
 
 
   const showToast = useCallback((toastMessage: ToastMessage) => {
@@ -207,17 +212,28 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
 
   const swipeContainerRef = useRef<HTMLDivElement>(null);
+  
+  const handleSwipeRight = useCallback(() => {
+    if (activeView === 'history') {
+      if (isHistoryItemOpen) {
+        historyScreenRef.current?.closeOpenItem();
+      } else {
+        handleNavigation('home');
+      }
+    }
+  }, [activeView, isHistoryItemOpen, handleNavigation]);
+  
   const { progress, isSwiping } = useSwipe(
     swipeContainerRef,
     {
       onSwipeLeft: activeView === 'home' ? () => handleNavigation('history') : undefined,
-      onSwipeRight: activeView === 'history' ? () => handleNavigation('home') : undefined,
+      onSwipeRight: handleSwipeRight,
     },
     { 
-      enabled: !isCalculatorContainerOpen,
-      threshold: 32,
-      slop: 6,
-      angle: 45,
+      enabled: !isCalculatorContainerOpen && !isHistoryItemInteracting,
+      disableDrag: (intent) => {
+        return intent === 'right' && activeView === 'history' && isHistoryItemOpen;
+      },
     }
   );
   
@@ -392,6 +408,11 @@ const handleInstallClick = async () => {
       setPrefilledData(data);
       setIsFormOpen(true);
   };
+  
+  const handleHistoryItemStateChange = useCallback(({ isOpen, isInteracting }: { isOpen: boolean; isInteracting: boolean; }) => {
+    setIsHistoryItemOpen(isOpen);
+    setIsHistoryItemInteracting(isInteracting);
+  }, []);
 
   const mainContentClasses = isCalculatorContainerOpen
     ? 'pointer-events-none'
@@ -440,10 +461,12 @@ const handleInstallClick = async () => {
                 </div>
                 <div className="w-1/2 h-full swipe-view">
                     <HistoryScreen 
+                      ref={historyScreenRef}
                       expenses={expenses}
                       accounts={accounts}
                       onEditExpense={openEditForm}
                       onDeleteExpense={handleDeleteRequest}
+                      onItemStateChange={handleHistoryItemStateChange}
                     />
                 </div>
             </div>

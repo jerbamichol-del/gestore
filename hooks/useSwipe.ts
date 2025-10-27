@@ -9,6 +9,7 @@ type SwipeOpts = {
   enableLeftAtRightEdge?: boolean;  // default true
   enableRightAtLeftEdge?: boolean;  // default false
   ignoreSelector?: string; // New option to ignore swipes on certain elements
+  disableDrag?: (intent: "left" | "right") => boolean;
 };
 
 function isHorizScrollable(el: HTMLElement | null) {
@@ -49,6 +50,7 @@ export function useSwipe(
     enableLeftAtRightEdge = true,
     enableRightAtLeftEdge = false,
     ignoreSelector,
+    disableDrag,
   } = opts;
 
   const st = React.useRef({
@@ -194,7 +196,11 @@ export function useSwipe(
         const screenWidth = root.offsetWidth;
         if (screenWidth > 0) {
             const p = Math.max(-1, Math.min(1, dxFromHandoff / screenWidth));
-            setProgress(p);
+            if (st.current.intent && disableDrag?.(st.current.intent)) {
+              setProgress(0);
+            } else {
+              setProgress(p);
+            }
         }
       }
     };
@@ -252,6 +258,7 @@ export function useSwipe(
     enableLeftAtRightEdge,
     enableRightAtLeftEdge,
     ignoreSelector,
+    disableDrag,
   ]);
 
   return { progress, isSwiping };
