@@ -213,27 +213,23 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
   const swipeContainerRef = useRef<HTMLDivElement>(null);
   
-  const handleSwipeRight = useCallback(() => {
+  const handleNavigateHome = useCallback(() => {
     if (activeView === 'history') {
-      if (isHistoryItemOpen) {
-        historyScreenRef.current?.closeOpenItem();
-      } else {
         handleNavigation('home');
-      }
     }
-  }, [activeView, isHistoryItemOpen, handleNavigation]);
-  
+  }, [activeView, handleNavigation]);
+
   const { progress, isSwiping } = useSwipe(
     swipeContainerRef,
     {
       onSwipeLeft: activeView === 'home' ? () => handleNavigation('history') : undefined,
-      onSwipeRight: handleSwipeRight,
+      onSwipeRight: activeView === 'history' ? handleNavigateHome : undefined,
     },
     { 
       enabled: !isCalculatorContainerOpen && !isHistoryItemInteracting,
-      disableDrag: (intent) => {
-        return intent === 'right' && activeView === 'history' && isHistoryItemOpen;
-      },
+      threshold: 32,
+      slop: 6,
+      ignoreSelector: '[data-swipeable-item="true"]',
     }
   );
   
@@ -414,6 +410,8 @@ const handleInstallClick = async () => {
     setIsHistoryItemInteracting(isInteracting);
   }, []);
 
+  const isEditingOrDeletingInHistory = (isFormOpen && !!editingExpense) || isConfirmDeleteModalOpen;
+
   const mainContentClasses = isCalculatorContainerOpen
     ? 'pointer-events-none'
     : '';
@@ -443,7 +441,7 @@ const handleInstallClick = async () => {
                 className="w-[200%] h-full flex swipe-container"
                 style={{
                   transform: `translateX(${viewTranslate}%)`,
-                  transition: isSwiping ? 'none' : 'transform 0.2s ease-out',
+                  transition: isSwiping ? 'none' : 'transform 0.12s ease-out',
                 }}
             >
                 <div className="w-1/2 h-full overflow-y-auto space-y-6 swipe-view" style={{ touchAction: 'pan-y' }}>
@@ -467,6 +465,8 @@ const handleInstallClick = async () => {
                       onEditExpense={openEditForm}
                       onDeleteExpense={handleDeleteRequest}
                       onItemStateChange={handleHistoryItemStateChange}
+                      isEditingOrDeleting={isEditingOrDeletingInHistory}
+                      onNavigateHome={handleNavigateHome}
                     />
                 </div>
             </div>

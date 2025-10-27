@@ -111,6 +111,7 @@ const MultipleExpensesModal: React.FC<MultipleExpensesModalProps> = ({ isOpen, o
   if (!isOpen) return null;
   
   const areAllSelected = selectedIndices.size === editableExpenses.length && editableExpenses.length > 0;
+  const today = new Date().toISOString().split('T')[0];
 
   const categoryOptions = Object.keys(CATEGORIES).map(cat => ({
     value: cat,
@@ -200,6 +201,7 @@ const MultipleExpensesModal: React.FC<MultipleExpensesModalProps> = ({ isOpen, o
                                     type="date"
                                     value={expense.date || ''}
                                     onChange={(e) => handleFieldChange(index, 'date', e.target.value)}
+                                    max={today}
                                     className="w-36 text-sm rounded-md border border-slate-300 bg-white py-1.5 px-2 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                                 />
                                 <p className="text-lg font-bold text-indigo-600 w-28 text-right">{formatCurrency(expense.amount || 0)}</p>

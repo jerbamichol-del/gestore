@@ -212,7 +212,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = ({
               style={{
                 width: '200%',
                 transform: `translateX(${translateX}%)`,
-                transition: dragging ? 'none' : 'transform 0.16s ease-out'
+                transition: dragging ? 'none' : 'transform 0.12s ease-out'
               }}
             >
               <div className="w-1/2 flex-shrink-0 px-4">

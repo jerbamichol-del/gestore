@@ -16,11 +16,12 @@ interface ExpenseItemProps {
   isOpen: boolean;
   onOpen: (id: string) => void;
   onInteractionChange: (isInteracting: boolean) => void;
+  onNavigateHome: () => void;
 }
 
 const ACTION_WIDTH = 144; // 9rem in pixels (w-36)
 
-const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, onDelete, isOpen, onOpen, onInteractionChange }) => {
+const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, onDelete, isOpen, onOpen, onInteractionChange, onNavigateHome }) => {
     const style = getCategoryStyle(expense.category);
     const accountName = accounts.find(a => a.id === expense.accountId)?.name || 'Sconosciuto';
     
@@ -79,11 +80,6 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
           const isHorizontal = Math.abs(deltaX) > Math.abs(deltaY);
 
           if (isHorizontal) {
-            if (dragState.current.initialTranslateX === 0 && deltaX > 0) {
-                dragState.current.isDragging = false;
-                return;
-            }
-
             dragState.current.isLocked = true;
             onInteractionChange(true);
             e.stopPropagation();
@@ -98,7 +94,8 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
             e.stopPropagation();
             let newX = dragState.current.initialTranslateX + deltaX;
 
-            if (newX > 0) newX = Math.tanh(newX / 50) * 25;
+            // Clamp the translation to prevent overshooting to the right
+            if (newX > 0) newX = 0;
             if (newX < -ACTION_WIDTH) newX = -ACTION_WIDTH - Math.tanh((-newX - ACTION_WIDTH) / 50) * 25;
 
             setTranslateX(newX, false);
@@ -106,37 +103,49 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
     };
 
     const handlePointerUp = (e: React.PointerEvent) => {
-      if (!dragState.current.isDragging) return;
-      
-      const wasLocked = dragState.current.isLocked;
-      
-      if (wasLocked) {
-        onInteractionChange(false);
-        try { itemRef.current?.releasePointerCapture(e.pointerId); } catch {}
-      
-        const elapsed = performance.now() - dragState.current.startTime;
-        const deltaX = e.clientX - dragState.current.startX;
-        const velocityX = elapsed > 10 ? deltaX / elapsed : 0;
+        if (!dragState.current.isDragging) return;
+    
+        const wasLocked = dragState.current.isLocked;
+    
+        dragState.current.isDragging = false;
+        dragState.current.isLocked = false;
+    
+        if (wasLocked) {
+            onInteractionChange(false);
+            try { itemRef.current?.releasePointerCapture(e.pointerId); } catch {}
+    
+            const elapsed = performance.now() - dragState.current.startTime;
+            const deltaX = e.clientX - dragState.current.startX;
+            const velocityX = elapsed > 10 ? deltaX / elapsed : 0;
+            
+            const wasClosed = dragState.current.initialTranslateX === 0;
 
-        const wasOpen = dragState.current.initialTranslateX < -1;
-        let shouldOpen: boolean;
-
-        const flickedRight = velocityX > 0.2 && deltaX > 15;
-        const draggedFarRight = deltaX > ACTION_WIDTH * 0.4;
-        const flickedLeft = velocityX < -0.2 && deltaX < -15;
-        const draggedFarLeft = deltaX < -ACTION_WIDTH * 0.4;
-
-        if (wasOpen) {
-          shouldOpen = !(flickedRight || draggedFarRight);
-        } else {
-          shouldOpen = flickedLeft || draggedFarLeft;
+            const isConfirmedRightSwipe = (deltaX > ACTION_WIDTH / 2) || (velocityX > 0.4 && deltaX > 20);
+            if (wasClosed && isConfirmedRightSwipe) {
+                onNavigateHome();
+                return;
+            }
+    
+            const wasOpen = !wasClosed;
+            let shouldOpen: boolean;
+    
+            const flickedRight = velocityX > 0.2 && deltaX > 15;
+            const draggedFarRight = deltaX > ACTION_WIDTH * 0.4;
+            const flickedLeft = velocityX < -0.2 && deltaX < -15;
+            const draggedFarLeft = deltaX < -ACTION_WIDTH * 0.4;
+    
+            if (wasOpen) {
+                shouldOpen = !(flickedRight || draggedFarRight);
+            } else {
+                shouldOpen = flickedLeft || draggedFarLeft;
+            }
+            
+            if (shouldOpen === isOpen) {
+                setTranslateX(shouldOpen ? -ACTION_WIDTH : 0, true);
+            } else {
+                onOpen(shouldOpen ? expense.id : '');
+            }
         }
-        
-        onOpen(shouldOpen ? expense.id : '');
-      }
-      
-      dragState.current.isDragging = false;
-      dragState.current.isLocked = false;
     };
     
     useEffect(() => {
@@ -146,11 +155,15 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
     }, [isOpen, setTranslateX]);
 
     return (
-        <div className="relative bg-white overflow-hidden">
+        <div data-expense-item-root className="relative bg-white overflow-hidden" onClick={(e) => e.stopPropagation()}>
             {/* Actions Layer (underneath) */}
             <div className="absolute top-0 right-0 h-full flex items-center z-0">
                 <button
-                    onClick={() => onEdit(expense)}
+                    onPointerDown={(e) => e.preventDefault()}
+                    onPointerUp={(e) => {
+                      e.stopPropagation();
+                      onEdit(expense);
+                    }}
                     className="w-[72px] h-full flex flex-col items-center justify-center bg-indigo-500 text-white hover:bg-indigo-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white"
                     aria-label="Modifica spesa"
                 >
@@ -158,7 +171,11 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
                     <span className="text-xs mt-1">Modifica</span>
                 </button>
                 <button
-                    onClick={() => onDelete(expense.id)}
+                    onPointerDown={(e) => e.preventDefault()}
+                    onPointerUp={(e) => {
+                      e.stopPropagation();
+                      onDelete(expense.id);
+                    }}
                     className="w-[72px] h-full flex flex-col items-center justify-center bg-red-500 text-white hover:bg-red-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white"
                     aria-label="Elimina spesa"
                 >
@@ -174,6 +191,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
                 onPointerCancel={handlePointerUp}
+                data-swipeable-item="true"
                 className="relative flex items-center gap-4 py-3 px-4 bg-white z-10"
                 style={{ touchAction: 'pan-y' }}
             >
@@ -196,6 +214,8 @@ interface HistoryScreenProps {
   onEditExpense: (expense: Expense) => void;
   onDeleteExpense: (id: string) => void;
   onItemStateChange: (state: { isOpen: boolean, isInteracting: boolean }) => void;
+  isEditingOrDeleting: boolean;
+  onNavigateHome: () => void;
 }
 
 interface HistoryScreenHandles {
@@ -224,11 +244,13 @@ const getWeekLabel = (year: number, week: number): string => {
 };
 
 
-const HistoryScreen = forwardRef<HistoryScreenHandles, HistoryScreenProps>(({ expenses, accounts, onEditExpense, onDeleteExpense, onItemStateChange }, ref) => {
+const HistoryScreen = forwardRef<HistoryScreenHandles, HistoryScreenProps>(({ expenses, accounts, onEditExpense, onDeleteExpense, onItemStateChange, isEditingOrDeleting, onNavigateHome }, ref) => {
     const [dateFilter, setDateFilter] = useState<DateFilter>('all');
     const [customRange, setCustomRange] = useState<{ start: string | null, end: string | null }>({ start: null, end: null });
     const [openItemId, setOpenItemId] = useState<string | null>(null);
     const [isInteracting, setIsInteracting] = useState(false);
+    const autoCloseTimerRef = useRef<number | null>(null);
+    const tapStartRef = useRef<{ x: number; y: number } | null>(null);
 
     useImperativeHandle(ref, () => ({
       closeOpenItem: () => {
@@ -239,6 +261,23 @@ const HistoryScreen = forwardRef<HistoryScreenHandles, HistoryScreenProps>(({ ex
     useEffect(() => {
         onItemStateChange({ isOpen: openItemId !== null, isInteracting });
     }, [openItemId, isInteracting, onItemStateChange]);
+
+    // Effetto per la chiusura automatica
+    useEffect(() => {
+        if (autoCloseTimerRef.current) {
+            clearTimeout(autoCloseTimerRef.current);
+        }
+        if (openItemId && !isEditingOrDeleting) {
+            autoCloseTimerRef.current = window.setTimeout(() => {
+                setOpenItemId(null);
+            }, 5000);
+        }
+        return () => {
+            if (autoCloseTimerRef.current) {
+                clearTimeout(autoCloseTimerRef.current);
+            }
+        };
+    }, [openItemId, isEditingOrDeleting]);
 
     const isCustomRangeActive = customRange.start !== null && customRange.end !== null;
     
@@ -349,6 +388,28 @@ const HistoryScreen = forwardRef<HistoryScreenHandles, HistoryScreenProps>(({ ex
         subtitle: 'Prova a selezionare un periodo di tempo diverso.'
     };
 
+    const handleContainerPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        tapStartRef.current = { x: e.clientX, y: e.clientY };
+    };
+
+    const handleContainerPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+        if (tapStartRef.current) {
+            const dx = Math.abs(e.clientX - tapStartRef.current.x);
+            const dy = Math.abs(e.clientY - tapStartRef.current.y);
+            const isTap = dx < 5 && dy < 5;
+
+            if (isTap && openItemId) {
+                const isClickInsideAnItem = (e.target as HTMLElement).closest('[data-expense-item-root]');
+                if (!isClickInsideAnItem) {
+                    setOpenItemId(null);
+                }
+            }
+        }
+        tapStartRef.current = null;
+    };
+
+
     return (
         <div className="h-full flex flex-col animate-fade-in-up">
             <div className="flex-shrink-0 pt-4 md:pt-8">
@@ -357,7 +418,12 @@ const HistoryScreen = forwardRef<HistoryScreenHandles, HistoryScreenProps>(({ ex
                 </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto pb-28" style={{ touchAction: 'pan-y' }}>
+            <div 
+              className="flex-1 overflow-y-auto pb-28" 
+              style={{ touchAction: 'pan-y' }}
+              onPointerDownCapture={handleContainerPointerDown}
+              onPointerUp={handleContainerPointerUp}
+            >
                 {historyData.length > 0 ? (
                     <div className="space-y-6">
                         {historyData.map(({ weekKey, weekLabel, weekTotal, days }) => (
@@ -387,6 +453,7 @@ const HistoryScreen = forwardRef<HistoryScreenHandles, HistoryScreenProps>(({ ex
                                                         isOpen={openItemId === expense.id}
                                                         onOpen={handleItemOpen}
                                                         onInteractionChange={setIsInteracting}
+                                                        onNavigateHome={onNavigateHome}
                                                     />
                                                 ))}
                                             </div>

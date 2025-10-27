@@ -44,6 +44,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     
     const selectedAccountLabel = accounts.find(a => a.id === formData.accountId)?.name;
     const accountOptions = accounts.map(acc => ({ value: acc.id, label: acc.name }));
+    const today = new Date().toISOString().split('T')[0];
     
     if (typeof formData.amount !== 'number') {
         return (
@@ -109,6 +110,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
                                 type="date"
                                 value={formData.date || ''}
                                 onChange={handleInputChange}
+                                max={today}
                                 className="block w-full rounded-md border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-base"
                             />
                         </div>

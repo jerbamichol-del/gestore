@@ -309,6 +309,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                       onChange={handleInputChange}
                       icon={<CalendarIcon className="h-5 w-5 text-slate-400" />}
                       type="date"
+                      max={getTodayString()}
                   />
                </div>
               
