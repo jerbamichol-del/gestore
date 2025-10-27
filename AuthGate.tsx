@@ -7,7 +7,7 @@ import { useLocalStorage } from './hooks/useLocalStorage';
 
 type AuthView = 'login' | 'register' | 'forgotPassword';
 
-const LOCK_TIMEOUT_MS = 5000; // 5 secondi
+const LOCK_TIMEOUT_MS = 30000; // 30 secondi
 
 const AuthGate: React.FC = () => {
   const [sessionToken, setSessionToken] = useState<string | null>(null);
@@ -44,6 +44,12 @@ const AuthGate: React.FC = () => {
            hiddenTimestampRef.current = Date.now();
         }
       } else if (document.visibilityState === 'visible') {
+        if (sessionStorage.getItem('preventAutoLock') === 'true') {
+            sessionStorage.removeItem('preventAutoLock');
+            hiddenTimestampRef.current = null; // Reset timestamp to prevent logout
+            return;
+        }
+
         if (sessionToken && hiddenTimestampRef.current) {
           const elapsed = Date.now() - hiddenTimestampRef.current;
           if (elapsed > LOCK_TIMEOUT_MS) {

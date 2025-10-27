@@ -3,10 +3,11 @@ import { Expense, Account, CATEGORIES } from '../types';
 import { XMarkIcon } from './icons/XMarkIcon';
 import { formatCurrency } from './icons/formatters';
 import { getCategoryStyle } from '../utils/categoryStyles';
-import CustomSelect from './CustomSelect';
 import { PencilSquareIcon } from './icons/PencilSquareIcon';
 import { DocumentTextIcon } from './icons/DocumentTextIcon';
 import { TagIcon } from './icons/TagIcon';
+import { CreditCardIcon } from './icons/CreditCardIcon';
+import SelectionMenu from './SelectionMenu';
 
 interface MultipleExpensesModalProps {
   isOpen: boolean;
@@ -32,26 +33,61 @@ const CustomCheckbox = ({ checked, onChange, id, label }: { checked: boolean, on
     </div>
 );
 
+const SelectionButton = ({ label, value, onClick, placeholder, ariaLabel, disabled, icon }: { label: string, value?: string, onClick: () => void, placeholder: string, ariaLabel: string, disabled?: boolean, icon: React.ReactNode }) => {
+    const hasValue = value && value !== placeholder && value !== '';
+    return (
+      <div>
+        <label className={`block text-sm font-medium text-slate-700 mb-1 transition-colors ${disabled ? 'text-slate-400' : 'text-slate-700'}`}>{label}</label>
+        <button
+          type="button"
+          onClick={onClick}
+          aria-label={ariaLabel}
+          disabled={disabled}
+          className={`w-full flex items-center justify-between text-left gap-2 px-3 py-2.5 text-sm rounded-lg border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors ${
+            disabled
+              ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed'
+              : hasValue
+                ? 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100'
+                : 'bg-white border-slate-300 text-slate-500 hover:bg-slate-50'
+          }`}
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            {icon}
+            <span className="truncate">
+              {value || placeholder}
+            </span>
+          </div>
+        </button>
+      </div>
+    );
+};
+
 
 const MultipleExpensesModal: React.FC<MultipleExpensesModalProps> = ({ isOpen, onClose, expenses, accounts, onConfirm }) => {
   const [isAnimating, setIsAnimating] = useState(false);
-  const [editableExpenses, setEditableExpenses] = useState<Partial<Omit<Expense, 'id'>>[]>([]);
+  const [editableExpenses, setEditableExpenses] = useState<(Partial<Omit<Expense, 'id'>> & { accountId: string })[]>([]);
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
+  const [activeMenu, setActiveMenu] = useState<{ index: number; type: 'category' | 'subcategory' | 'account' } | null>(null);
 
   useEffect(() => {
     if (isOpen) {
-      const newEditableExpenses = expenses.map(e => ({...e}));
+      const defaultAccountId = accounts.length > 0 ? accounts[0].id : '';
+      const newEditableExpenses = expenses.map(e => ({
+          ...e,
+          accountId: e.accountId || defaultAccountId,
+      }));
       setEditableExpenses(newEditableExpenses);
       setSelectedIndices(new Set(expenses.map((_, index) => index)));
       setExpandedIndex(null);
+      setActiveMenu(null);
       
       const timer = setTimeout(() => setIsAnimating(true), 10);
       return () => clearTimeout(timer);
     } else {
       setIsAnimating(false);
     }
-  }, [isOpen, expenses]);
+  }, [isOpen, expenses, accounts]);
   
   const handleToggleSelection = (index: number) => {
       const newSelection = new Set(selectedIndices);
@@ -71,7 +107,7 @@ const MultipleExpensesModal: React.FC<MultipleExpensesModalProps> = ({ isOpen, o
       }
   };
 
-  const handleFieldChange = (index: number, field: keyof Omit<Expense, 'id' | 'amount'>, value: string) => {
+  const handleFieldChange = (index: number, field: keyof Omit<Expense, 'id'>, value: string) => {
       const updatedExpenses = [...editableExpenses];
       const expenseToUpdate = { ...updatedExpenses[index], [field]: value };
 
@@ -88,7 +124,6 @@ const MultipleExpensesModal: React.FC<MultipleExpensesModalProps> = ({ isOpen, o
 
 
   const handleConfirm = () => {
-    const defaultAccountId = accounts.length > 0 ? accounts[0].id : '';
     const expensesToAdd = editableExpenses
       .filter((_, index) => selectedIndices.has(index))
       .map(exp => ({
@@ -97,7 +132,7 @@ const MultipleExpensesModal: React.FC<MultipleExpensesModalProps> = ({ isOpen, o
         date: exp.date || new Date().toISOString().split('T')[0],
         category: exp.category || 'Altro',
         subcategory: exp.subcategory || undefined,
-        accountId: exp.accountId || defaultAccountId,
+        accountId: exp.accountId,
       }))
       .filter(exp => exp.amount > 0); 
 
@@ -120,6 +155,16 @@ const MultipleExpensesModal: React.FC<MultipleExpensesModalProps> = ({ isOpen, o
     color: getCategoryStyle(cat).color,
     bgColor: getCategoryStyle(cat).bgColor,
   }));
+  
+  const accountOptions = accounts.map(acc => ({
+      value: acc.id,
+      label: acc.name,
+  }));
+
+  const activeExpense = activeMenu ? editableExpenses[activeMenu.index] : null;
+  const subcategoryOptionsForActive = activeExpense?.category
+    ? (CATEGORIES[activeExpense.category as keyof typeof CATEGORIES]?.map(sub => ({ value: sub, label: sub })) || [])
+    : [];
 
   return (
     <div
@@ -163,52 +208,38 @@ const MultipleExpensesModal: React.FC<MultipleExpensesModalProps> = ({ isOpen, o
                 {editableExpenses.map((expense, index) => {
                     const isSelected = selectedIndices.has(index);
                     const isExpanded = expandedIndex === index;
-                    const categoryStyle = getCategoryStyle(expense.category || 'Altro');
                     
-                    const subcategoriesForCategory = expense.category ? CATEGORIES[expense.category as keyof typeof CATEGORIES] : undefined;
-                    const availableSubcategories = Array.isArray(subcategoriesForCategory) ? subcategoriesForCategory : [];
-                    
-                    const subcategoryOptions = availableSubcategories.map(subcat => ({
-                        value: subcat,
-                        label: subcat
-                    }));
-
+                    const subcategoriesForCategory = expense.category ? CATEGORIES[expense.category as keyof typeof CATEGORIES] : [];
+                    const selectedAccountLabel = accounts.find(a => a.id === expense.accountId)?.name;
+                    const selectedCategoryLabel = expense.category ? getCategoryStyle(expense.category).label : undefined;
 
                     return (
                     <div 
                         key={index} 
-                        className={`relative bg-white rounded-lg shadow-sm border ${isSelected ? 'border-indigo-400' : 'border-slate-200'} ${isExpanded ? 'ring-2 ring-indigo-300 z-10' : 'z-0'} transition-all duration-300 animate-fade-in-up`} 
-                        style={{ animationDelay: `${index * 50}ms` }}
+                        className={`bg-white rounded-lg shadow-sm border ${isSelected ? 'border-indigo-400' : 'border-slate-200'} transition-all duration-300 animate-fade-in-up`} 
+                        style={{ animationDelay: `${index * 50}ms`, zIndex: isExpanded ? 10 : 1 }}
                     >
-                        <div className="p-3 flex items-center justify-between gap-4">
-                            <div className="flex items-center gap-4 flex-1 min-w-0">
-                                <CustomCheckbox 
-                                    id={`expense-${index}`} 
-                                    checked={isSelected} 
-                                    onChange={() => handleToggleSelection(index)}
-                                    label={`Seleziona spesa ${expense.description}`}
-                                />
-                                <span className={`w-10 h-10 rounded-lg flex-shrink-0 flex items-center justify-center ${categoryStyle.bgColor}`}>
-                                    <categoryStyle.Icon className={`w-6 h-6 ${categoryStyle.color}`} />
-                                </span>
-                                <div className="flex-1 min-w-0">
-                                    <p className="font-semibold text-slate-800 truncate" title={expense.description}>{expense.description || 'Senza descrizione'}</p>
-                                    <p className="text-sm text-slate-500 truncate">{expense.category || 'Altro'}</p>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-4">
-                                <input 
-                                    type="date"
-                                    value={expense.date || ''}
-                                    onChange={(e) => handleFieldChange(index, 'date', e.target.value)}
-                                    max={today}
-                                    className="w-36 text-sm rounded-md border border-slate-300 bg-white py-1.5 px-2 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-                                />
-                                <p className="text-lg font-bold text-indigo-600 w-28 text-right">{formatCurrency(expense.amount || 0)}</p>
-                                <button onClick={() => handleToggleExpand(index)} className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-100 rounded-full transition-colors" aria-label="Modifica spesa">
-                                    <PencilSquareIcon className="w-5 h-5" />
-                                </button>
-                            </div>
+                        <div className="p-3 flex items-center gap-3">
+                           <CustomCheckbox 
+                                id={`expense-${index}`} 
+                                checked={isSelected} 
+                                onChange={() => handleToggleSelection(index)}
+                                label={`Seleziona spesa ${expense.description}`}
+                            />
+                            <input 
+                                type="date"
+                                value={expense.date || ''}
+                                onChange={(e) => handleFieldChange(index, 'date', e.target.value)}
+                                max={today}
+                                className="text-sm rounded-md border border-slate-300 bg-white py-1.5 px-2 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                            />
+                            <div className="flex-grow" />
+                            <p className="text-lg font-bold text-indigo-600 shrink-0">
+                                {formatCurrency(expense.amount || 0)}
+                            </p>
+                             <button onClick={() => handleToggleExpand(index)} className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-100 rounded-full transition-colors flex-shrink-0" aria-label="Modifica dettagli spesa">
+                                <PencilSquareIcon className="w-5 h-5" />
+                            </button>
                         </div>
                         
                         {isExpanded && (
@@ -229,28 +260,32 @@ const MultipleExpensesModal: React.FC<MultipleExpensesModalProps> = ({ isOpen, o
                                         />
                                     </div>
                                 </div>
-                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                                     <div>
-                                        <label htmlFor={`category-${index}`} className="block text-sm font-medium text-slate-700 mb-1">Categoria</label>
-                                        <CustomSelect
-                                            options={categoryOptions}
-                                            selectedValue={expense.category || ''}
-                                            onSelect={(value) => handleFieldChange(index, 'category', value)}
-                                            placeholder="Seleziona categoria"
-                                            icon={<TagIcon className="h-5 w-5 text-slate-400" aria-hidden="true" />}
-                                        />
-                                     </div>
-                                      <div>
-                                        <label htmlFor={`subcategory-${index}`} className="block text-sm font-medium text-slate-700 mb-1">Sottocategoria</label>
-                                        <CustomSelect
-                                            options={subcategoryOptions}
-                                            selectedValue={expense.subcategory || ''}
-                                            onSelect={(value) => handleFieldChange(index, 'subcategory', value)}
-                                            placeholder="Nessuna"
-                                            icon={<TagIcon className="h-5 w-5 text-slate-400" aria-hidden="true" />}
-                                            disabled={!expense.category || availableSubcategories.length === 0}
-                                        />
-                                      </div>
+                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                                     <SelectionButton
+                                        label="Conto"
+                                        value={selectedAccountLabel}
+                                        onClick={() => setActiveMenu({ index, type: 'account' })}
+                                        placeholder="Seleziona"
+                                        ariaLabel="Seleziona conto di pagamento"
+                                        icon={<CreditCardIcon className="h-5 w-5 text-slate-400" />}
+                                    />
+                                    <SelectionButton
+                                        label="Categoria"
+                                        value={selectedCategoryLabel}
+                                        onClick={() => setActiveMenu({ index, type: 'category' })}
+                                        placeholder="Seleziona"
+                                        ariaLabel="Seleziona categoria"
+                                        icon={<TagIcon className="h-5 w-5 text-slate-400" />}
+                                    />
+                                    <SelectionButton
+                                        label="Sottocategoria"
+                                        value={expense.subcategory}
+                                        onClick={() => setActiveMenu({ index, type: 'subcategory' })}
+                                        placeholder="Nessuna"
+                                        ariaLabel="Seleziona sottocategoria"
+                                        icon={<TagIcon className="h-5 w-5 text-slate-400" />}
+                                        disabled={!expense.category || subcategoriesForCategory.length === 0}
+                                    />
                                 </div>
                             </div>
                         )}
@@ -278,6 +313,42 @@ const MultipleExpensesModal: React.FC<MultipleExpensesModalProps> = ({ isOpen, o
             </button>
         </div>
       </div>
+
+      <SelectionMenu
+        isOpen={activeMenu?.type === 'account'}
+        onClose={() => setActiveMenu(null)}
+        title="Seleziona un Conto"
+        options={accountOptions}
+        selectedValue={activeExpense?.accountId || ''}
+        onSelect={(value) => {
+            if (activeMenu) handleFieldChange(activeMenu.index, 'accountId', value);
+            setActiveMenu(null);
+        }}
+      />
+
+      <SelectionMenu
+        isOpen={activeMenu?.type === 'category'}
+        onClose={() => setActiveMenu(null)}
+        title="Seleziona una Categoria"
+        options={categoryOptions}
+        selectedValue={activeExpense?.category || ''}
+        onSelect={(value) => {
+            if (activeMenu) handleFieldChange(activeMenu.index, 'category', value);
+            setActiveMenu(null);
+        }}
+      />
+
+      <SelectionMenu
+        isOpen={activeMenu?.type === 'subcategory'}
+        onClose={() => setActiveMenu(null)}
+        title="Seleziona Sottocategoria"
+        options={subcategoryOptionsForActive}
+        selectedValue={activeExpense?.subcategory || ''}
+        onSelect={(value) => {
+            if (activeMenu) handleFieldChange(activeMenu.index, 'subcategory', value);
+            setActiveMenu(null);
+        }}
+      />
     </div>
   );
 };

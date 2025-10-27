@@ -107,11 +107,13 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const [prefilledData, setPrefilledData] = useState<Partial<Omit<Expense, 'id'>> | undefined>(undefined);
   const [expenseToDeleteId, setExpenseToDeleteId] = useState<string | null>(null);
   const [multipleExpensesData, setMultipleExpensesData] = useState<Partial<Omit<Expense, 'id'>>[]>([]);
+  const [imageForAnalysis, setImageForAnalysis] = useState<OfflineImage | null>(null);
 
   // Offline & Sync States
   const isOnline = useOnlineStatus();
   const [pendingImages, setPendingImages] = useState<OfflineImage[]>([]);
   const [syncingImageId, setSyncingImageId] = useState<string | null>(null);
+  const prevIsOnlineRef = useRef<boolean | undefined>(undefined);
 
   // UI State
   const [toast, setToast] = useState<ToastMessage | null>(null);
@@ -142,6 +144,11 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         const pushStateAfterHandling = () => window.history.pushState({ view: activeView }, '');
 
         // Priorità 1: Chiudere le modali aperte
+        if (!!imageForAnalysis) {
+            setImageForAnalysis(null); // Chiude la modale di analisi
+            pushStateAfterHandling();
+            return;
+        }
         if (isCalculatorContainerOpen) {
             setIsCalculatorContainerOpen(false);
             pushStateAfterHandling();
@@ -207,7 +214,8 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 }, [
     activeView, handleNavigation, showToast,
     isCalculatorContainerOpen, isFormOpen, isImageSourceModalOpen,
-    isVoiceModalOpen, isConfirmDeleteModalOpen, isMultipleExpensesModalOpen
+    isVoiceModalOpen, isConfirmDeleteModalOpen, isMultipleExpensesModalOpen,
+    imageForAnalysis
 ]);
 
 
@@ -265,7 +273,7 @@ const handleInstallClick = async () => {
     getQueuedImages().then(images => {
       setPendingImages(images);
       if (images.length > pendingImagesCountRef.current) {
-        showToast({ message: 'Immagine ricevuta! Pronta per l\'analisi.', type: 'info' });
+        showToast({ message: 'Immagine salvata! Pronta per l\'analisi.', type: 'info' });
       }
       pendingImagesCountRef.current = images.length;
     });
@@ -283,10 +291,12 @@ const handleInstallClick = async () => {
 
   // Sincronizzazione automatica quando si torna online
   useEffect(() => {
-    if (isOnline && pendingImages.length > 0) {
-      // Potresti aggiungere una logica per avviare automaticamente l'analisi qui
+    // Mostra la notifica "Sei online!" solo quando si passa da offline a online.
+    if (prevIsOnlineRef.current === false && isOnline && pendingImages.length > 0) {
       showToast({ message: `Sei online! ${pendingImages.length} immagini in attesa.`, type: 'info' });
     }
+    // Aggiorna lo stato online precedente per il prossimo render.
+    prevIsOnlineRef.current = isOnline;
   }, [isOnline, pendingImages.length, showToast]);
 
   const addExpense = (newExpense: Omit<Expense, 'id'>) => {
@@ -347,6 +357,7 @@ const handleInstallClick = async () => {
 
   const handleImagePick = async (source: 'camera' | 'gallery') => {
     setIsImageSourceModalOpen(false);
+    sessionStorage.setItem('preventAutoLock', 'true');
     try {
         const file = await pickImage(source);
         const base64Image = await fileToBase64(file);
@@ -356,8 +367,12 @@ const handleInstallClick = async () => {
             mimeType: file.type,
         };
 
-        await addImageToQueue(newImage);
-        refreshPendingImages();
+        if (isOnline) {
+            setImageForAnalysis(newImage);
+        } else {
+            await addImageToQueue(newImage);
+            refreshPendingImages();
+        }
     } catch (error) {
         if (error instanceof Error && error.message.includes('annullata')) {
              // L'utente ha annullato, non mostrare errore
@@ -365,10 +380,12 @@ const handleInstallClick = async () => {
             console.error('Errore selezione immagine:', error);
             showToast({ message: 'Errore durante la selezione dell\'immagine.', type: 'error' });
         }
+    } finally {
+        setTimeout(() => sessionStorage.removeItem('preventAutoLock'), 2000); // safety clear
     }
   };
   
-  const handleAnalyzeImage = async (image: OfflineImage) => {
+  const handleAnalyzeImage = async (image: OfflineImage, fromQueue: boolean = true) => {
       if (!isOnline) {
           showToast({ message: 'Connettiti a internet per analizzare le immagini.', type: 'error' });
           return;
@@ -388,8 +405,10 @@ const handleInstallClick = async () => {
               setMultipleExpensesData(parsedData);
               setIsMultipleExpensesModalOpen(true);
           }
-          await deleteImageFromQueue(image.id);
-          refreshPendingImages();
+          if (fromQueue) {
+            await deleteImageFromQueue(image.id);
+            refreshPendingImages();
+          }
       } catch (error) {
           console.error('Error durante l\'analisi AI:', error);
           showToast({ message: 'Errore durante l\'analisi dell\'immagine.', type: 'error' });
@@ -448,7 +467,7 @@ const handleInstallClick = async () => {
                     <Dashboard expenses={expenses} onLogout={onLogout} />
                     <PendingImages 
                         images={pendingImages}
-                        onAnalyze={handleAnalyzeImage}
+                        onAnalyze={(image) => handleAnalyzeImage(image, true)}
                         onDelete={async (id) => {
                             await deleteImageFromQueue(id);
                             refreshPendingImages();
@@ -571,6 +590,30 @@ const handleInstallClick = async () => {
             onConfirm={confirmDelete}
             title="Conferma Eliminazione"
             message={<>Sei sicuro di voler eliminare questa spesa? <br/>L'azione è irreversibile.</>}
+            variant="danger"
+        />
+
+        <ConfirmationModal
+            isOpen={!!imageForAnalysis}
+            onClose={() => {
+                if (imageForAnalysis) {
+                    addImageToQueue(imageForAnalysis).then(() => {
+                        refreshPendingImages();
+                        setImageForAnalysis(null);
+                    });
+                }
+            }}
+            onConfirm={() => {
+                if (imageForAnalysis) {
+                    handleAnalyzeImage(imageForAnalysis, false);
+                    setImageForAnalysis(null);
+                }
+            }}
+            title="Analizza Immagine"
+            message="Vuoi analizzare subito questa immagine per rilevare le spese?"
+            variant="info"
+            confirmButtonText="Analizza Ora"
+            cancelButtonText="Più Tardi"
         />
         
         <MultipleExpensesModal 

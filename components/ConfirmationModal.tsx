@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ExclamationTriangleIcon } from './icons/ExclamationTriangleIcon';
+import { InformationCircleIcon } from './icons/InformationCircleIcon';
 
 interface ConfirmationModalProps {
   isOpen: boolean;
@@ -7,9 +8,21 @@ interface ConfirmationModalProps {
   onConfirm: () => void;
   title: string;
   message: React.ReactNode;
+  variant?: 'danger' | 'info';
+  confirmButtonText?: string;
+  cancelButtonText?: string;
 }
 
-const ConfirmationModal: React.FC<ConfirmationModalProps> = ({ isOpen, onClose, onConfirm, title, message }) => {
+const ConfirmationModal: React.FC<ConfirmationModalProps> = ({ 
+  isOpen, 
+  onClose, 
+  onConfirm, 
+  title, 
+  message, 
+  variant = 'danger',
+  confirmButtonText = 'Conferma',
+  cancelButtonText = 'Annulla'
+}) => {
   const [isAnimating, setIsAnimating] = useState(false);
 
   useEffect(() => {
@@ -22,6 +35,22 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({ isOpen, onClose, 
   }, [isOpen]);
 
   if (!isOpen) return null;
+
+  const config = {
+      danger: {
+          icon: ExclamationTriangleIcon,
+          iconColor: 'text-red-600',
+          bgColor: 'bg-red-100',
+          confirmButtonClasses: 'bg-red-600 hover:bg-red-700 focus:ring-red-500',
+      },
+      info: {
+          icon: InformationCircleIcon,
+          iconColor: 'text-indigo-600',
+          bgColor: 'bg-indigo-100',
+          confirmButtonClasses: 'bg-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500',
+      }
+  }
+  const { icon: Icon, iconColor, bgColor, confirmButtonClasses } = config[variant];
 
   return (
     <div
@@ -37,8 +66,8 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({ isOpen, onClose, 
       >
         <div className="p-6">
           <div className="sm:flex sm:items-start">
-            <div className="mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
-              <ExclamationTriangleIcon className="h-6 w-6 text-red-600" aria-hidden="true" />
+            <div className={`mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full ${bgColor} sm:mx-0 sm:h-10 sm:w-10`}>
+              <Icon className={`h-6 w-6 ${iconColor}`} aria-hidden="true" />
             </div>
             <div className="mt-3 text-center sm:ml-4 sm:mt-0 sm:text-left">
               <h3 className="text-lg font-semibold leading-6 text-slate-900" id="modal-title">
@@ -58,14 +87,14 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({ isOpen, onClose, 
             onClick={onClose}
             className="w-full sm:w-auto px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg shadow-sm hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors"
           >
-            Annulla
+            {cancelButtonText}
           </button>
           <button
             type="button"
             onClick={onConfirm}
-            className="w-full sm:w-auto px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors"
+            className={`w-full sm:w-auto px-4 py-2 text-sm font-semibold text-white rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors ${confirmButtonClasses}`}
           >
-            Conferma
+            {confirmButtonText}
           </button>
         </div>
       </div>
