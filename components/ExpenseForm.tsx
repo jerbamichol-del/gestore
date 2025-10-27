@@ -140,11 +140,13 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
   }, []);
   
   const handleSelectChange = (field: keyof Omit<Expense, 'id'>, value: string) => {
-    const updatedFormData = { ...formData, [field]: value };
-    if (field === 'category') {
-      updatedFormData.subcategory = ''; // Reset subcategory when category changes
-    }
-    setFormData(updatedFormData);
+    setFormData(currentData => {
+      const newData = { ...currentData, [field]: value };
+      if (field === 'category') {
+        newData.subcategory = '';
+      }
+      return newData;
+    });
     setActiveMenu(null);
   };
 

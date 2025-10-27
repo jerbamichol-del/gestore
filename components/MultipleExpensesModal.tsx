@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Expense, Account, CATEGORIES } from '../types';
 import { XMarkIcon } from './icons/XMarkIcon';
 import { formatCurrency } from './icons/formatters';
@@ -108,14 +108,31 @@ const MultipleExpensesModal: React.FC<MultipleExpensesModalProps> = ({ isOpen, o
   };
 
   const handleFieldChange = (index: number, field: keyof Omit<Expense, 'id'>, value: string) => {
-      const updatedExpenses = [...editableExpenses];
-      const expenseToUpdate = { ...updatedExpenses[index], [field]: value };
+    setEditableExpenses(prevExpenses =>
+      prevExpenses.map((expense, i) => {
+        if (i !== index) {
+          return expense;
+        }
+        
+        const updatedExpense = {
+          ...expense,
+          [field]: value,
+        };
 
-      if (field === 'category') {
-          expenseToUpdate.subcategory = '';
-      }
-      updatedExpenses[index] = expenseToUpdate;
-      setEditableExpenses(updatedExpenses);
+        if (field === 'category') {
+          updatedExpense.subcategory = '';
+        }
+        
+        return updatedExpense;
+      })
+    );
+  };
+
+  const handleSelection = (field: 'accountId' | 'category' | 'subcategory', value: string) => {
+    if (activeMenu) {
+        handleFieldChange(activeMenu.index, field, value);
+        setActiveMenu(null);
+    }
   };
 
   const handleToggleExpand = (index: number) => {
@@ -320,10 +337,7 @@ const MultipleExpensesModal: React.FC<MultipleExpensesModalProps> = ({ isOpen, o
         title="Seleziona un Conto"
         options={accountOptions}
         selectedValue={activeExpense?.accountId || ''}
-        onSelect={(value) => {
-            if (activeMenu) handleFieldChange(activeMenu.index, 'accountId', value);
-            setActiveMenu(null);
-        }}
+        onSelect={(value) => handleSelection('accountId', value)}
       />
 
       <SelectionMenu
@@ -332,10 +346,7 @@ const MultipleExpensesModal: React.FC<MultipleExpensesModalProps> = ({ isOpen, o
         title="Seleziona una Categoria"
         options={categoryOptions}
         selectedValue={activeExpense?.category || ''}
-        onSelect={(value) => {
-            if (activeMenu) handleFieldChange(activeMenu.index, 'category', value);
-            setActiveMenu(null);
-        }}
+        onSelect={(value) => handleSelection('category', value)}
       />
 
       <SelectionMenu
@@ -344,10 +355,7 @@ const MultipleExpensesModal: React.FC<MultipleExpensesModalProps> = ({ isOpen, o
         title="Seleziona Sottocategoria"
         options={subcategoryOptionsForActive}
         selectedValue={activeExpense?.subcategory || ''}
-        onSelect={(value) => {
-            if (activeMenu) handleFieldChange(activeMenu.index, 'subcategory', value);
-            setActiveMenu(null);
-        }}
+        onSelect={(value) => handleSelection('subcategory', value)}
       />
     </div>
   );

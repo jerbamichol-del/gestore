@@ -89,6 +89,7 @@ const SelectionMenu: React.FC<SelectionMenuProps> = ({ isOpen, onClose, title, o
       <div
         ref={menuRef}
         onTransitionEnd={onInternalTransitionEnd}
+        onClick={(e) => e.stopPropagation()}
         className="absolute bottom-0 left-0 right-0 z-10 bg-slate-50 rounded-t-2xl shadow-xl max-h-[80vh] flex flex-col"
         style={{
           transform: transformStyle,
@@ -119,7 +120,7 @@ const SelectionMenu: React.FC<SelectionMenuProps> = ({ isOpen, onClose, title, o
               return (
                 <li key={option.value}>
                   <button
-                    onClick={() => { onSelect(option.value); handleManualClose(); }}
+                    onClick={() => onSelect(option.value)}
                     className={`w-full text-left p-4 flex items-center justify-between gap-4 transition-colors rounded-lg ${
                       isSelected ? 'bg-indigo-100' : 'hover:bg-slate-200'
                     }`}
