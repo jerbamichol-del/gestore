@@ -23,6 +23,7 @@ import { ComputerDesktopIcon } from './components/icons/ComputerDesktopIcon';
 import { XMarkIcon } from './components/icons/XMarkIcon';
 import { SpinnerIcon } from './components/icons/SpinnerIcon';
 import CalculatorContainer from './components/CalculatorContainer';
+import SuccessIndicator from './components/SuccessIndicator';
 
 type NavView = 'home' | 'history';
 
@@ -123,7 +124,19 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const [isHistoryItemOpen, setIsHistoryItemOpen] = useState(false);
   const [isHistoryItemInteracting, setIsHistoryItemInteracting] = useState(false);
   const historyScreenRef = useRef<HistoryScreenHandles>(null);
+  const [showSuccessIndicator, setShowSuccessIndicator] = useState(false);
+  const successIndicatorTimerRef = useRef<number | null>(null);
 
+  const triggerSuccessIndicator = useCallback(() => {
+    if (successIndicatorTimerRef.current) {
+        clearTimeout(successIndicatorTimerRef.current);
+    }
+    setShowSuccessIndicator(true);
+    successIndicatorTimerRef.current = window.setTimeout(() => {
+        setShowSuccessIndicator(false);
+        successIndicatorTimerRef.current = null;
+    }, 2000);
+  }, []);
 
   const showToast = useCallback((toastMessage: ToastMessage) => {
     setToast(toastMessage);
@@ -305,12 +318,12 @@ const handleInstallClick = async () => {
       id: crypto.randomUUID(),
     };
     setExpenses(prev => [expenseWithId, ...prev]);
-    showToast({ message: 'Spesa aggiunta con successo!', type: 'success' });
+    triggerSuccessIndicator();
   };
 
   const updateExpense = (updatedExpense: Expense) => {
     setExpenses(prev => prev.map(e => e.id === updatedExpense.id ? updatedExpense : e));
-    showToast({ message: 'Spesa aggiornata!', type: 'success' });
+    triggerSuccessIndicator();
   };
   
   const handleFormSubmit = (data: Omit<Expense, 'id'> | Expense) => {
@@ -333,7 +346,7 @@ const handleInstallClick = async () => {
       setExpenses(prev => [...expensesWithIds, ...prev]);
       setIsMultipleExpensesModalOpen(false);
       setMultipleExpensesData([]);
-      showToast({ message: `${expensesToAdd.length} spese aggiunte!`, type: 'success' });
+      triggerSuccessIndicator();
   };
 
   const openEditForm = (expense: Expense) => {
@@ -497,12 +510,19 @@ const handleInstallClick = async () => {
                 onAddFromImage={() => setIsImageSourceModalOpen(true)}
                 onAddFromVoice={() => setIsVoiceModalOpen(true)}
                 style={{
-                  transform: activeView === 'history' ? 'translateY(-78px)' : 'translateY(0)',
+                  transform: activeView === 'history' ? 'translateY(-70px)' : 'translateY(0)',
                   opacity: 1,
                   transition: 'transform 0.25s cubic-bezier(0.22, 0.61, 0.36, 1)',
                 }}
             />
         )}
+        
+        <SuccessIndicator
+            show={showSuccessIndicator}
+            style={{
+              transform: activeView === 'history' ? 'translateY(-70px)' : 'translateY(0)',
+            }}
+        />
         
         {toast && (
             <Toast 

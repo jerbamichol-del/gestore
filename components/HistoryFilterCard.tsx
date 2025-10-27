@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 
 type DateFilter = 'all' | '7d' | '30d' | '6m' | '1y';
@@ -33,7 +32,7 @@ const QuickFilterTable: React.FC<{
               <td key={filter.value} className="border border-slate-400 p-0 h-11">
                 <button
                   onClick={() => onSelect(currentValue === filter.value ? 'all' : filter.value)}
-                  className={`w-full h-full flex items-center justify-center px-2 text-center font-semibold text-sm transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500 ${
+                  className={`w-full h-full flex items-center justify-center px-2 text-center font-semibold text-sm transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 ${
                     isActive ? 'bg-indigo-600 text-white'
                              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                   }`}
