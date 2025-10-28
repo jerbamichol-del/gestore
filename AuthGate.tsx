@@ -3,11 +3,12 @@ import App from './App';
 import LoginScreen from './screens/LoginScreen';
 import SetupScreen from './screens/SetupScreen';
 import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
+import ForgotPasswordSuccessScreen from './screens/ForgotPasswordSuccessScreen';
 import ForgotEmailScreen from './screens/ForgotEmailScreen';
 import ResetPinScreen from './screens/ResetPinScreen';
 import { useLocalStorage } from './hooks/useLocalStorage';
 
-type AuthView = 'login' | 'register' | 'forgotPassword' | 'forgotEmail';
+type AuthView = 'login' | 'register' | 'forgotPassword' | 'forgotEmail' | 'forgotPasswordSuccess';
 type ResetContext = { token: string; email: string; } | null;
 
 const LOCK_TIMEOUT_MS = 30000; // 30 secondi
@@ -17,6 +18,7 @@ const AuthGate: React.FC = () => {
   const [, setLastActiveUser] = useLocalStorage<string | null>('last_active_user_email', null);
   const [resetContext, setResetContext] = useState<ResetContext>(null);
   const hiddenTimestampRef = useRef<number | null>(null);
+  const [emailForReset, setEmailForReset] = useState<string>('');
   
   // Controlla se esiste un database di utenti per decidere la schermata iniziale.
   const hasUsers = () => {
@@ -111,7 +113,18 @@ const AuthGate: React.FC = () => {
     case 'register':
       return <SetupScreen onSetupSuccess={handleAuthSuccess} onGoToLogin={() => setAuthView('login')} />;
     case 'forgotPassword':
-      return <ForgotPasswordScreen onBackToLogin={() => setAuthView('login')} />;
+      return <ForgotPasswordScreen 
+        onBackToLogin={() => setAuthView('login')} 
+        onRequestSent={(email) => {
+            setEmailForReset(email);
+            setAuthView('forgotPasswordSuccess');
+        }} 
+      />;
+    case 'forgotPasswordSuccess':
+      return <ForgotPasswordSuccessScreen 
+        email={emailForReset}
+        onBackToLogin={() => setAuthView('login')} 
+      />;
     case 'forgotEmail':
         return <ForgotEmailScreen onBackToLogin={() => setAuthView('login')} />;
     case 'login':

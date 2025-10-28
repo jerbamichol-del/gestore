@@ -374,11 +374,10 @@ const HistoryScreen = forwardRef<HistoryScreenHandles, HistoryScreenProps>(({ ex
         }, {} as Record<string, ExpenseGroup>);
     }, [filteredExpenses]);
 
-    // FIX: Explicitly type `a` and `b` to `ExpenseGroup` to ensure correct type inference for `expenseGroups`,
-    // which resolves errors with accessing properties like `.year`, `.week`, `.label`, and `.expenses`.
-    const expenseGroups = Object.values(groupedExpenses).sort((a: ExpenseGroup, b: ExpenseGroup) => {
+    // FIX: The result of Object.values was being inferred as `unknown[]`, causing type errors in the JSX.
+    // Casting to `ExpenseGroup[]` ensures `expenseGroups` and its elements are correctly typed.
+    const expenseGroups = (Object.values(groupedExpenses) as ExpenseGroup[]).sort((a, b) => {
         if (a.year !== b.year) return b.year - a.year;
-        // FIX: Corrected sort logic from `b.week - b.week` to `b.week - a.week`.
         return b.week - a.week;
     });
     
