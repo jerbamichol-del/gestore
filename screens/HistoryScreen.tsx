@@ -45,8 +45,6 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
     const handlePointerDown = (e: React.PointerEvent) => {
         if ((e.target as HTMLElement).closest('button')) return;
         
-        // FIX: Determine initial position from the `isOpen` prop (the source of truth)
-        // instead of reading from the DOM. This prevents race conditions with CSS transitions.
         const initialTranslateX = isOpen ? -ACTION_WIDTH : 0;
         
         dragState.current = {
@@ -58,7 +56,6 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
             initialTranslateX: initialTranslateX,
         };
         
-        // Snap to the correct starting position without animation before dragging begins.
         setTranslateX(initialTranslateX, false);
     };
 
@@ -69,7 +66,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
         const deltaY = e.clientY - dragState.current.startY;
 
         if (!dragState.current.isLocked) {
-          const SLOP = 10; // Increased to prevent accidental swipe lock on tap
+          const SLOP = 10;
           if (Math.abs(deltaX) <= SLOP && Math.abs(deltaY) <= SLOP) {
             return;
           }
@@ -91,7 +88,6 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
             e.stopPropagation();
             let newX = dragState.current.initialTranslateX + deltaX;
 
-            // Clamp the translation to prevent overshooting to the right
             if (newX > 0) newX = 0;
             if (newX < -ACTION_WIDTH) newX = -ACTION_WIDTH - Math.tanh((-newX - ACTION_WIDTH) / 50) * 25;
 
@@ -109,7 +105,6 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
         const elapsed = performance.now() - dragState.current.startTime;
         const isTap = distance < 12 && elapsed < 250;
     
-        // Reset dragging state immediately
         dragState.current.isDragging = false;
         dragState.current.isLocked = false;
         if (wasLocked) {
@@ -119,35 +114,28 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
 
         const wasOpen = dragState.current.initialTranslateX !== 0;
 
-        // --- 1. Handle Taps First ---
         if (isTap) {
             e.preventDefault();
             e.stopPropagation();
-            
             if (wasOpen) {
-                // If it was open, a tap should close it.
                 onOpen('');
             } else {
-                // It was closed, a tap should edit.
                 onEdit(expense);
             }
-            return; // Exit early for taps.
+            return;
         }
     
-        // --- 2. Handle Swipes Only If Not a Tap ---
         if (wasLocked) {
             e.stopPropagation();
     
             const velocityX = elapsed > 10 ? deltaX / elapsed : 0;
     
-            // Navigation swipe to home
-            const isConfirmedRightSwipeNav = (deltaX > ACTION_WIDTH / 2) || (velocityX > 0.4 && deltaX > 20);
-            if (!wasOpen && isConfirmedRightSwipeNav) {
+            const isConfirmedRightSwipeNav = !wasOpen && ((deltaX > ACTION_WIDTH / 2) || (velocityX > 0.4 && deltaX > 20));
+            if (isConfirmedRightSwipeNav) {
                 onNavigateHome();
                 return;
             }
     
-            // Action menu swipe logic
             let shouldOpen: boolean;
             const flickedRight = velocityX > 0.2 && deltaX > 15;
             const draggedFarRight = deltaX > ACTION_WIDTH * 0.4;
@@ -160,11 +148,13 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
                 shouldOpen = flickedLeft || draggedFarLeft;
             }
             
-            if (shouldOpen !== wasOpen) {
-                onOpen(shouldOpen ? expense.id : '');
-            } else {
-                // Snap back if swipe was not confirmed
-                setTranslateX(wasOpen ? -ACTION_WIDTH : 0, true);
+            const finalId = shouldOpen ? expense.id : '';
+            onOpen(finalId);
+
+            // Manual snapback if state won't change, preventing items from getting stuck.
+            // This is crucial when a user performs a small swipe that shouldn't change the state.
+            if (isOpen === shouldOpen) {
+                setTranslateX(shouldOpen ? -ACTION_WIDTH : 0, true);
             }
         }
     };
@@ -228,7 +218,6 @@ interface HistoryScreenProps {
   isActive: boolean;
 }
 
-// Fix: Add ExpenseGroup interface to properly type the grouped expenses object.
 interface ExpenseGroup {
     year: number;
     week: number;
@@ -236,7 +225,6 @@ interface ExpenseGroup {
     expenses: Expense[];
 }
 
-// Helper per ottenere l'anno e il numero della settimana ISO 8601
 const getISOWeek = (date: Date): [number, number] => {
     const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
     const dayNum = d.getUTCDay() || 7;
@@ -267,8 +255,6 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({ expenses, accounts, onEdi
     const tapStartRef = useRef<{ x: number; y: number; time: number; target: EventTarget | null } | null>(null);
 
 
-    // Quando la schermata non è più attiva, chiudiamo qualsiasi elemento aperto.
-    // Questo risolve i problemi di stato quando si naviga avanti e indietro.
     useEffect(() => {
         if (!isActive) {
             setOpenItemId(null);
@@ -279,7 +265,6 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({ expenses, accounts, onEdi
         onItemStateChange({ isOpen: openItemId !== null, isInteracting });
     }, [openItemId, isInteracting, onItemStateChange]);
 
-    // Effetto per la chiusura automatica
     useEffect(() => {
         if (autoCloseTimerRef.current) {
             clearTimeout(autoCloseTimerRef.current);
@@ -301,7 +286,6 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({ expenses, accounts, onEdi
     const filteredExpenses = useMemo(() => {
         if (isCustomRangeActive) {
              const startTime = new Date(customRange.start!).getTime();
-             // Add one day minus one millisecond to include the entire end day
              const endTime = new Date(customRange.end!).getTime() + (24 * 60 * 60 * 1000 - 1);
 
              return expenses.filter(e => {
@@ -343,11 +327,8 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({ expenses, accounts, onEdi
     }, [expenses, dateFilter, customRange, isCustomRangeActive]);
 
     const groupedExpenses = useMemo(() => {
-        // Ordina le spese dalla più recente alla più vecchia prima di raggrupparle
         const sortedExpenses = [...filteredExpenses].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     
-        // FIX: The initial value `{}` was cast, but TypeScript still failed to infer the accumulator type correctly.
-        // By adding a generic type to `reduce`, we ensure `acc` is correctly typed, resolving downstream type errors.
         return sortedExpenses.reduce<Record<string, ExpenseGroup>>((acc, expense) => {
             const expenseDate = new Date(expense.date);
             if (isNaN(expenseDate.getTime())) return acc;
@@ -365,13 +346,9 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({ expenses, accounts, onEdi
             }
             acc[key].expenses.push(expense);
             return acc;
-        // FIX: The generic on `reduce` was not sufficient for TypeScript to infer the accumulator's type from an empty object.
-        // Casting the initial value explicitly to the correct type resolves all subsequent type errors.
         }, {} as Record<string, ExpenseGroup>);
     }, [filteredExpenses]);
 
-    // FIX: The result of Object.values was being inferred as `unknown[]`, causing type errors in the JSX.
-    // Casting to `ExpenseGroup[]` ensures `expenseGroups` and its elements are correctly typed.
     const expenseGroups = (Object.values(groupedExpenses) as ExpenseGroup[]).sort((a, b) => {
         if (a.year !== b.year) return b.year - a.year;
         return b.week - a.week;
@@ -386,13 +363,11 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({ expenses, accounts, onEdi
     };
 
     const handlePointerDownCapture = (e: React.PointerEvent) => {
-        // Record where the pointer down event started
         tapStartRef.current = { x: e.clientX, y: e.clientY, time: performance.now(), target: e.target };
     };
 
     const handlePointerUpCapture = (e: React.PointerEvent) => {
         const start = tapStartRef.current;
-        // Check if an item is open and if we have pointer down data
         if (openItemId && start) {
             const targetElement = start.target as HTMLElement | null;
 
@@ -400,14 +375,12 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({ expenses, accounts, onEdi
             const elapsed = performance.now() - start.time;
             const isTap = dist < 10 && elapsed < 200;
 
-            // If it was a tap and it started outside any expense item, close the open item.
             if (isTap && !targetElement?.closest('[data-expense-item-root]')) {
                 e.preventDefault();
                 e.stopPropagation();
                 setOpenItemId(null);
             }
         }
-        // Always reset the ref on pointer up to be ready for the next gesture.
         tapStartRef.current = null;
     };
     
