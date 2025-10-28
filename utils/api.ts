@@ -78,17 +78,17 @@ export const forgotPassword = async (email: string): Promise<{ success: boolean;
     try {
         await fetch(SCRIPT_URL, {
             method: 'POST',
+            mode: 'no-cors', // Aggiunto per evitare errori CORS su richieste "fire-and-forget"
             headers: {
                 'Content-Type': 'text/plain',
             },
-            // Aggiungo un'azione per aiutare lo script a distinguere le richieste
             body: JSON.stringify({ action: 'requestReset', email: normalizedEmail }), 
         });
-        // Non controlliamo la risposta per motivi di sicurezza (email enumeration)
+        // Con 'no-cors', non possiamo vedere la risposta, ma la richiesta viene inviata.
     } catch (error) {
         console.error('Network error calling the password reset script:', error);
-        // L'utente vuole procedere alla schermata di successo anche se la rete fallisce.
-        // Registriamo l'errore ma non blocchiamo il flusso dell'utente. Questo previene anche l'enumerazione delle email.
+        // Questo blocco catturerà ora solo veri errori di rete (es. offline), non errori CORS.
+        // In ogni caso, procediamo alla schermata di successo come richiesto.
     }
     
     return { success: true, message: 'Se l\'email è registrata, riceverai un link per il reset.' };
