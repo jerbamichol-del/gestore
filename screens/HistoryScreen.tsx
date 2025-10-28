@@ -116,6 +116,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
         dragState.current.isLocked = false;
     
         if (wasLocked) {
+            e.stopPropagation();
             onInteractionChange(false);
             try { itemRef.current?.releasePointerCapture(e.pointerId); } catch {}
     
@@ -149,6 +150,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
                 onOpen(shouldOpen ? expense.id : '');
             }
         } else if (isTap) {
+            e.stopPropagation();
             if (isOpen) {
                 onOpen('');
             } else {
@@ -322,156 +324,111 @@ const HistoryScreen = forwardRef<HistoryScreenHandles, HistoryScreenProps>(({ ex
         });
     }, [expenses, dateFilter, customRange, isCustomRangeActive]);
 
-    const historyData = useMemo(() => {
+    const groupedExpenses = useMemo(() => {
+        // Ordina le spese dalla più recente alla più vecchia prima di raggrupparle
         const sortedExpenses = [...filteredExpenses].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-        const weeklyGroups: Record<string, Expense[]> = sortedExpenses.reduce((acc, expense) => {
-            const date = new Date(expense.date);
-            if (isNaN(date.getTime())) return acc;
-            const [year, week] = getISOWeek(date);
-            const weekKey = `${year}-${String(week).padStart(2, '0')}`;
-            if (!acc[weekKey]) acc[weekKey] = [];
-            acc[weekKey].push(expense);
+    
+        // FIX: Explicitly type the accumulator for the reduce function to ensure correct type inference.
+        return sortedExpenses.reduce<Record<string, { year: number, week: number, label: string, expenses: Expense[] }>>((acc, expense) => {
+            const expenseDate = new Date(expense.date);
+            if (isNaN(expenseDate.getTime())) return acc;
+    
+            const [year, week] = getISOWeek(expenseDate);
+            const key = `${year}-${week}`;
+    
+            if (!acc[key]) {
+                acc[key] = {
+                    year,
+                    week,
+                    label: getWeekLabel(year, week),
+                    expenses: []
+                };
+            }
+            acc[key].expenses.push(expense);
             return acc;
-        }, {} as Record<string, Expense[]>);
-
-        return Object.entries(weeklyGroups).map(([weekKey, weekExpenses]) => {
-            const [yearStr, weekStr] = weekKey.split('-');
-            const year = parseInt(yearStr);
-            const week = parseInt(weekStr);
-            
-            const weekTotal = weekExpenses.reduce((sum, exp) => sum + Number(exp.amount), 0);
-            const weekLabel = getWeekLabel(year, week);
-            
-            const dailyGroups: Record<string, Expense[]> = weekExpenses.reduce((acc, expense) => {
-                if (!acc[expense.date]) acc[expense.date] = [];
-                acc[expense.date].push(expense);
-                return acc;
-            }, {} as Record<string, Expense[]>);
-            
-            const days = Object.entries(dailyGroups)
-              .sort(([dateA], [dateB]) => new Date(dateB).getTime() - new Date(dateA).getTime())
-              .map(([date, items]) => ({
-                date,
-                dailyTotal: items.reduce((sum, item) => sum + Number(item.amount), 0),
-                items,
-            }));
-            
-            return { weekKey, weekLabel, weekTotal, days };
-        });
+        }, {});
     }, [filteredExpenses]);
+
+    const expenseGroups = Object.values(groupedExpenses).sort((a, b) => {
+        if (a.year !== b.year) return b.year - a.year;
+        return b.week - a.week;
+    });
     
-    const handleSelectQuickFilter = (filter: DateFilter) => {
-        setDateFilter(filter);
-        setCustomRange({ start: null, end: null });
-    };
-
-    const handleCustomRangeChange = (range: { start: string, end: string }) => {
-        setCustomRange(range);
-        setDateFilter('all');
+    const handleOpenItem = (id: string) => {
+        setOpenItemId(id);
     };
     
-    const handleItemOpen = useCallback((id: string) => {
-        setOpenItemId(id || null);
-    }, []);
-
-    const noExpensesMessage = (dateFilter === 'all' && !isCustomRangeActive) 
-    ? {
-        title: 'Nessuna spesa registrata.',
-        subtitle: 'Aggiungi una nuova spesa per iniziare il tuo storico.'
-      }
-    : {
-        title: 'Nessuna spesa trovata.',
-        subtitle: 'Prova a selezionare un periodo di tempo diverso.'
+    const handleInteractionChange = (isInteracting: boolean) => {
+        setIsInteracting(isInteracting);
     };
 
-    const handleContainerPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-        if (e.pointerType === 'mouse' && e.button !== 0) return;
-        tapStartRef.current = { x: e.clientX, y: e.clientY };
-    };
-
-    const handleContainerPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-        if (tapStartRef.current) {
-            const dx = Math.abs(e.clientX - tapStartRef.current.x);
-            const dy = Math.abs(e.clientY - tapStartRef.current.y);
-            const isTap = dx < 5 && dy < 5;
-
-            if (isTap && openItemId) {
-                const isClickInsideAnItem = (e.target as HTMLElement).closest('[data-expense-item-root]');
-                if (!isClickInsideAnItem) {
-                    setOpenItemId(null);
+    const handlePointerDownCapture = (e: React.PointerEvent) => {
+        // If an item is already open and the user taps outside of it, close it.
+        if (openItemId && !(e.target as HTMLElement).closest('[data-expense-item-root]')) {
+            const now = performance.now();
+            const start = tapStartRef.current;
+            if (start) {
+                const dist = Math.sqrt(Math.pow(e.clientX - start.x, 2) + Math.pow(e.clientY - start.y, 2));
+                // Only register as a tap-outside if it's a real tap, not a drag that started outside
+                if (dist < 10 && (now - (start as any).time) < 200) {
+                     e.preventDefault();
+                     e.stopPropagation();
+                     setOpenItemId(null);
                 }
             }
+            tapStartRef.current = null;
+        } else {
+            tapStartRef.current = { x: e.clientX, y: e.clientY, time: performance.now() } as any;
         }
-        tapStartRef.current = null;
     };
-
-
+    
     return (
-        <div className="h-full flex flex-col animate-fade-in-up">
-            <div className="flex-shrink-0 pt-4 md:pt-8">
-                <div className="mb-6 px-4 md:px-8">
-                    <h1 className="text-xl font-bold text-slate-700">Storico Spese</h1>
-                </div>
-            </div>
-
-            <div 
-              className="flex-1 overflow-y-auto pb-28" 
-              style={{ touchAction: 'pan-y' }}
-              onPointerDownCapture={handleContainerPointerDown}
-              onPointerUp={handleContainerPointerUp}
-            >
-                {historyData.length > 0 ? (
-                    <div className="space-y-6">
-                        {historyData.map(({ weekKey, weekLabel, weekTotal, days }) => (
-                            <div key={weekKey}>
-                                <div className="p-4 flex justify-between items-baseline bg-slate-100 border-b border-slate-200">
-                                    <h2 className="text-xl font-bold text-slate-700 capitalize">{weekLabel}</h2>
-                                    <p className="text-lg font-semibold text-indigo-600">{formatCurrency(weekTotal)}</p>
-                                </div>
-                                
-                                <div className="bg-white">
-                                    {days.map(({ date, dailyTotal, items }) => (
-                                        <div key={date} className="p-2">
-                                            <div className="flex justify-between items-center py-2 px-2">
-                                                <p className="font-semibold text-slate-600">
-                                                    {formatDate(new Date(date))}
-                                                </p>
-                                                <p className="text-sm font-medium text-slate-500">{formatCurrency(dailyTotal)}</p>
-                                            </div>
-                                            <div className="divide-y divide-slate-200">
-                                                {items.map(expense => (
-                                                    <ExpenseItem
-                                                        key={expense.id}
-                                                        expense={expense}
-                                                        accounts={accounts}
-                                                        onEdit={onEditExpense}
-                                                        onDelete={onDeleteExpense}
-                                                        isOpen={openItemId === expense.id}
-                                                        onOpen={handleItemOpen}
-                                                        onInteractionChange={setIsInteracting}
-                                                        onNavigateHome={onNavigateHome}
-                                                    />
-                                                ))}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
+        <div 
+            className="h-full flex flex-col bg-slate-100"
+            onPointerDownCapture={handlePointerDownCapture}
+        >
+            <div className="flex-1 overflow-y-auto">
+                {expenseGroups.length > 0 ? (
+                    expenseGroups.map(group => (
+                        <div key={group.label} className="mb-6 last:mb-0">
+                            <h2 className="font-bold text-slate-800 text-lg px-4 py-2 sticky top-0 bg-slate-100/80 backdrop-blur-sm z-10">{group.label}</h2>
+                            <div className="bg-white rounded-xl shadow-md mx-2 overflow-hidden">
+                                {group.expenses.map((expense, index) => (
+                                    <React.Fragment key={expense.id}>
+                                        {index > 0 && <hr className="border-t border-slate-200 ml-16" />}
+                                        <ExpenseItem
+                                            expense={expense}
+                                            accounts={accounts}
+                                            onEdit={onEditExpense}
+                                            onDelete={onDeleteExpense}
+                                            isOpen={openItemId === expense.id}
+                                            onOpen={handleOpenItem}
+                                            onInteractionChange={handleInteractionChange}
+                                            onNavigateHome={onNavigateHome}
+                                        />
+                                    </React.Fragment>
+                                ))}
                             </div>
-                        ))}
-                    </div>
+                        </div>
+                    ))
                 ) : (
-                    <div className="text-center text-slate-500 py-20 bg-white rounded-2xl shadow-lg mx-4 md:mx-8">
-                        <p className="text-lg">{noExpensesMessage.title}</p>
-                        <p className="text-sm mt-2">{noExpensesMessage.subtitle}</p>
+                    <div className="text-center text-slate-500 pt-20 px-6">
+                        <p className="text-lg font-semibold">Nessuna spesa trovata</p>
+                        <p className="mt-2">Prova a modificare i filtri o aggiungi una nuova spesa dalla schermata Home.</p>
                     </div>
                 )}
             </div>
             
             <HistoryFilterCard
-                onSelectQuickFilter={handleSelectQuickFilter}
+                onSelectQuickFilter={(value) => {
+                    setDateFilter(value);
+                    setCustomRange({ start: null, end: null });
+                }}
                 currentQuickFilter={dateFilter}
-                onCustomRangeChange={handleCustomRangeChange}
+                onCustomRangeChange={(range) => {
+                    setCustomRange(range);
+                    setDateFilter('all');
+                }}
                 currentCustomRange={customRange}
                 isCustomRangeActive={isCustomRangeActive}
             />
