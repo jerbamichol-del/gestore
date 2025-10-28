@@ -156,7 +156,9 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
             e.preventDefault();
             e.stopPropagation();
             if (isOpen) {
-                onOpen('');
+                // Tapping an open item should NOT close it.
+                // This prevents accidental closing when trying to initiate a swipe.
+                // The user can close it by swiping it back or tapping outside.
             } else {
                 onEdit(expense);
             }
@@ -261,7 +263,8 @@ const HistoryScreen = forwardRef<HistoryScreenHandles, HistoryScreenProps>(({ ex
     const [openItemId, setOpenItemId] = useState<string | null>(null);
     const [isInteracting, setIsInteracting] = useState(false);
     const autoCloseTimerRef = useRef<number | null>(null);
-    const tapStartRef = useRef<{ x: number; y: number } | null>(null);
+    const tapStartRef = useRef<{ x: number; y: number; time: number; target: EventTarget | null } | null>(null);
+
 
     useImperativeHandle(ref, () => ({
       closeOpenItem: () => {
@@ -381,29 +384,36 @@ const HistoryScreen = forwardRef<HistoryScreenHandles, HistoryScreenProps>(({ ex
     };
 
     const handlePointerDownCapture = (e: React.PointerEvent) => {
-        // If an item is already open and the user taps outside of it, close it.
-        if (openItemId && !(e.target as HTMLElement).closest('[data-expense-item-root]')) {
-            const now = performance.now();
-            const start = tapStartRef.current;
-            if (start) {
-                const dist = Math.sqrt(Math.pow(e.clientX - start.x, 2) + Math.pow(e.clientY - start.y, 2));
-                // Only register as a tap-outside if it's a real tap, not a drag that started outside
-                if (dist < 10 && (now - (start as any).time) < 200) {
-                     e.preventDefault();
-                     e.stopPropagation();
-                     setOpenItemId(null);
-                }
+        // Record where the pointer down event started
+        tapStartRef.current = { x: e.clientX, y: e.clientY, time: performance.now(), target: e.target };
+    };
+
+    const handlePointerUpCapture = (e: React.PointerEvent) => {
+        const start = tapStartRef.current;
+        // Check if an item is open and if we have pointer down data
+        if (openItemId && start) {
+            const targetElement = start.target as HTMLElement | null;
+
+            const dist = Math.sqrt(Math.pow(e.clientX - start.x, 2) + Math.pow(e.clientY - start.y, 2));
+            const elapsed = performance.now() - start.time;
+            const isTap = dist < 10 && elapsed < 200;
+
+            // If it was a tap and it started outside any expense item, close the open item.
+            if (isTap && !targetElement?.closest('[data-expense-item-root]')) {
+                e.preventDefault();
+                e.stopPropagation();
+                setOpenItemId(null);
             }
-            tapStartRef.current = null;
-        } else {
-            tapStartRef.current = { x: e.clientX, y: e.clientY, time: performance.now() } as any;
         }
+        // Always reset the ref on pointer up to be ready for the next gesture.
+        tapStartRef.current = null;
     };
     
     return (
         <div 
             className="h-full flex flex-col bg-slate-100"
             onPointerDownCapture={handlePointerDownCapture}
+            onPointerUpCapture={handlePointerUpCapture}
         >
             <div className="flex-1 overflow-y-auto" style={{ touchAction: 'pan-y' }}>
                 {expenseGroups.length > 0 ? (

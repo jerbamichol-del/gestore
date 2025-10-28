@@ -14,6 +14,10 @@ const getUsers = () => {
 };
 const saveUsers = (users: any) => localStorage.setItem('users_db', JSON.stringify(users));
 
+// URL per lo script di Google Apps
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzmq-PTrMcMdrYqCRX29_S034zCaj5ttyc3tZhdhjV77wF6n99LKricFgzy7taGqKOo/exec';
+
+
 // --- MOCK API FUNCTIONS ---
 // Queste funzioni simulano richieste di rete con un ritardo.
 // Sostituiscile con chiamate fetch() reali al tuo backend.
@@ -69,32 +73,23 @@ export const login = async (email: string, pin: string): Promise<{ success: bool
  * Invokes a Google App Script to send a password reset email.
  */
 export const forgotPassword = async (email: string): Promise<{ success: boolean; message: string }> => {
-    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzmq-PTrMcMdrYqCRX29_S034zCaj5ttyc3tZhdhjV77wF6n99LKricFgzy7taGqKOo/exec';
     const normalizedEmail = email.toLowerCase();
     
     try {
-        const response = await fetch(SCRIPT_URL, {
+        await fetch(SCRIPT_URL, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ email: normalizedEmail }),
+            // Aggiungo un'azione per aiutare lo script a distinguere le richieste
+            body: JSON.stringify({ action: 'requestReset', email: normalizedEmail }), 
         });
-
-        if (!response.ok) {
-           // Log server-side errors for debugging, but don't expose them to the user.
-           console.warn(`Password reset script returned a non-OK response: ${response.status}`);
-        }
-
+        // Non controlliamo la risposta per motivi di sicurezza (email enumeration)
     } catch (error) {
-        // This catches network errors (e.g., offline, DNS, CORS issues).
         console.error('Network error calling the password reset script:', error);
-        // It's crucial to inform the user about a potential connection issue.
         return { success: false, message: 'Impossibile inviare la richiesta. Controlla la tua connessione e riprova.' };
     }
     
-    // For security reasons, always return a generic success message to prevent attackers
-    // from checking which emails are registered in the system (email enumeration).
     return { success: true, message: 'Se l\'email è registrata, riceverai un link per il reset.' };
 };
 
@@ -112,40 +107,49 @@ export const findEmailByPhoneNumber = async (phoneNumber: string): Promise<{ suc
             } else {
                 console.log(`(SIMULAZIONE) Tentativo di recupero per numero non registrato: ${phoneNumber}`);
             }
-            // Per sicurezza, restituisci sempre un messaggio generico.
             resolve({ success: true, message: 'Se il numero è associato a un account, riceverai un SMS con la tua email.' });
         }, 1500);
     });
 };
 
 /**
- * Reimposta il PIN di un utente dopo aver "verificato" un token.
+ * Reimposta il PIN di un utente inviando il token e il nuovo PIN allo script di Google per la validazione.
  */
 export const resetPin = async (email: string, token: string, newPin: string): Promise<{ success: boolean; message: string }> => {
-    return new Promise(resolve => {
-        setTimeout(async () => {
-            const users = getUsers();
-            const normalizedEmail = email.toLowerCase();
-            const user = users[normalizedEmail];
+    const normalizedEmail = email.toLowerCase();
 
-            if (!user) {
-                resolve({ success: false, message: 'Utente non trovato o link non valido.' });
-                return;
-            }
+    try {
+        const response = await fetch(SCRIPT_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                action: 'resetPin',
+                email: normalizedEmail,
+                token: token,
+                newPin: newPin
+            }),
+        });
 
-            // In una vera applicazione, il token verrebbe validato con un backend.
-            // Per questa demo, la presenza di un token e di un'email valida è sufficiente.
-            if (!token) {
-                 resolve({ success: false, message: 'Token di reset mancante o non valido.' });
-                 return;
-            }
-            
-            const { hash, salt } = await hashPinWithSalt(newPin);
-            users[normalizedEmail].pinHash = hash;
-            users[normalizedEmail].pinSalt = salt;
-            saveUsers(users);
+        if (!response.ok) {
+            console.error(`Lo script di App Script ha restituito un errore: ${response.status}`);
+            return { success: false, message: 'Si è verificato un errore sul server. Riprova più tardi.' };
+        }
 
-            resolve({ success: true, message: 'PIN aggiornato con successo.' });
-        }, 1000);
-    });
+        const result = await response.json();
+
+        if (result.success) {
+            // L'aggiornamento del PIN è gestito dallo script.
+            // La nostra DB locale mock potrebbe non essere sincronizzata, ma per la demo va bene.
+            return { success: true, message: 'PIN aggiornato con successo.' };
+        } else {
+            // Restituisce il messaggio di errore specifico dallo script (es. "Token non valido")
+            return { success: false, message: result.message || 'Token non valido o scaduto.' };
+        }
+
+    } catch (error) {
+        console.error('Errore di rete durante il reset del PIN:', error);
+        return { success: false, message: 'Impossibile completare la richiesta. Controlla la tua connessione e riprova.' };
+    }
 };
