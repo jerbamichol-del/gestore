@@ -1,7 +1,7 @@
 <!doctype html><html lang="it"><head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Reimposta PIN</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Reimposta PIN</title>
+<script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="min-h-screen flex items-center justify-center bg-slate-100 p-4">
   <main class="w-full max-w-md bg-white shadow-xl rounded-2xl p-6 space-y-4">
@@ -10,12 +10,12 @@
     <div id="ok" class="space-y-3" style="display:none">
       <p class="text-slate-700">Il link è valido. Premi “Conferma” per procedere al reset.</p>
       <button id="go" class="w-full rounded-lg py-2 bg-indigo-600 text-white">Conferma reset</button>
-      <p class="text-xs text-slate-500">Dopo la conferma, torna nell’app <b>Gestore Spese</b> e imposta un nuovo PIN.</p>
+      <p class="text-xs text-slate-500">Dopo la conferma, torna nell’app <b>Gestore Spese</b> per impostare il nuovo PIN.</p>
     </div>
   </main>
   <script>
   (function(){
-    var ENDPOINT='https://script.google.com/macros/s/AKfycbzmq-PTrMcMdrYqCRX29_S034zCaj5ttyc3tZhdhjV77wF6n99LKricFgzy7taGqKOo/exec';
+    var ENDPOINT="https://script.google.com/macros/s/AKfycbzmq-PTrMcMdrYqCRX29_S034zCaj5ttyc3tZhdhjV77wF6n99LKricFgzy7taGqKOo/exec";
     function jsonp(url, cb){
       var c='__rp_'+Date.now()+Math.random().toString(36).slice(2);
       window[c]=function(d){ try{delete window[c];}catch(_){}
@@ -28,49 +28,38 @@
       };
       document.head.appendChild(s);
     }
-    function pickToken(){
-      var sp=new URL(location.href).searchParams;
-      var keys=['t','token','code','k'];
-      for(var i=0;i<keys.length;i++){ var v=sp.get(keys[i]); if(v) return v; }
-      for (const [k,v] of sp.entries()){ if(String(v).length>12) return v; }
-      return null;
+    function scopeGuess(){
+      try{
+        var m=document.querySelector('link[rel="manifest"]');
+        if(m){
+          var u=new URL(m.getAttribute('href')||'', location.href);
+          var mm=u.pathname.match(/^\/([^/]+)\//); if(mm) return '/'+mm[1]+'/';
+        }
+      }catch(e){}
+      return '/gestore/';
     }
-    function validateAny(t, cb){
-      var tried=0, done=false;
-      function tryOne(param){
-        tried++;
-        jsonp(ENDPOINT+'?action=validate&'+param+'='+encodeURIComponent(t), function(res){
-          if(done) return;
-          if(res && res.ok){ done=true; cb(true, param); }
-          else if(tried<3){ if(param==='t') tryOne('token'); else if(param==='token') tryOne('code'); else tryOne('t'); }
-          else { cb(false, null); }
-        });
-      }
-      tryOne('t');
-    }
-    function consumeWith(param, t, cb){
-      jsonp(ENDPOINT+'?action=consume&'+param+'='+encodeURIComponent(t), function(res){
-        cb(!!(res&&res.ok));
-      });
-    }
+    var SCOPE = scopeGuess();
+    var params = new URL(location.href).searchParams;
+    var t = params.get('t') || params.get('token') || params.get('code') || params.get('k');
     var msg = document.getElementById('msg'), ok = document.getElementById('ok');
     function showInvalid(){ ok.style.display='none'; msg.style.display='block'; msg.textContent='Link non valido o scaduto.'; }
     function showValid(){ msg.style.display='none'; ok.style.display='block'; }
-    if(!ENDPOINT){ showInvalid(); return; }
-    var t = pickToken();
-    if(!t){ showInvalid(); return; }
-    validateAny(t, function(valid, paramUsed){
-      if(!valid){ showInvalid(); return; }
+    if(!t || !ENDPOINT){ showInvalid(); return; }
+    jsonp(ENDPOINT+'?action=validate&t='+encodeURIComponent(t), function(v){
+      if(!(v&&v.ok)){ showInvalid(); return; }
       showValid();
       document.getElementById('go').onclick=function(){
-        consumeWith(paramUsed||'t', t, function(okRes){
-          if(okRes){
-            try{ localStorage.setItem('gs_pin_reset_ready','1'); }catch(e){}
+        jsonp(ENDPOINT+'?action=consume&t='+encodeURIComponent(t), function(c){
+          if(c&&c.ok){
+            try { localStorage.setItem('gs_pin_reset_pending','1'); } catch(e){}
+            msg.textContent='Reset confermato. Torna nell\'app per impostare il nuovo PIN.';
+            ok.style.display='none';
+            // Piccolo redirect gentile verso l'app
+            setTimeout(function(){ location.href = location.origin + SCOPE; }, 800);
+          } else {
+            msg.textContent='Qualcosa è andato storto. Riprova.';
+            ok.style.display='none';
           }
-          msg.style.display='block'; ok.style.display='none';
-          msg.textContent = okRes
-            ? 'Reset confermato. Ora torna all’app e imposta un nuovo PIN.'
-            : 'Qualcosa è andato storto. Riprova.';
         });
       };
     });
