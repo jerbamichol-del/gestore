@@ -29,10 +29,6 @@ type NavView = 'home' | 'history';
 
 type ToastMessage = { message: string; type: 'success' | 'info' | 'error' };
 
-interface HistoryScreenHandles {
-  closeOpenItem: () => void;
-}
-
 const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -123,7 +119,6 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const backPressExitTimeoutRef = useRef<number | null>(null);
   const [isHistoryItemOpen, setIsHistoryItemOpen] = useState(false);
   const [isHistoryItemInteracting, setIsHistoryItemInteracting] = useState(false);
-  const historyScreenRef = useRef<HistoryScreenHandles>(null);
   const [showSuccessIndicator, setShowSuccessIndicator] = useState(false);
   const successIndicatorTimerRef = useRef<number | null>(null);
 
@@ -144,12 +139,6 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
   const handleNavigation = useCallback((targetView: NavView) => {
     if (activeView === targetView) return;
-
-    // Se stiamo lasciando la schermata dello storico, chiudiamo qualsiasi elemento aperto.
-    if (activeView === 'history' && historyScreenRef.current) {
-        historyScreenRef.current.closeOpenItem();
-    }
-
     setActiveView(targetView);
     window.history.pushState({ view: targetView }, '');
   }, [activeView]);
@@ -497,7 +486,6 @@ const handleInstallClick = async () => {
                 </div>
                 <div className="w-1/2 h-full swipe-view">
                     <HistoryScreen 
-                      ref={historyScreenRef}
                       expenses={expenses}
                       accounts={accounts}
                       onEditExpense={openEditForm}
@@ -505,6 +493,7 @@ const handleInstallClick = async () => {
                       onItemStateChange={handleHistoryItemStateChange}
                       isEditingOrDeleting={isEditingOrDeletingInHistory}
                       onNavigateHome={handleNavigateHome}
+                      isActive={activeView === 'history'}
                     />
                 </div>
             </div>

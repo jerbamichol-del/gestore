@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
+import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { Expense, Account } from '../types';
 import { getCategoryStyle } from '../utils/categoryStyles';
 import { formatCurrency, formatDate } from '../components/icons/formatters';
@@ -225,10 +225,7 @@ interface HistoryScreenProps {
   onItemStateChange: (state: { isOpen: boolean, isInteracting: boolean }) => void;
   isEditingOrDeleting: boolean;
   onNavigateHome: () => void;
-}
-
-interface HistoryScreenHandles {
-  closeOpenItem: () => void;
+  isActive: boolean;
 }
 
 // Fix: Add ExpenseGroup interface to properly type the grouped expenses object.
@@ -261,7 +258,7 @@ const getWeekLabel = (year: number, week: number): string => {
 };
 
 
-const HistoryScreen = forwardRef<HistoryScreenHandles, HistoryScreenProps>(({ expenses, accounts, onEditExpense, onDeleteExpense, onItemStateChange, isEditingOrDeleting, onNavigateHome }, ref) => {
+const HistoryScreen: React.FC<HistoryScreenProps> = ({ expenses, accounts, onEditExpense, onDeleteExpense, onItemStateChange, isEditingOrDeleting, onNavigateHome, isActive }) => {
     const [dateFilter, setDateFilter] = useState<DateFilter>('all');
     const [customRange, setCustomRange] = useState<{ start: string | null, end: string | null }>({ start: null, end: null });
     const [openItemId, setOpenItemId] = useState<string | null>(null);
@@ -270,11 +267,13 @@ const HistoryScreen = forwardRef<HistoryScreenHandles, HistoryScreenProps>(({ ex
     const tapStartRef = useRef<{ x: number; y: number; time: number; target: EventTarget | null } | null>(null);
 
 
-    useImperativeHandle(ref, () => ({
-      closeOpenItem: () => {
-        setOpenItemId(null);
-      }
-    }));
+    // Quando la schermata non è più attiva, chiudiamo qualsiasi elemento aperto.
+    // Questo risolve i problemi di stato quando si naviga avanti e indietro.
+    useEffect(() => {
+        if (!isActive) {
+            setOpenItemId(null);
+        }
+    }, [isActive]);
 
     useEffect(() => {
         onItemStateChange({ isOpen: openItemId !== null, isInteracting });
@@ -465,6 +464,6 @@ const HistoryScreen = forwardRef<HistoryScreenHandles, HistoryScreenProps>(({ ex
             />
         </div>
     );
-});
+};
 
 export default HistoryScreen;
