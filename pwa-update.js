@@ -3,8 +3,8 @@
 
   var scopeGuess = '/gestore/';
   var FLAG = 'pwa-skip-waiting';
-  var PERIOD_MS = 15 * 60 * 1000; // 15 minuti
-  var FIRST_START_DELAY = 2000;    // 2s dopo l'avvio
+  var PERIOD_MS = 15 * 60 * 1000;
+  var FIRST_START_DELAY = 2000;
   var VERSION_URL = scopeGuess + 'version.json?ts=' + Date.now();
   var LAST_KEY = 'pwa-last-commit';
 
@@ -52,19 +52,16 @@
         .then(v=>{
           var last = ''; try { last = localStorage.getItem(LAST_KEY)||''; } catch(e){}
           var cur = (v && v.commit) || '';
-          if (cur && cur !== last) {
-            if (!reg.waiting) {
-              banner(function(){
-                try { localStorage.setItem(LAST_KEY, String(cur)); } catch(e){}
-                location.reload();
-              }, function(){});
-            }
+          if (cur && cur !== last && !reg.waiting) {
+            banner(function(){
+              try { localStorage.setItem(LAST_KEY, String(cur)); } catch(e){}
+              location.reload();
+            }, function(){});
           }
         }).catch(function(){});
     }
 
     var check = function(){ reg.update().catch(function(){}); checkVersion(); };
-
     setTimeout(check, FIRST_START_DELAY);
     window.addEventListener('focus', check);
     document.addEventListener('visibilitychange', function(){
