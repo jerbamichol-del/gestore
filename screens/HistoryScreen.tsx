@@ -153,6 +153,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
                 onOpen(shouldOpen ? expense.id : '');
             }
         } else if (isTap) {
+            e.preventDefault();
             e.stopPropagation();
             if (isOpen) {
                 onOpen('');
@@ -339,8 +340,8 @@ const HistoryScreen = forwardRef<HistoryScreenHandles, HistoryScreenProps>(({ ex
         // Ordina le spese dalla più recente alla più vecchia prima di raggrupparle
         const sortedExpenses = [...filteredExpenses].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     
-        // FIX: Use a generic type argument for `reduce` to ensure correct type inference for the accumulator.
-        return sortedExpenses.reduce<Record<string, ExpenseGroup>>((acc, expense) => {
+        // FIX: The initial value `{}` must be cast to the correct type to avoid `acc` being inferred as `{}`, which causes downstream type errors.
+        return sortedExpenses.reduce((acc, expense) => {
             const expenseDate = new Date(expense.date);
             if (isNaN(expenseDate.getTime())) return acc;
     
@@ -357,7 +358,7 @@ const HistoryScreen = forwardRef<HistoryScreenHandles, HistoryScreenProps>(({ ex
             }
             acc[key].expenses.push(expense);
             return acc;
-        }, {});
+        }, {} as Record<string, ExpenseGroup>);
     }, [filteredExpenses]);
 
     const expenseGroups = Object.values(groupedExpenses).sort((a, b) => {
