@@ -41,4 +41,5 @@
   }
   scan();
   new MutationObserver(scan).observe(document.documentElement,{childList:true,subtree:true});
+  window.gsResetTest=function(email){ if(!email) return alert('Nessuna email'); sendReset(email); };
 })();

@@ -6,7 +6,7 @@
   var PERIOD_MS = 15 * 60 * 1000; // 15 minuti
   var FIRST_START_DELAY = 2000;    // 2s dopo l'avvio
   var VERSION_URL = scopeGuess + 'version.json?ts=' + Date.now();
-  var LAST_SEEN_KEY = 'pwa-last-version-run';
+  var LAST_SEEN_KEY = 'pwa-last-version-tag';
 
   function banner(onAccept,onDismiss){
     if (document.getElementById('pwa-update-banner')) return;
@@ -48,14 +48,14 @@
       });
     });
 
-    // Fallback a versione: se build nuova ma niente waiting → proponi reload gentile
+    // Fallback a versione: se build nuova (tag diverso) ma niente waiting → proponi reload gentile
     function checkVersion(){
       fetch(VERSION_URL, { cache: 'no-store' })
         .then(r=>r.json())
         .then(v=>{
-          var last = 0; try { last = parseInt(localStorage.getItem(LAST_SEEN_KEY)||'0',10); } catch(e){}
-          var cur = parseInt(v && v.run || 0,10);
-          if (cur && cur > last) {
+          var last = ''; try { last = localStorage.getItem(LAST_SEEN_KEY)||''; } catch(e){}
+          var cur = (v && v.tag) || '';
+          if (cur && cur !== last) {
             if (!reg.waiting) {
               banner(function(){
                 try { localStorage.setItem(LAST_SEEN_KEY, String(cur)); } catch(e){}
