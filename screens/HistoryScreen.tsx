@@ -174,7 +174,8 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
             {/* Actions Layer (underneath) */}
             <div className="absolute top-0 right-0 h-full flex items-center z-0">
                 <button
-                    onClick={(e) => {
+                    onPointerDown={(e) => e.preventDefault()}
+                    onPointerUp={(e) => {
                       e.stopPropagation();
                       onDelete(expense.id);
                     }}
@@ -358,7 +359,8 @@ const HistoryScreen = forwardRef<HistoryScreenHandles, HistoryScreenProps>(({ ex
             }
             acc[key].expenses.push(expense);
             return acc;
-// FIX: Explicitly cast the initial value of reduce to ensure correct type inference for groupedExpenses.
+        // FIX: The generic on `reduce` was not sufficient for TypeScript to infer the accumulator's type from an empty object.
+        // Casting the initial value explicitly to the correct type resolves all subsequent type errors.
         }, {} as Record<string, ExpenseGroup>);
     }, [filteredExpenses]);
 
