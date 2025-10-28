@@ -3,13 +3,6 @@
   const API = "https://script.google.com/macros/s/AKfycbzmq-PTrMcMdrYqCRX29_S034zCaj5ttyc3tZhdhjV77wF6n99LKricFgzy7taGqKOo/exec";
   if (!API) return;
 
-  let armed=false;
-  const arm=()=>{ armed=true; enable(); window.removeEventListener('pointerdown',arm,true); window.removeEventListener('keydown',arm,true); };
-  window.addEventListener('pointerdown',arm,true);
-  window.addEventListener('keydown',arm,true);
-
-  let inFlight=false, lastSent=0;
-
   function getScope(){
     const l=document.querySelector('link[rel="manifest"]');
     if(l&&l.getAttribute('href')){
@@ -23,30 +16,36 @@
   const REDIRECT=location.origin+SCOPE+'reset/';
 
   function readEmailNear(el){
-    let root=el.closest('form') || el.closest('div') || document;
-    let inp = root.querySelector('input[type="email"], input[type="text"]');
-    let v = inp && (inp.value||'').trim();
-    return v || null;
+    const root=el.closest('form')||el.closest('div')||document;
+    const inp=root.querySelector('input[type="email"],input[type="text"]');
+    const v=inp && (inp.value||'').trim();
+    return v||null;
+  }
+
+  function sawEmailSentUI(){
+    const txt=document.body.innerText.toLowerCase();
+    return txt.includes('controlla la tua email');
   }
 
   function sendReset(email){
-    if (!armed || !email) return;
-    const now=Date.now();
-    if (inFlight || (now-lastSent)<5000) return;
-    inFlight=true; lastSent=now;
     const url=API+'?action=request&email='+encodeURIComponent(email)+'&redirect='+encodeURIComponent(REDIRECT);
     try{ fetch(url,{method:'GET',cache:'no-store',mode:'no-cors'}) }catch(e){}
-    const img=new Image(); img.src=url+'&_b=1';
-    setTimeout(()=>{ inFlight=false; },1200);
   }
 
   function attach(el){
     if(!el||el.__gs_bound) return; el.__gs_bound=true;
     el.addEventListener('click',(ev)=>{
-      if (!armed || !ev.isTrusted) return;
-      const email = readEmailNear(el) || (localStorage.getItem('gs_email')||'');
-      if (email) { try{ localStorage.setItem('gs_email', email);}catch(e){} sendReset(email); }
-      // Non blocchiamo il click → la tua UI mostra "Controlla la tua Email"
+      if(!ev.isTrusted) return;
+      const email=readEmailNear(el) || (localStorage.getItem('gs_email')||'');
+      if(email){ try{ localStorage.setItem('gs_email', email);}catch(e){} }
+      // fallback: solo se entro 1200ms NON vediamo la pagina "controlla la tua email"
+      let fired=false;
+      const t=setTimeout(()=>{ if(!fired && !sawEmailSentUI() && email) sendReset(email); },1200);
+      const mo=new MutationObserver(()=>{
+        if(sawEmailSentUI()){ fired=true; clearTimeout(t); mo.disconnect(); }
+      });
+      mo.observe(document.documentElement,{childList:true,subtree:true});
+      setTimeout(()=>mo.disconnect(), 3000);
     },{capture:true});
   }
 
@@ -57,10 +56,9 @@
       if (t.includes('invia') && t.includes('reset') && (t.includes('link')||t.includes('pin'))) attach(el);
     });
   }
+  scan();
+  new MutationObserver(scan).observe(document.documentElement,{childList:true,subtree:true});
 
-  function enable(){
-    scan();
-    new MutationObserver(scan).observe(document.documentElement,{childList:true,subtree:true});
-    window.gsResetTest = (email)=> sendReset(email);
-  }
+  // test manuale
+  window.gsResetTest = (email)=> sendReset(email);
 })();

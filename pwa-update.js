@@ -20,18 +20,9 @@
     try { if (sessionStorage.getItem(FLAG) === '1') { sessionStorage.removeItem(FLAG); location.reload(); } } catch(e){}
   });
   function wire(reg){
-    function showIfWaiting(){
-      if(reg.waiting && navigator.serviceWorker.controller){
-        banner(function(){ reg.waiting && reg.waiting.postMessage({type:'SKIP_WAITING'}); }, function(){});
-      }
-    }
+    function showIfWaiting(){ if(reg.waiting && navigator.serviceWorker.controller){ banner(function(){ reg.waiting && reg.waiting.postMessage({type:'SKIP_WAITING'}); }, function(){}); } }
     showIfWaiting();
-    reg.addEventListener('updatefound', function(){
-      var nw = reg.installing;
-      nw && nw.addEventListener('statechange', function(){
-        if(nw.state==='installed' && navigator.serviceWorker.controller){ showIfWaiting(); }
-      });
-    });
+    reg.addEventListener('updatefound', function(){ var nw = reg.installing; nw && nw.addEventListener('statechange', function(){ if(nw.state==='installed' && navigator.serviceWorker.controller){ showIfWaiting(); } }); });
     function checkVersion(){
       fetch(VERSION_URL, { cache: 'no-store' })
         .then(r=>r.json())
@@ -40,10 +31,7 @@
           var cur = (v && v.commit) || '';
           if (cur && cur !== last) {
             if (!reg.waiting) {
-              banner(function(){
-                try { localStorage.setItem(LAST_KEY, String(cur)); } catch(e){}
-                location.reload();
-              }, function(){});
+              banner(function(){ try { localStorage.setItem(LAST_KEY, String(cur)); } catch(e){} location.reload(); }, function(){});
             }
           }
         }).catch(function(){});

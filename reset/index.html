@@ -42,9 +42,8 @@
         jsonp(ENDPOINT+'?action=validate&'+param+'='+encodeURIComponent(t), function(res){
           if(done) return;
           if(res && res.ok){ done=true; cb(true, param); }
-          else if(tried<3){
-            if(param==='t') tryOne('token'); else if(param==='token') tryOne('code'); else tryOne('t');
-          } else { cb(false, null); }
+          else if(tried<3){ if(param==='t') tryOne('token'); else if(param==='token') tryOne('code'); else tryOne('t'); }
+          else { cb(false, null); }
         });
       }
       tryOne('t');
