@@ -224,6 +224,14 @@ interface HistoryScreenHandles {
   closeOpenItem: () => void;
 }
 
+// Fix: Add ExpenseGroup interface to properly type the grouped expenses object.
+interface ExpenseGroup {
+    year: number;
+    week: number;
+    label: string;
+    expenses: Expense[];
+}
+
 // Helper per ottenere l'anno e il numero della settimana ISO 8601
 const getISOWeek = (date: Date): [number, number] => {
     const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
@@ -331,8 +339,8 @@ const HistoryScreen = forwardRef<HistoryScreenHandles, HistoryScreenProps>(({ ex
         // Ordina le spese dalla più recente alla più vecchia prima di raggrupparle
         const sortedExpenses = [...filteredExpenses].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     
-        // FIX: Explicitly typing the initial value of the reduce function's accumulator to ensure correct type inference.
-        return sortedExpenses.reduce((acc, expense) => {
+        // FIX: Use a generic type argument for `reduce` to ensure correct type inference for the accumulator.
+        return sortedExpenses.reduce<Record<string, ExpenseGroup>>((acc, expense) => {
             const expenseDate = new Date(expense.date);
             if (isNaN(expenseDate.getTime())) return acc;
     
@@ -349,7 +357,7 @@ const HistoryScreen = forwardRef<HistoryScreenHandles, HistoryScreenProps>(({ ex
             }
             acc[key].expenses.push(expense);
             return acc;
-        }, {} as Record<string, { year: number, week: number, label: string, expenses: Expense[] }>);
+        }, {});
     }, [filteredExpenses]);
 
     const expenseGroups = Object.values(groupedExpenses).sort((a, b) => {
@@ -390,7 +398,7 @@ const HistoryScreen = forwardRef<HistoryScreenHandles, HistoryScreenProps>(({ ex
             className="h-full flex flex-col bg-slate-100"
             onPointerDownCapture={handlePointerDownCapture}
         >
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto" style={{ touchAction: 'pan-y' }}>
                 {expenseGroups.length > 0 ? (
                     expenseGroups.map(group => (
                         <div key={group.label} className="mb-6 last:mb-0">
