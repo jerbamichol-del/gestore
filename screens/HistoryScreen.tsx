@@ -140,12 +140,11 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
             e.stopPropagation();
     
             const velocityX = elapsed > 10 ? deltaX / elapsed : 0;
-            const wasClosed = dragState.current.initialTranslateX === 0;
-            const wasOpen = !wasClosed;
+            const wasOpen = isOpen;
     
             // Navigation swipe to home
             const isConfirmedRightSwipeNav = (deltaX > ACTION_WIDTH / 2) || (velocityX > 0.4 && deltaX > 20);
-            if (wasClosed && isConfirmedRightSwipeNav) {
+            if (!wasOpen && isConfirmedRightSwipeNav) {
                 onNavigateHome();
                 return;
             }
