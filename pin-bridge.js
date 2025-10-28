@@ -1,4 +1,9 @@
 (()=> {
+  function mark(){ try{localStorage.setItem('gs_force_new_pin','1'); sessionStorage.setItem('gs_force_new_pin','1');}catch(e){} }
+  try{ if(new URL(location.href).searchParams.get('resetpin')==='1') mark(); }catch(e){}
+
+  function flagOn(){ try{ return localStorage.getItem('gs_force_new_pin')==='1' || sessionStorage.getItem('gs_force_new_pin')==='1'; }catch(e){ return false; } }
+
   function isNewPinScreen(){
     const headers=[...document.querySelectorAll('h1,h2,h3')].map(n=>(n.textContent||'').trim().toLowerCase());
     if (headers.some(t=>t.includes('crea un nuovo pin'))) return true;
@@ -6,6 +11,7 @@
     const hasKeypad=['0','1','2','3','4','5','6','7','8','9'].every(x=>keys.includes(x));
     return hasKeypad && headers.join(' ').includes('pin');
   }
+
   function clickCandidates(){
     const btns=[...document.querySelectorAll('button,a,[role="button"]')];
     const c = btns.find(b=>{
@@ -14,43 +20,44 @@
     });
     if (c) c.click();
   }
+
   function tryRoutes(){
     const base = location.origin + '/gestore/';
-    const guesses = [
-      '#/new-pin','#/pin/new','#/set-pin','#/reset-pin','#/pin',
-      '/pin/new','/set-pin','/reset-pin','/auth/pin','/pin'
-    ];
+    const hashes=['#/new-pin','#/set-pin','#/create-pin','#/pin/new','#/auth/new-pin','#/reset-pin','#/pin/setup','#/pin'];
+    const paths=['pin/new','set-pin','create-pin','auth/new-pin','reset-pin','pin/setup','pin'];
     let i=0;
+    const start=Date.now();
     const tick=()=>{
-      if (isNewPinScreen()) { return; }
-      if (i>=guesses.length) { clickCandidates(); return; }
-      const r=guesses[i++];
-      if (r.startsWith('#')) {
+      if(isNewPinScreen()) return;
+      if(Date.now()-start>6000){ clickCandidates(); return; }
+      const r = (i<hashes.length) ? hashes[i++] : paths[i++-hashes.length];
+      if(!r){ clickCandidates(); return; }
+      if(r.startsWith('#')){
         if (location.pathname !== '/gestore/') history.replaceState(null,'',base);
-        location.hash=r;
+        location.hash = r;
         window.dispatchEvent(new HashChangeEvent('hashchange'));
       } else {
-        history.pushState(null,'', base.replace(//$/,'') + r);
+        history.pushState(null,'', base.replace(//$/,'') + '/' + r.replace(/^//,''));
         window.dispatchEvent(new PopStateEvent('popstate'));
       }
-      setTimeout(tick, 500);
+      setTimeout(tick, 400);
     };
     tick();
   }
+
   function hideEmailScreen(){
     [...document.querySelectorAll('*')].forEach(n=>{
       const t=(n.textContent||'').toLowerCase();
       if (t.includes('controlla la tua email')) n.style.display='none';
     });
   }
+
   function run(){
-    let flag=false;
-    try { flag = localStorage.getItem('gs_force_new_pin')==='1'; } catch(e){}
-    const urlFlag = new URL(location.href).searchParams.get('resetpin')==='1';
-    if (!(flag || urlFlag)) return;
+    if(!flagOn()) return;
     hideEmailScreen();
-    if (!isNewPinScreen()) tryRoutes();
+    tryRoutes();
   }
+
   run();
   new MutationObserver(run).observe(document.documentElement,{childList:true,subtree:true});
 })();

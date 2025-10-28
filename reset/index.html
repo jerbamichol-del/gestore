@@ -10,7 +10,7 @@
     <div id="ok" class="space-y-3" style="display:none">
       <p class="text-slate-700">Il link è valido. Premi “Conferma” per procedere al reset.</p>
       <button id="go" class="w-full rounded-lg py-2 bg-indigo-600 text-white">Conferma reset</button>
-      <p class="text-xs text-slate-500">Dopo la conferma, si aprirà la schermata per creare il nuovo PIN.</p>
+      <p class="text-xs text-slate-500">Dopo la conferma si aprirà la schermata per creare il nuovo PIN.</p>
     </div>
   </main>
   <script>
@@ -61,7 +61,7 @@
       document.getElementById('go').onclick=function(){
         jsonp(ENDPOINT+'?action=consume&'+(paramUsed||'t')+'='+encodeURIComponent(t), function(c){
           if(c && c.ok){
-            try{ localStorage.setItem('gs_force_new_pin','1'); }catch(e){}
+            try{ localStorage.setItem('gs_force_new_pin','1'); sessionStorage.setItem('gs_force_new_pin','1'); }catch(e){}
             var base = location.origin + '/gestore/';
             location.replace(base + '?resetpin=1#new-pin');
           }else{
