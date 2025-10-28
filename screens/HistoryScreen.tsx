@@ -34,13 +34,6 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
       startTime: 0,
       initialTranslateX: 0,
     });
-    
-    const getTranslateX = (element: HTMLElement | null): number => {
-      if (!element) return 0;
-      const style = window.getComputedStyle(element);
-      const matrix = new DOMMatrix(style.transform);
-      return matrix.m41;
-    };
 
     const setTranslateX = useCallback((x: number, animated: boolean) => {
         if (itemRef.current) {
@@ -52,17 +45,21 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
     const handlePointerDown = (e: React.PointerEvent) => {
         if ((e.target as HTMLElement).closest('button')) return;
         
-        const currentTranslateX = getTranslateX(itemRef.current);
+        // FIX: Determine initial position from the `isOpen` prop (the source of truth)
+        // instead of reading from the DOM. This prevents race conditions with CSS transitions.
+        const initialTranslateX = isOpen ? -ACTION_WIDTH : 0;
+        
         dragState.current = {
             isDragging: true,
             isLocked: false,
             startX: e.clientX,
             startY: e.clientY,
             startTime: performance.now(),
-            initialTranslateX: currentTranslateX,
+            initialTranslateX: initialTranslateX,
         };
         
-        setTranslateX(currentTranslateX, false);
+        // Snap to the correct starting position without animation before dragging begins.
+        setTranslateX(initialTranslateX, false);
     };
 
     const handlePointerMove = (e: React.PointerEvent) => {
@@ -120,18 +117,20 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
             try { itemRef.current?.releasePointerCapture(e.pointerId); } catch {}
         }
 
+        // FIX: Consistently determine 'wasOpen' from the state captured at the beginning of the drag.
+        const wasOpen = dragState.current.initialTranslateX !== 0;
+
         // --- 1. Handle Taps First ---
         if (isTap) {
             e.preventDefault();
             e.stopPropagation();
             
             // Snap back to original position to prevent visual jitter
-            setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
+            setTranslateX(wasOpen ? -ACTION_WIDTH : 0, true);
             
-            if (!isOpen) {
+            if (!wasOpen) {
                 onEdit(expense);
             }
-            // If it IS open, we do nothing, as intended.
             return; // Exit early for taps.
         }
     
@@ -140,7 +139,6 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
             e.stopPropagation();
     
             const velocityX = elapsed > 10 ? deltaX / elapsed : 0;
-            const wasOpen = isOpen;
     
             // Navigation swipe to home
             const isConfirmedRightSwipeNav = (deltaX > ACTION_WIDTH / 2) || (velocityX > 0.4 && deltaX > 20);
@@ -162,11 +160,11 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
                 shouldOpen = flickedLeft || draggedFarLeft;
             }
             
-            if (shouldOpen !== isOpen) {
+            if (shouldOpen !== wasOpen) {
                 onOpen(shouldOpen ? expense.id : '');
             } else {
                 // Snap back if swipe was not confirmed
-                setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
+                setTranslateX(wasOpen ? -ACTION_WIDTH : 0, true);
             }
         }
     };
