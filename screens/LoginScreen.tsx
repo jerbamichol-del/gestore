@@ -10,9 +10,10 @@ interface LoginScreenProps {
   onLoginSuccess: (token: string, email: string) => void;
   onGoToRegister: () => void;
   onGoToForgotPassword: () => void;
+  onGoToForgotEmail: () => void;
 }
 
-const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoToRegister, onGoToForgotPassword }) => {
+const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoToRegister, onGoToForgotPassword, onGoToForgotEmail }) => {
   const [activeEmail, setActiveEmail] = useLocalStorage<string | null>('last_active_user_email', null);
   const [pin, setPin] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -79,19 +80,27 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoToRegiste
               {isLoading ? <SpinnerIcon className="w-6 h-6 text-indigo-600" /> : (error || 'Inserisci il tuo PIN di 4 cifre.')}
           </p>
           <PinInput pin={pin} onPinChange={setPin} />
-          <div className="mt-4 flex justify-between items-center">
+          <div className="mt-4 flex flex-col sm:flex-row justify-between items-center gap-2">
             <button
                 onClick={handleSwitchUser}
                 className="text-sm font-semibold text-slate-500 hover:text-slate-800"
             >
               Cambia Utente
             </button>
-            <button
-              onClick={onGoToForgotPassword}
-              className="text-sm font-semibold text-indigo-600 hover:text-indigo-500"
-            >
-              PIN Dimenticato?
-            </button>
+            <div className="flex gap-4">
+              <button
+                onClick={onGoToForgotEmail}
+                className="text-sm font-semibold text-indigo-600 hover:text-indigo-500"
+              >
+                Email dimenticata?
+              </button>
+              <button
+                onClick={onGoToForgotPassword}
+                className="text-sm font-semibold text-indigo-600 hover:text-indigo-500"
+              >
+                PIN Dimenticato?
+              </button>
+            </div>
           </div>
         </div>
     );

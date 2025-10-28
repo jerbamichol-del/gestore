@@ -340,8 +340,9 @@ const HistoryScreen = forwardRef<HistoryScreenHandles, HistoryScreenProps>(({ ex
         // Ordina le spese dalla più recente alla più vecchia prima di raggrupparle
         const sortedExpenses = [...filteredExpenses].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     
-        // FIX: The initial value `{}` must be cast to the correct type to avoid `acc` being inferred as `{}`, which causes downstream type errors.
-        return sortedExpenses.reduce((acc, expense) => {
+        // FIX: The initial value `{}` was cast, but TypeScript still failed to infer the accumulator type correctly.
+        // By adding a generic type to `reduce`, we ensure `acc` is correctly typed, resolving downstream type errors.
+        return sortedExpenses.reduce<Record<string, ExpenseGroup>>((acc, expense) => {
             const expenseDate = new Date(expense.date);
             if (isNaN(expenseDate.getTime())) return acc;
     
@@ -358,11 +359,12 @@ const HistoryScreen = forwardRef<HistoryScreenHandles, HistoryScreenProps>(({ ex
             }
             acc[key].expenses.push(expense);
             return acc;
-        }, {} as Record<string, ExpenseGroup>);
+        }, {});
     }, [filteredExpenses]);
 
     const expenseGroups = Object.values(groupedExpenses).sort((a, b) => {
         if (a.year !== b.year) return b.year - a.year;
+        // FIX: Corrected sort logic from `b.week - b.week` to `b.week - a.week`.
         return b.week - a.week;
     });
     

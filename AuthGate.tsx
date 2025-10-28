@@ -3,9 +3,10 @@ import App from './App';
 import LoginScreen from './screens/LoginScreen';
 import SetupScreen from './screens/SetupScreen';
 import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
+import ForgotEmailScreen from './screens/ForgotEmailScreen';
 import { useLocalStorage } from './hooks/useLocalStorage';
 
-type AuthView = 'login' | 'register' | 'forgotPassword';
+type AuthView = 'login' | 'register' | 'forgotPassword' | 'forgotEmail';
 
 const LOCK_TIMEOUT_MS = 30000; // 30 secondi
 
@@ -81,6 +82,8 @@ const AuthGate: React.FC = () => {
       return <SetupScreen onSetupSuccess={handleAuthSuccess} onGoToLogin={() => setAuthView('login')} />;
     case 'forgotPassword':
       return <ForgotPasswordScreen onBackToLogin={() => setAuthView('login')} />;
+    case 'forgotEmail':
+        return <ForgotEmailScreen onBackToLogin={() => setAuthView('login')} />;
     case 'login':
     default:
       return (
@@ -88,6 +91,7 @@ const AuthGate: React.FC = () => {
             onLoginSuccess={handleAuthSuccess}
             onGoToRegister={() => setAuthView('register')}
             onGoToForgotPassword={() => setAuthView('forgotPassword')}
+            onGoToForgotEmail={() => setAuthView('forgotEmail')}
         />
       );
   }

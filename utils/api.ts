@@ -21,7 +21,7 @@ const saveUsers = (users: any) => localStorage.setItem('users_db', JSON.stringif
 /**
  * Registra un nuovo utente.
  */
-export const register = async (email: string, pin: string): Promise<{ success: boolean; message: string }> => {
+export const register = async (email: string, pin: string, phoneNumber?: string): Promise<{ success: boolean; message: string }> => {
     return new Promise(resolve => {
         setTimeout(async () => {
             const users = getUsers();
@@ -31,7 +31,7 @@ export const register = async (email: string, pin: string): Promise<{ success: b
                 return;
             }
             const { hash, salt } = await hashPinWithSalt(pin);
-            users[normalizedEmail] = { email: normalizedEmail, pinHash: hash, pinSalt: salt };
+            users[normalizedEmail] = { email: normalizedEmail, pinHash: hash, pinSalt: salt, phoneNumber: phoneNumber || null };
             saveUsers(users);
             resolve({ success: true, message: 'Registrazione completata.' });
         }, 1000);
@@ -82,6 +82,26 @@ export const forgotPassword = async (email: string): Promise<{ success: boolean;
                 console.log(`(SIMULAZIONE) Tentativo di reset per email non registrata: ${email}`);
                 resolve({ success: true, message: 'Se l\'email è registrata, riceverai un link per il reset.' });
             }
+        }, 1500);
+    });
+};
+
+/**
+ * Simula la ricerca di un'email tramite numero di telefono e l'invio di un SMS.
+ */
+export const findEmailByPhoneNumber = async (phoneNumber: string): Promise<{ success: boolean; message: string }> => {
+    return new Promise(resolve => {
+        setTimeout(() => {
+            const users = getUsers();
+            const foundUser = Object.values(users).find((user: any) => user.phoneNumber === phoneNumber);
+            
+            if (foundUser) {
+                console.log(`(SIMULAZIONE) SMS inviato a ${phoneNumber} con l'email: ${(foundUser as any).email}`);
+            } else {
+                console.log(`(SIMULAZIONE) Tentativo di recupero per numero non registrato: ${phoneNumber}`);
+            }
+            // Per sicurezza, restituisci sempre un messaggio generico.
+            resolve({ success: true, message: 'Se il numero è associato a un account, riceverai un SMS con la tua email.' });
         }, 1500);
     });
 };

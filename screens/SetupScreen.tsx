@@ -3,6 +3,7 @@ import AuthLayout from '../components/auth/AuthLayout';
 import PinInput from '../components/auth/PinInput';
 import { register, login } from '../utils/api';
 import { EnvelopeIcon } from '../components/icons/EnvelopeIcon';
+import { PhoneIcon } from '../components/icons/PhoneIcon';
 import { SpinnerIcon } from '../components/icons/SpinnerIcon';
 
 interface SetupScreenProps {
@@ -13,6 +14,7 @@ interface SetupScreenProps {
 const SetupScreen: React.FC<SetupScreenProps> = ({ onSetupSuccess, onGoToLogin }) => {
   const [step, setStep] = useState<'email' | 'pin_setup' | 'pin_confirm'>('email');
   const [email, setEmail] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -32,7 +34,7 @@ const SetupScreen: React.FC<SetupScreenProps> = ({ onSetupSuccess, onGoToLogin }
     setIsLoading(true);
     setError(null);
     const normalizedEmail = email.toLowerCase();
-    const regResponse = await register(normalizedEmail, pin);
+    const regResponse = await register(normalizedEmail, pin, phoneNumber);
     if (regResponse.success) {
       // Login automatico dopo la registrazione
       const loginResponse = await login(normalizedEmail, pin);
@@ -95,9 +97,9 @@ const SetupScreen: React.FC<SetupScreenProps> = ({ onSetupSuccess, onGoToLogin }
         return (
           <div className="text-center">
             <h2 className="text-xl font-bold text-slate-800 mb-2">Crea un Account</h2>
-            <p className="text-slate-500 mb-6 h-10 flex items-center justify-center">{error || 'Inizia inserendo la tua email.'}</p>
-            <form onSubmit={handleEmailSubmit}>
-               <div className="mb-4">
+            <p className="text-slate-500 mb-6 h-10 flex items-center justify-center">{error || 'Inizia inserendo i tuoi dati.'}</p>
+            <form onSubmit={handleEmailSubmit} className="space-y-4">
+               <div>
                    <label htmlFor="email-register" className="sr-only">Email</label>
                    <div className="relative">
                       <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
@@ -111,6 +113,22 @@ const SetupScreen: React.FC<SetupScreenProps> = ({ onSetupSuccess, onGoToLogin }
                           className={inputStyles}
                           placeholder="La tua email"
                           required
+                      />
+                   </div>
+               </div>
+                <div>
+                   <label htmlFor="phone-register" className="sr-only">Numero di telefono (opzionale)</label>
+                   <div className="relative">
+                      <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                          <PhoneIcon className="h-5 w-5 text-slate-400" aria-hidden="true" />
+                      </div>
+                      <input
+                          type="tel"
+                          id="phone-register"
+                          value={phoneNumber}
+                          onChange={(e) => setPhoneNumber(e.target.value)}
+                          className={inputStyles}
+                          placeholder="Telefono (opzionale per recupero)"
                       />
                    </div>
                </div>
