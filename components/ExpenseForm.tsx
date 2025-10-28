@@ -74,6 +74,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
 
   const amountInputRef = useRef<HTMLInputElement>(null);
   const descriptionInputRef = useRef<HTMLInputElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
 
   const isEditing = !!initialData;
 
@@ -113,21 +114,14 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
         resetForm();
       }
       
-      const animTimer = setTimeout(() => setIsAnimating(true), 10);
-      let focusTimer: number | undefined;
-
-      if (!initialData && !prefilledData) {
-        focusTimer = window.setTimeout(() => {
-          if (amountInputRef.current) {
-            amountInputRef.current.focus();
-            amountInputRef.current.select(); // Select existing content if any
-          }
-        }, 350); // Delay slightly longer than modal animation
-      }
-
+      const animTimer = setTimeout(() => {
+        setIsAnimating(true);
+        // Set focus on the title to prevent the browser from auto-focusing an input
+        titleRef.current?.focus();
+      }, 50);
+      
       return () => {
         clearTimeout(animTimer);
-        if (focusTimer) clearTimeout(focusTimer);
       };
     } else {
       setIsAnimating(false);
@@ -261,7 +255,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
         onClick={(e) => e.stopPropagation()}
       >
         <header className="flex justify-between items-center p-6 border-b border-slate-200">
-          <h2 className="text-2xl font-bold text-slate-800">{isEditing ? 'Modifica Spesa' : 'Aggiungi Spesa'}</h2>
+          <h2 ref={titleRef} tabIndex={-1} className="text-2xl font-bold text-slate-800 focus:outline-none">{isEditing ? 'Modifica Spesa' : 'Aggiungi Spesa'}</h2>
           <button
             type="button"
             onClick={handleClose}
