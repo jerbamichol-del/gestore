@@ -117,7 +117,6 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
             try { itemRef.current?.releasePointerCapture(e.pointerId); } catch {}
         }
 
-        // FIX: Consistently determine 'wasOpen' from the state captured at the beginning of the drag.
         const wasOpen = dragState.current.initialTranslateX !== 0;
 
         // --- 1. Handle Taps First ---
@@ -125,10 +124,11 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
             e.preventDefault();
             e.stopPropagation();
             
-            // Snap back to original position to prevent visual jitter
-            setTranslateX(wasOpen ? -ACTION_WIDTH : 0, true);
-            
-            if (!wasOpen) {
+            if (wasOpen) {
+                // If it was open, a tap should close it.
+                onOpen('');
+            } else {
+                // It was closed, a tap should edit.
                 onEdit(expense);
             }
             return; // Exit early for taps.
