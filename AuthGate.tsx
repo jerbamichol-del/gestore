@@ -4,15 +4,18 @@ import LoginScreen from './screens/LoginScreen';
 import SetupScreen from './screens/SetupScreen';
 import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
 import ForgotEmailScreen from './screens/ForgotEmailScreen';
+import ResetPinScreen from './screens/ResetPinScreen';
 import { useLocalStorage } from './hooks/useLocalStorage';
 
 type AuthView = 'login' | 'register' | 'forgotPassword' | 'forgotEmail';
+type ResetContext = { token: string; email: string; } | null;
 
 const LOCK_TIMEOUT_MS = 30000; // 30 secondi
 
 const AuthGate: React.FC = () => {
   const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [, setLastActiveUser] = useLocalStorage<string | null>('last_active_user_email', null);
+  const [resetContext, setResetContext] = useState<ResetContext>(null);
   const hiddenTimestampRef = useRef<number | null>(null);
   
   // Controlla se esiste un database di utenti per decidere la schermata iniziale.
@@ -27,9 +30,26 @@ const AuthGate: React.FC = () => {
 
   const [authView, setAuthView] = useState<AuthView>(hasUsers() ? 'login' : 'register');
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('resetToken');
+    const email = params.get('email');
+
+    if (token && email) {
+        setResetContext({ token, email });
+        // Pulisce l'URL per evitare che il reset venga riattivato al refresh della pagina
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
+
   const handleAuthSuccess = (token: string, email: string) => {
     setSessionToken(token);
     setLastActiveUser(email.toLowerCase());
+  };
+  
+  const handleResetSuccess = () => {
+    setResetContext(null);
+    setAuthView('login'); // Torna alla schermata di login dopo il reset
   };
 
   const handleLogout = useCallback(() => {
@@ -68,6 +88,16 @@ const AuthGate: React.FC = () => {
     };
   }, [sessionToken, handleLogout]);
   
+  if (resetContext) {
+    return (
+      <ResetPinScreen
+        email={resetContext.email}
+        token={resetContext.token}
+        onResetSuccess={handleResetSuccess}
+      />
+    );
+  }
+
   if (sessionToken) {
     return <App onLogout={handleLogout} />;
   }

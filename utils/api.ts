@@ -66,24 +66,36 @@ export const login = async (email: string, pin: string): Promise<{ success: bool
 };
 
 /**
- * Simula l'invio di un'email per il reset della password.
+ * Invokes a Google App Script to send a password reset email.
  */
 export const forgotPassword = async (email: string): Promise<{ success: boolean; message: string }> => {
-     return new Promise(resolve => {
-        setTimeout(() => {
-            const users = getUsers();
-            const normalizedEmail = email.toLowerCase();
-            if (users[normalizedEmail]) {
-                 // In una vera app, il backend genererebbe un token e invierebbe un'email.
-                 console.log(`(SIMULAZIONE) Link di reset inviato a ${email}`);
-                 resolve({ success: true, message: 'Se l\'email è registrata, riceverai un link per il reset.' });
-            } else {
-                // Inviamo lo stesso messaggio per motivi di sicurezza (per non rivelare le email esistenti).
-                console.log(`(SIMULAZIONE) Tentativo di reset per email non registrata: ${email}`);
-                resolve({ success: true, message: 'Se l\'email è registrata, riceverai un link per il reset.' });
-            }
-        }, 1500);
-    });
+    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzmq-PTrMcMdrYqCRX29_S034zCaj5ttyc3tZhdhjV77wF6n99LKricFgzy7taGqKOo/exec';
+    const normalizedEmail = email.toLowerCase();
+    
+    try {
+        const response = await fetch(SCRIPT_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ email: normalizedEmail }),
+        });
+
+        if (!response.ok) {
+           // Log server-side errors for debugging, but don't expose them to the user.
+           console.warn(`Password reset script returned a non-OK response: ${response.status}`);
+        }
+
+    } catch (error) {
+        // This catches network errors (e.g., offline, DNS, CORS issues).
+        console.error('Network error calling the password reset script:', error);
+        // It's crucial to inform the user about a potential connection issue.
+        return { success: false, message: 'Impossibile inviare la richiesta. Controlla la tua connessione e riprova.' };
+    }
+    
+    // For security reasons, always return a generic success message to prevent attackers
+    // from checking which emails are registered in the system (email enumeration).
+    return { success: true, message: 'Se l\'email è registrata, riceverai un link per il reset.' };
 };
 
 /**
@@ -103,5 +115,37 @@ export const findEmailByPhoneNumber = async (phoneNumber: string): Promise<{ suc
             // Per sicurezza, restituisci sempre un messaggio generico.
             resolve({ success: true, message: 'Se il numero è associato a un account, riceverai un SMS con la tua email.' });
         }, 1500);
+    });
+};
+
+/**
+ * Reimposta il PIN di un utente dopo aver "verificato" un token.
+ */
+export const resetPin = async (email: string, token: string, newPin: string): Promise<{ success: boolean; message: string }> => {
+    return new Promise(resolve => {
+        setTimeout(async () => {
+            const users = getUsers();
+            const normalizedEmail = email.toLowerCase();
+            const user = users[normalizedEmail];
+
+            if (!user) {
+                resolve({ success: false, message: 'Utente non trovato o link non valido.' });
+                return;
+            }
+
+            // In una vera applicazione, il token verrebbe validato con un backend.
+            // Per questa demo, la presenza di un token e di un'email valida è sufficiente.
+            if (!token) {
+                 resolve({ success: false, message: 'Token di reset mancante o non valido.' });
+                 return;
+            }
+            
+            const { hash, salt } = await hashPinWithSalt(newPin);
+            users[normalizedEmail].pinHash = hash;
+            users[normalizedEmail].pinSalt = salt;
+            saveUsers(users);
+
+            resolve({ success: true, message: 'PIN aggiornato con successo.' });
+        }, 1000);
     });
 };
