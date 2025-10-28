@@ -6,6 +6,7 @@
   var FIRST_START_DELAY = 2000;
   var VERSION_URL = scopeGuess + 'version.json?ts=' + Date.now();
   var LAST_KEY = 'pwa-last-commit';
+
   function banner(onAccept,onDismiss){
     if (document.getElementById('pwa-update-banner')) return;
     var w=document.createElement('div');
@@ -16,32 +17,47 @@
     document.getElementById('pwa-update-later').onclick=function(){ w.remove(); onDismiss&&onDismiss(); };
     document.getElementById('pwa-update-now').onclick=function(){ w.remove(); try { sessionStorage.setItem(FLAG,'1'); } catch(e){} onAccept&&onAccept(); };
   }
+
   navigator.serviceWorker.addEventListener('controllerchange', function(){
     try { if (sessionStorage.getItem(FLAG) === '1') { sessionStorage.removeItem(FLAG); location.reload(); } } catch(e){}
   });
+
   function wire(reg){
-    function showIfWaiting(){ if(reg.waiting && navigator.serviceWorker.controller){ banner(function(){ reg.waiting && reg.waiting.postMessage({type:'SKIP_WAITING'}); }, function(){}); } }
+    function showIfWaiting(){
+      if(reg.waiting && navigator.serviceWorker.controller){
+        banner(function(){ reg.waiting && reg.waiting.postMessage({type:'SKIP_WAITING'}); }, function(){});
+      }
+    }
     showIfWaiting();
-    reg.addEventListener('updatefound', function(){ var nw = reg.installing; nw && nw.addEventListener('statechange', function(){ if(nw.state==='installed' && navigator.serviceWorker.controller){ showIfWaiting(); } }); });
+    reg.addEventListener('updatefound', function(){
+      var nw = reg.installing;
+      nw && nw.addEventListener('statechange', function(){
+        if(nw.state==='installed' && navigator.serviceWorker.controller){ showIfWaiting(); }
+      });
+    });
+
     function checkVersion(){
       fetch(VERSION_URL, { cache: 'no-store' })
         .then(r=>r.json())
         .then(v=>{
           var last = ''; try { last = localStorage.getItem(LAST_KEY)||''; } catch(e){}
           var cur = (v && v.commit) || '';
-          if (cur && cur !== last) {
-            if (!reg.waiting) {
-              banner(function(){ try { localStorage.setItem(LAST_KEY, String(cur)); } catch(e){} location.reload(); }, function(){});
-            }
+          if (cur && cur !== last && !reg.waiting) {
+            banner(function(){
+              try { localStorage.setItem(LAST_KEY, String(cur)); } catch(e){}
+              location.reload();
+            }, function(){});
           }
         }).catch(function(){});
     }
+
     var check = function(){ reg.update().catch(function(){}); checkVersion(); };
     setTimeout(check, FIRST_START_DELAY);
     window.addEventListener('focus', check);
     document.addEventListener('visibilitychange', function(){ if(document.visibilityState === 'visible') check(); });
     setInterval(check, PERIOD_MS);
   }
+
   window.addEventListener('load', function(){
     (navigator.serviceWorker.getRegistration(scopeGuess).catch(function(){}) )
       .then(function(reg){ return reg || navigator.serviceWorker.getRegistration(); })
