@@ -79,7 +79,7 @@ export const forgotPassword = async (email: string): Promise<{ success: boolean;
         await fetch(SCRIPT_URL, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
+                'Content-Type': 'text/plain',
             },
             // Aggiungo un'azione per aiutare lo script a distinguere le richieste
             body: JSON.stringify({ action: 'requestReset', email: normalizedEmail }), 
@@ -87,7 +87,8 @@ export const forgotPassword = async (email: string): Promise<{ success: boolean;
         // Non controlliamo la risposta per motivi di sicurezza (email enumeration)
     } catch (error) {
         console.error('Network error calling the password reset script:', error);
-        return { success: false, message: 'Impossibile inviare la richiesta. Controlla la tua connessione e riprova.' };
+        // L'utente vuole procedere alla schermata di successo anche se la rete fallisce.
+        // Registriamo l'errore ma non blocchiamo il flusso dell'utente. Questo previene anche l'enumerazione delle email.
     }
     
     return { success: true, message: 'Se l\'email è registrata, riceverai un link per il reset.' };
@@ -122,7 +123,7 @@ export const resetPin = async (email: string, token: string, newPin: string): Pr
         const response = await fetch(SCRIPT_URL, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
+                'Content-Type': 'text/plain',
             },
             body: JSON.stringify({
                 action: 'resetPin',

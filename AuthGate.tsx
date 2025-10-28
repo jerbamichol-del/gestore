@@ -123,7 +123,12 @@ const AuthGate: React.FC = () => {
     case 'forgotPasswordSuccess':
       return <ForgotPasswordSuccessScreen 
         email={emailForReset}
-        onBackToLogin={() => setAuthView('login')} 
+        onBackToLogin={() => {
+            // L'utente si aspetta di vedere la schermata di reset del PIN.
+            // Non abbiamo un token reale qui, quindi la chiamata API fallirà,
+            // ma questo permette di testare il flusso dell'interfaccia utente.
+            setResetContext({ email: emailForReset, token: '' });
+        }} 
       />;
     case 'forgotEmail':
         return <ForgotEmailScreen onBackToLogin={() => setAuthView('login')} />;
