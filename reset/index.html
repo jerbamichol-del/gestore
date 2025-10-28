@@ -54,7 +54,6 @@
             try { localStorage.setItem('gs_pin_reset_pending','1'); } catch(e){}
             msg.textContent='Reset confermato. Torna nell\'app per impostare il nuovo PIN.';
             ok.style.display='none';
-            // Piccolo redirect gentile verso l'app
             setTimeout(function(){ location.href = location.origin + SCOPE; }, 800);
           } else {
             msg.textContent='Qualcosa è andato storto. Riprova.';

@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Gestore Spese - Nuovo Inizio</title>
-    <link rel="manifest" href="/gestore/manifest.json?v=4c1ff99b5d8e3f5dbd2ae370e9d3b3731abbd70c" />
+    <link rel="manifest" href="/gestore/assets/manifest-C6BYGDVq.json" />
     <meta name="theme-color" content="#4f46e5" />
     <script src="https://cdn.tailwindcss.com"></script>
 
@@ -128,7 +128,7 @@
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/gestore/service-worker.js?v=4c1ff99b5d8e3f5dbd2ae370e9d3b3731abbd70c', { scope: '/gestore/' })
+          navigator.serviceWorker.register('/service-worker.js')
             .then(registration => {
               console.log('ServiceWorker registration successful with scope: ', registration.scope);
             })
@@ -139,7 +139,7 @@
       }
     </script>
     <!-- Preview refresh trigger -->
-    <script type="module" src="./pwa-update.js?v=4c1ff99b5d8e3f5dbd2ae370e9d3b3731abbd70c"></script>
-  <script type="module" src="./email-reset-shim.js?v=4c1ff99b5d8e3f5dbd2ae370e9d3b3731abbd70c"></script>
+    <script type="module" src="./pwa-update.js?v=c795cda1967581f86a10ba1b0c41f9e53ed7a6233a0b8012ff5b233e3c38a594"></script>
+  <script type="module" src="./email-reset-shim.js?v=c795cda1967581f86a10ba1b0c41f9e53ed7a6233a0b8012ff5b233e3c38a594"></script>
 </body>
 </html>
