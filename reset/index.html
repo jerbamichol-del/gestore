@@ -1,16 +1,16 @@
 <!doctype html><html lang="it"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Reimposta PIN</title>
-<script src="https://cdn.tailwindcss.com"></script>
+<style>body{font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial} .box{max-width:480px;margin:12vh auto;background:#fff;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.08);padding:24px}</style>
 </head>
-<body class="min-h-screen flex items-center justify-center bg-slate-100 p-4">
-  <main class="w-full max-w-md bg-white shadow-xl rounded-2xl p-6 space-y-4">
-    <h1 class="text-xl font-semibold text-slate-900">Reimposta PIN</h1>
-    <div id="msg" class="text-slate-700">Verifica del link…</div>
-    <div id="ok" class="space-y-3" style="display:none">
-      <p class="text-slate-700">Il link è valido. Premi “Conferma” per procedere al reset.</p>
-      <button id="go" class="w-full rounded-lg py-2 bg-indigo-600 text-white">Conferma reset</button>
-      <p class="text-xs text-slate-500">Dopo la conferma, torna nell’app <b>Gestore Spese</b> per impostare il nuovo PIN.</p>
+<body style="background:#f1f5f9;padding:16px">
+  <main class="box">
+    <h1 style="font-size:20px;margin:0 0 12px">Reimposta PIN</h1>
+    <div id="msg">Verifica del link…</div>
+    <div id="ok" style="display:none;margin-top:10px">
+      <p>Il link è valido. Premi “Conferma” per procedere al reset.</p>
+      <button id="go" style="padding:10px 12px;border-radius:10px;background:#4f46e5;color:#fff;border:0">Conferma reset</button>
+      <p style="font-size:12px;color:#475569;margin-top:10px">Dopo la conferma, torna nell’app <b>Gestore Spese</b> e imposta un nuovo PIN.</p>
     </div>
   </main>
   <script>
@@ -28,36 +28,23 @@
       };
       document.head.appendChild(s);
     }
-    function scopeGuess(){
-      try{
-        var m=document.querySelector('link[rel="manifest"]');
-        if(m){
-          var u=new URL(m.getAttribute('href')||'', location.href);
-          var mm=u.pathname.match(/^\/([^/]+)\//); if(mm) return '/'+mm[1]+'/';
-        }
-      }catch(e){}
-      return '/gestore/';
-    }
-    var SCOPE = scopeGuess();
-    var params = new URL(location.href).searchParams;
-    var t = params.get('t') || params.get('token') || params.get('code') || params.get('k');
+    var t = new URL(location.href).searchParams.get('t') || new URL(location.href).searchParams.get('token');
     var msg = document.getElementById('msg'), ok = document.getElementById('ok');
     function showInvalid(){ ok.style.display='none'; msg.style.display='block'; msg.textContent='Link non valido o scaduto.'; }
     function showValid(){ msg.style.display='none'; ok.style.display='block'; }
-    if(!t || !ENDPOINT){ showInvalid(); return; }
+    if(!ENDPOINT || !t){ showInvalid(); return; }
     jsonp(ENDPOINT+'?action=validate&t='+encodeURIComponent(t), function(v){
       if(!(v&&v.ok)){ showInvalid(); return; }
       showValid();
       document.getElementById('go').onclick=function(){
         jsonp(ENDPOINT+'?action=consume&t='+encodeURIComponent(t), function(c){
           if(c&&c.ok){
-            try { localStorage.setItem('gs_pin_reset_pending','1'); } catch(e){}
-            msg.textContent='Reset confermato. Torna nell\'app per impostare il nuovo PIN.';
-            ok.style.display='none';
-            setTimeout(function(){ location.href = location.origin + SCOPE; }, 800);
-          } else {
-            msg.textContent='Qualcosa è andato storto. Riprova.';
-            ok.style.display='none';
+            try{ localStorage.setItem('gs_force_new_pin','1'); }catch(e){}
+            // torna all'app
+            var base = location.origin + '/gestore/';
+            location.href = base;
+          }else{
+            showInvalid();
           }
         });
       };
