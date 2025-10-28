@@ -245,16 +245,16 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
   
   return (
     <div
-      className={`fixed inset-0 z-50 flex justify-center items-start p-4 transition-opacity duration-300 ease-in-out ${isAnimating ? 'opacity-100' : 'opacity-0'} bg-slate-900/60 backdrop-blur-sm overflow-y-auto`}
+      className={`fixed inset-0 z-50 transition-opacity duration-300 ease-in-out ${isAnimating ? 'opacity-100' : 'opacity-0'} bg-slate-900/60 backdrop-blur-sm`}
       onClick={handleClose}
       aria-modal="true"
       role="dialog"
     >
       <div
-        className={`bg-slate-50 rounded-lg shadow-xl w-full max-w-lg my-8 transform transition-all duration-300 ease-in-out ${isAnimating ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`}
+        className={`bg-slate-50 w-full h-full flex flex-col absolute bottom-0 transform transition-transform duration-300 ease-in-out ${isAnimating ? 'translate-y-0' : 'translate-y-full'}`}
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="flex justify-between items-center p-6 border-b border-slate-200">
+        <header className="flex justify-between items-center p-6 border-b border-slate-200 flex-shrink-0">
           <h2 ref={titleRef} tabIndex={-1} className="text-2xl font-bold text-slate-800 focus:outline-none">{isEditing ? 'Modifica Spesa' : 'Aggiungi Spesa'}</h2>
           <button
             type="button"
@@ -265,8 +265,8 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
             <XMarkIcon className="w-6 h-6" />
           </button>
         </header>
-        <form onSubmit={handleSubmit} noValidate>
-          <div className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} noValidate className="flex-1 flex flex-col overflow-hidden">
+          <div className="p-6 space-y-4 flex-1 overflow-y-auto">
                <FormInput
                   ref={descriptionInputRef}
                   id="description"
@@ -339,7 +339,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
 
                {error && <p className="text-base text-red-600 bg-red-100 p-3 rounded-md">{error}</p>}
           </div>
-          <footer className="px-6 py-4 bg-slate-100 border-t border-slate-200 flex justify-end gap-3">
+          <footer className="px-6 py-4 bg-slate-100 border-t border-slate-200 flex justify-end gap-3 flex-shrink-0">
               <button
                 type="button"
                 onClick={handleClose}
