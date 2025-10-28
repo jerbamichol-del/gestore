@@ -116,19 +116,22 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
         dragState.current.isLocked = false;
     
         if (wasLocked) {
-            e.stopPropagation();
             onInteractionChange(false);
             try { itemRef.current?.releasePointerCapture(e.pointerId); } catch {}
     
             const velocityX = elapsed > 10 ? deltaX / elapsed : 0;
-            
             const wasClosed = dragState.current.initialTranslateX === 0;
-
+    
+            // Check for home navigation first
             const isConfirmedRightSwipe = (deltaX > ACTION_WIDTH / 2) || (velocityX > 0.4 && deltaX > 20);
             if (wasClosed && isConfirmedRightSwipe) {
                 onNavigateHome();
+                // Do NOT stop propagation for navigation
                 return;
             }
+    
+            // If it wasn't a navigation swipe, it's a component-level action. Stop propagation.
+            e.stopPropagation();
     
             const wasOpen = !wasClosed;
             let shouldOpen: boolean;
@@ -328,8 +331,8 @@ const HistoryScreen = forwardRef<HistoryScreenHandles, HistoryScreenProps>(({ ex
         // Ordina le spese dalla più recente alla più vecchia prima di raggrupparle
         const sortedExpenses = [...filteredExpenses].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     
-        // FIX: Explicitly type the accumulator for the reduce function to ensure correct type inference.
-        return sortedExpenses.reduce<Record<string, { year: number, week: number, label: string, expenses: Expense[] }>>((acc, expense) => {
+        // FIX: Explicitly typing the initial value of the reduce function's accumulator to ensure correct type inference.
+        return sortedExpenses.reduce((acc, expense) => {
             const expenseDate = new Date(expense.date);
             if (isNaN(expenseDate.getTime())) return acc;
     
@@ -346,7 +349,7 @@ const HistoryScreen = forwardRef<HistoryScreenHandles, HistoryScreenProps>(({ ex
             }
             acc[key].expenses.push(expense);
             return acc;
-        }, {});
+        }, {} as Record<string, { year: number, week: number, label: string, expenses: Expense[] }>);
     }, [filteredExpenses]);
 
     const expenseGroups = Object.values(groupedExpenses).sort((a, b) => {
