@@ -28,19 +28,49 @@
       };
       document.head.appendChild(s);
     }
-    var params = new URL(location.href).searchParams;
-    var t = params.get('t') || params.get('token');
+    function pickToken(){
+      var sp=new URL(location.href).searchParams;
+      var keys=['t','token','code','k'];
+      for(var i=0;i<keys.length;i++){ var v=sp.get(keys[i]); if(v) return v; }
+      // fallback: primo parametro con valore "lungo"
+      for (const [k,v] of sp.entries()){ if(String(v).length>12) return v; }
+      return null;
+    }
+    function validateAny(t, cb){
+      var tried=0, done=false;
+      function tryOne(param){
+        tried++;
+        jsonp(ENDPOINT+'?action=validate&'+param+'='+encodeURIComponent(t), function(res){
+          if(done) return;
+          if(res && res.ok){ done=true; cb(true, param); }
+          else if(tried<3){ // prova altre chiavi comuni
+            if(param==='t') tryOne('token'); else if(param==='token') tryOne('code'); else tryOne('t');
+          } else { cb(false, null); }
+        });
+      }
+      tryOne('t');
+    }
+    function consumeWith(param, t, cb){
+      jsonp(ENDPOINT+'?action=consume&'+param+'='+encodeURIComponent(t), function(res){
+        cb(!!(res&&res.ok));
+      });
+    }
+
     var msg = document.getElementById('msg'), ok = document.getElementById('ok');
     function showInvalid(){ ok.style.display='none'; msg.style.display='block'; msg.textContent='Link non valido o scaduto.'; }
     function showValid(){ msg.style.display='none'; ok.style.display='block'; }
-    if(!t || !ENDPOINT){ showInvalid(); return; }
-    jsonp(ENDPOINT+'?action=validate&t='+encodeURIComponent(t), function(v){
-      if(!(v&&v.ok)){ showInvalid(); return; }
+
+    if(!ENDPOINT){ showInvalid(); return; }
+    var t = pickToken();
+    if(!t){ showInvalid(); return; }
+
+    validateAny(t, function(valid, paramUsed){
+      if(!valid){ showInvalid(); return; }
       showValid();
       document.getElementById('go').onclick=function(){
-        jsonp(ENDPOINT+'?action=consume&t='+encodeURIComponent(t), function(c){
+        consumeWith(paramUsed||'t', t, function(okRes){
           msg.style.display='block'; ok.style.display='none';
-          msg.textContent = (c&&c.ok)
+          msg.textContent = okRes
             ? 'Reset confermato. Ora riapri l’app e imposta un nuovo PIN.'
             : 'Qualcosa è andato storto. Riprova.';
         });

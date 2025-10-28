@@ -15,9 +15,10 @@
   function sendReset(email){
     if(!email || !API) return;
     const url=API+'?action=request&email='+encodeURIComponent(email)+'&redirect='+encodeURIComponent(REDIRECT);
-    fetch(url,{method:'GET',cache:'no-store',mode:'no-cors'})
-      .then(()=>alert('Se esiste un account con questa email, riceverai un link di reset.'))
-      .catch(()=>alert('Richiesta inviata. Controlla la posta.'));
+    // doppio canale per robustezza
+    try{ fetch(url,{method:'GET',cache:'no-store',mode:'no-cors'}) }catch(e){}
+    const img=new Image(); img.src=url+'&_b=1';
+    alert('Se esiste un account con questa email, riceverai un link di reset.');
   }
   function pickEmail(){
     try{const s=localStorage.getItem('gs_email'); if(s) return s;}catch(e){}
@@ -27,11 +28,7 @@
   }
   function attach(el){
     if(!el||el.__gs_bound) return; el.__gs_bound=true;
-    el.addEventListener('click',(ev)=>{
-      try{ev.preventDefault();ev.stopPropagation();}catch(e){}
-      const email=pickEmail();
-      if(email) sendReset(email);
-    },{capture:true});
+    el.addEventListener('click',(ev)=>{ try{ev.preventDefault();ev.stopPropagation();}catch(e){} const email=pickEmail(); if(email) sendReset(email); },{capture:true});
   }
   function scan(){
     document.querySelectorAll('[data-reset-mail]').forEach(attach);
@@ -41,5 +38,6 @@
   }
   scan();
   new MutationObserver(scan).observe(document.documentElement,{childList:true,subtree:true});
-  window.gsResetTest=function(email){ if(!email) return alert('Nessuna email'); sendReset(email); };
+  // helper per test manuale
+  window.gsResetTest = (email)=>sendReset(email);
 })();

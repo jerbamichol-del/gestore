@@ -6,7 +6,7 @@
   var PERIOD_MS = 15 * 60 * 1000; // 15 minuti
   var FIRST_START_DELAY = 2000;    // 2s dopo l'avvio
   var VERSION_URL = scopeGuess + 'version.json?ts=' + Date.now();
-  var LAST_SEEN_KEY = 'pwa-last-version-tag';
+  var LAST_KEY = 'pwa-last-commit';
 
   function banner(onAccept,onDismiss){
     if (document.getElementById('pwa-update-banner')) return;
@@ -23,7 +23,6 @@
     };
   }
 
-  // Ricarica SOLO se l'utente ha accettato
   navigator.serviceWorker.addEventListener('controllerchange', function(){
     try {
       if (sessionStorage.getItem(FLAG) === '1') {
@@ -34,7 +33,6 @@
   });
 
   function wire(reg){
-    // Percorso standard: mostra banner se c'è un SW in waiting
     function showIfWaiting(){
       if(reg.waiting && navigator.serviceWorker.controller){
         banner(function(){ reg.waiting && reg.waiting.postMessage({type:'SKIP_WAITING'}); }, function(){});
@@ -48,17 +46,16 @@
       });
     });
 
-    // Fallback a versione: se build nuova (tag diverso) ma niente waiting → proponi reload gentile
     function checkVersion(){
       fetch(VERSION_URL, { cache: 'no-store' })
         .then(r=>r.json())
         .then(v=>{
-          var last = ''; try { last = localStorage.getItem(LAST_SEEN_KEY)||''; } catch(e){}
-          var cur = (v && v.tag) || '';
+          var last = ''; try { last = localStorage.getItem(LAST_KEY)||''; } catch(e){}
+          var cur = (v && v.commit) || '';
           if (cur && cur !== last) {
             if (!reg.waiting) {
               banner(function(){
-                try { localStorage.setItem(LAST_SEEN_KEY, String(cur)); } catch(e){}
+                try { localStorage.setItem(LAST_KEY, String(cur)); } catch(e){}
                 location.reload();
               }, function(){});
             }
