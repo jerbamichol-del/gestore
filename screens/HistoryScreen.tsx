@@ -72,7 +72,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
         const deltaY = e.clientY - dragState.current.startY;
 
         if (!dragState.current.isLocked) {
-          const SLOP = 5;
+          const SLOP = 10; // Increased to prevent accidental swipe lock on tap
           if (Math.abs(deltaX) <= SLOP && Math.abs(deltaY) <= SLOP) {
             return;
           }
@@ -110,32 +110,48 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
         const deltaY = e.clientY - dragState.current.startY;
         const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
         const elapsed = performance.now() - dragState.current.startTime;
-        const isTap = distance < 10 && elapsed < 200;
+        const isTap = distance < 12 && elapsed < 250;
     
+        // Reset dragging state immediately
         dragState.current.isDragging = false;
         dragState.current.isLocked = false;
-    
         if (wasLocked) {
             onInteractionChange(false);
             try { itemRef.current?.releasePointerCapture(e.pointerId); } catch {}
+        }
+
+        // --- 1. Handle Taps First ---
+        if (isTap) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // Snap back to original position to prevent visual jitter
+            setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
+            
+            if (!isOpen) {
+                onEdit(expense);
+            }
+            // If it IS open, we do nothing, as intended.
+            return; // Exit early for taps.
+        }
+    
+        // --- 2. Handle Swipes Only If Not a Tap ---
+        if (wasLocked) {
+            e.stopPropagation();
     
             const velocityX = elapsed > 10 ? deltaX / elapsed : 0;
             const wasClosed = dragState.current.initialTranslateX === 0;
+            const wasOpen = !wasClosed;
     
-            // Check for home navigation first
-            const isConfirmedRightSwipe = (deltaX > ACTION_WIDTH / 2) || (velocityX > 0.4 && deltaX > 20);
-            if (wasClosed && isConfirmedRightSwipe) {
+            // Navigation swipe to home
+            const isConfirmedRightSwipeNav = (deltaX > ACTION_WIDTH / 2) || (velocityX > 0.4 && deltaX > 20);
+            if (wasClosed && isConfirmedRightSwipeNav) {
                 onNavigateHome();
-                // Do NOT stop propagation for navigation
                 return;
             }
     
-            // If it wasn't a navigation swipe, it's a component-level action. Stop propagation.
-            e.stopPropagation();
-    
-            const wasOpen = !wasClosed;
+            // Action menu swipe logic
             let shouldOpen: boolean;
-    
             const flickedRight = velocityX > 0.2 && deltaX > 15;
             const draggedFarRight = deltaX > ACTION_WIDTH * 0.4;
             const flickedLeft = velocityX < -0.2 && deltaX < -15;
@@ -147,20 +163,11 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
                 shouldOpen = flickedLeft || draggedFarLeft;
             }
             
-            if (shouldOpen === isOpen) {
-                setTranslateX(shouldOpen ? -ACTION_WIDTH : 0, true);
-            } else {
+            if (shouldOpen !== isOpen) {
                 onOpen(shouldOpen ? expense.id : '');
-            }
-        } else if (isTap) {
-            e.preventDefault();
-            e.stopPropagation();
-            if (isOpen) {
-                // Tapping an open item should NOT close it.
-                // This prevents accidental closing when trying to initiate a swipe.
-                // The user can close it by swiping it back or tapping outside.
             } else {
-                onEdit(expense);
+                // Snap back if swipe was not confirmed
+                setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
             }
         }
     };
@@ -172,7 +179,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
     }, [isOpen, setTranslateX]);
 
     return (
-        <div data-expense-item-root className="relative bg-white overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div data-expense-item-root className="relative bg-white overflow-hidden">
             {/* Actions Layer (underneath) */}
             <div className="absolute top-0 right-0 h-full flex items-center z-0">
                 <button
