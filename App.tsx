@@ -144,6 +144,12 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
   const handleNavigation = useCallback((targetView: NavView) => {
     if (activeView === targetView) return;
+
+    // Se stiamo lasciando la schermata dello storico, chiudiamo qualsiasi elemento aperto.
+    if (activeView === 'history' && historyScreenRef.current) {
+        historyScreenRef.current.closeOpenItem();
+    }
+
     setActiveView(targetView);
     window.history.pushState({ view: targetView }, '');
   }, [activeView]);
