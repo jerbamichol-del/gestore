@@ -174,8 +174,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
             {/* Actions Layer (underneath) */}
             <div className="absolute top-0 right-0 h-full flex items-center z-0">
                 <button
-                    onPointerDown={(e) => e.preventDefault()}
-                    onPointerUp={(e) => {
+                    onClick={(e) => {
                       e.stopPropagation();
                       onDelete(expense.id);
                     }}
@@ -359,7 +358,8 @@ const HistoryScreen = forwardRef<HistoryScreenHandles, HistoryScreenProps>(({ ex
             }
             acc[key].expenses.push(expense);
             return acc;
-        }, {});
+// FIX: Explicitly cast the initial value of reduce to ensure correct type inference for groupedExpenses.
+        }, {} as Record<string, ExpenseGroup>);
     }, [filteredExpenses]);
 
     const expenseGroups = Object.values(groupedExpenses).sort((a, b) => {
