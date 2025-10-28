@@ -6,6 +6,7 @@
   var FIRST_START_DELAY = 2000;
   var VERSION_URL = scopeGuess + 'version.json?ts=' + Date.now();
   var LAST_KEY = 'pwa-last-commit';
+  var FORCE = /[?&](update|force|force-update)=1/.test(location.search);
 
   function banner(onAccept,onDismiss){
     if (document.getElementById('pwa-update-banner')) return;
@@ -42,7 +43,7 @@
         .then(v=>{
           var last = ''; try { last = localStorage.getItem(LAST_KEY)||''; } catch(e){}
           var cur = (v && v.commit) || '';
-          if (cur && cur !== last) {
+          if (FORCE || (cur && cur !== last)) {
             if (!reg.waiting) {
               banner(function(){
                 try { localStorage.setItem(LAST_KEY, String(cur)); } catch(e){}

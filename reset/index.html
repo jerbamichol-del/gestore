@@ -64,9 +64,12 @@
       showValid();
       document.getElementById('go').onclick=function(){
         consumeWith(paramUsed||'t', t, function(okRes){
+          if(okRes){
+            try{ localStorage.setItem('gs_pin_reset_ready','1'); }catch(e){}
+          }
           msg.style.display='block'; ok.style.display='none';
           msg.textContent = okRes
-            ? 'Reset confermato. Ora riapri l’app e imposta un nuovo PIN.'
+            ? 'Reset confermato. Ora torna all’app e imposta un nuovo PIN.'
             : 'Qualcosa è andato storto. Riprova.';
         });
       };
