@@ -19,7 +19,7 @@ interface ExpenseItemProps {
   onNavigateHome: () => void;
 }
 
-const ACTION_WIDTH = 144; // 9rem in pixels (w-36)
+const ACTION_WIDTH = 72; // w-[72px] for delete button
 
 const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, onDelete, isOpen, onOpen, onInteractionChange, onNavigateHome }) => {
     const style = getCategoryStyle(expense.category);
@@ -106,6 +106,11 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
         if (!dragState.current.isDragging) return;
     
         const wasLocked = dragState.current.isLocked;
+        const deltaX = e.clientX - dragState.current.startX;
+        const deltaY = e.clientY - dragState.current.startY;
+        const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+        const elapsed = performance.now() - dragState.current.startTime;
+        const isTap = distance < 10 && elapsed < 200;
     
         dragState.current.isDragging = false;
         dragState.current.isLocked = false;
@@ -114,8 +119,6 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
             onInteractionChange(false);
             try { itemRef.current?.releasePointerCapture(e.pointerId); } catch {}
     
-            const elapsed = performance.now() - dragState.current.startTime;
-            const deltaX = e.clientX - dragState.current.startX;
             const velocityX = elapsed > 10 ? deltaX / elapsed : 0;
             
             const wasClosed = dragState.current.initialTranslateX === 0;
@@ -145,6 +148,12 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
             } else {
                 onOpen(shouldOpen ? expense.id : '');
             }
+        } else if (isTap) {
+            if (isOpen) {
+                onOpen('');
+            } else {
+                onEdit(expense);
+            }
         }
     };
     
@@ -158,18 +167,6 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
         <div data-expense-item-root className="relative bg-white overflow-hidden" onClick={(e) => e.stopPropagation()}>
             {/* Actions Layer (underneath) */}
             <div className="absolute top-0 right-0 h-full flex items-center z-0">
-                <button
-                    onPointerDown={(e) => e.preventDefault()}
-                    onPointerUp={(e) => {
-                      e.stopPropagation();
-                      onEdit(expense);
-                    }}
-                    className="w-[72px] h-full flex flex-col items-center justify-center bg-indigo-500 text-white hover:bg-indigo-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white"
-                    aria-label="Modifica spesa"
-                >
-                    <PencilSquareIcon className="w-6 h-6" />
-                    <span className="text-xs mt-1">Modifica</span>
-                </button>
                 <button
                     onPointerDown={(e) => e.preventDefault()}
                     onPointerUp={(e) => {
