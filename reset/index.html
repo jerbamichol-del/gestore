@@ -1,54 +1,77 @@
-<!doctype html>
-<html lang="it">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Reimposta PIN</title>
+<!doctype html><html lang="it"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Reimposta PIN</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen flex items-center justify-center bg-slate-100 p-4">
+  <main class="w-full max-w-md bg-white shadow-xl rounded-2xl p-6 space-y-4">
+    <h1 class="text-xl font-semibold text-slate-900">Reimposta PIN</h1>
+    <div id="msg" class="text-slate-700">Verifica del link…</div>
+    <div id="ok" class="space-y-3" style="display:none">
+      <p class="text-slate-700">Il link è valido. Premi “Conferma” per procedere al reset.</p>
+      <button id="go" class="w-full rounded-lg py-2 bg-indigo-600 text-white">Conferma reset</button>
+      <p class="text-xs text-slate-500">Dopo la conferma, torna nell’app <b>Gestore Spese</b> e imposta un nuovo PIN.</p>
+    </div>
+  </main>
   <script>
-  (function () {
-    // ENDPOINT Apps Script (già deployato)
-    var ENDPOINT = "https://script.google.com/macros/s/AKfycbzmq-PTrMcMdrYqCRX29_S034zCaj5ttyc3tZhdhjV77wF6n99LKricFgzy7taGqKOo/exec";
-
-    function jsonp(url, cb) {
-      var c = "__rp_" + Date.now() + Math.random().toString(36).slice(2);
-      window[c] = function (d) { try { delete window[c]; } catch(_) {} s.remove(); cb(d); };
-      var s = document.createElement("script");
-      s.src = url + (url.includes("?") ? "&" : "?") + "callback=" + c;
-      s.onerror = function(){ try { delete window[c]; } catch(_) {} s.remove(); cb({ ok:false, error:"NETWORK" }); };
+  (function(){
+    var ENDPOINT="https://script.google.com/macros/s/AKfycbzmq-PTrMcMdrYqCRX29_S034zCaj5ttyc3tZhdhjV77wF6n99LKricFgzy7taGqKOo/exec";
+    function jsonp(url, cb){
+      var c='__rp_'+Date.now()+Math.random().toString(36).slice(2);
+      window[c]=function(d){ try{delete window[c];}catch(_){}
+        s.remove(); cb(d);
+      };
+      var s=document.createElement('script');
+      s.src=url+(url.includes('?')?'&':'?')+'callback='+c;
+      s.onerror=function(){ try{delete window[c];}catch(_){}
+        s.remove(); cb({ok:false,error:'NETWORK'});
+      };
       document.head.appendChild(s);
     }
-
-    function getParam(keys) {
-      var sp = new URL(location.href).searchParams;
-      for (var i=0;i<keys.length;i++) { var v = sp.get(keys[i]); if (v) return v; }
+    function pickToken(){
+      var sp=new URL(location.href).searchParams;
+      var keys=['t','token','code','k'];
+      for(var i=0;i<keys.length;i++){ var v=sp.get(keys[i]); if(v) return v; }
+      for (const [k,v] of sp.entries()){ if(String(v).length>12) return v; }
       return null;
     }
-
-    // 1) Prendi token ed email (accettiamo t/token/code/k per compat vecchie mail)
-    var token = getParam(["t","token","code","k","resetToken"]);
-    var email = getParam(["email","e"]);
-    if (!token || !email) {
-      // Fallback: torna all'app comunque (aprirà login)
-      location.replace("https://jerbamichol-del.github.io/gestore/");
-      return;
+    function validateAny(t, cb){
+      var tried=0, done=false;
+      function tryOne(param){
+        tried++;
+        jsonp(ENDPOINT+'?action=validate&'+param+'='+encodeURIComponent(t), function(res){
+          if(done) return;
+          if(res && res.ok){ done=true; cb(true, param); }
+          else if(tried<3){
+            if(param==='t') tryOne('token'); else if(param==='token') tryOne('code'); else tryOne('t');
+          } else { cb(false, null); }
+        });
+      }
+      tryOne('t');
     }
-
-    // 2) Consuma il token (opzionale ma consigliato)
-    jsonp(ENDPOINT + "?action=consume&t=" + encodeURIComponent(token), function (_res) {
-      // 3) Reindirizza alla PWA con i parametri che la tua app si aspetta
-      var target = "https://jerbamichol-del.github.io/gestore/?resetToken=" +
-                   encodeURIComponent(token) + "&email=" + encodeURIComponent(email);
-      location.replace(target);
+    function consumeWith(param, t, cb){
+      jsonp(ENDPOINT+'?action=consume&'+param+'='+encodeURIComponent(t), function(res){
+        cb(!!(res&&res.ok));
+      });
+    }
+    var msg = document.getElementById('msg'), ok = document.getElementById('ok');
+    function showInvalid(){ ok.style.display='none'; msg.style.display='block'; msg.textContent='Link non valido o scaduto.'; }
+    function showValid(){ msg.style.display='none'; ok.style.display='block'; }
+    if(!ENDPOINT){ showInvalid(); return; }
+    var t = pickToken();
+    if(!t){ showInvalid(); return; }
+    validateAny(t, function(valid, paramUsed){
+      if(!valid){ showInvalid(); return; }
+      showValid();
+      document.getElementById('go').onclick=function(){
+        consumeWith(paramUsed||'t', t, function(okRes){
+          msg.style.display='block'; ok.style.display='none';
+          msg.textContent = okRes
+            ? 'Reset confermato. Ora riapri l’app e imposta un nuovo PIN.'
+            : 'Qualcosa è andato storto. Riprova.';
+        });
+      };
     });
   })();
   </script>
-  <style>
-    html,body{height:100%;margin:0}
-    body{display:flex;align-items:center;justify-content:center;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
-    .card{padding:16px 20px;border:1px solid #e5e7eb;border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.08)}
-  </style>
-</head>
-<body>
-  <div class="card">Reindirizzamento…</div>
-</body>
-</html>
+</body></html>
