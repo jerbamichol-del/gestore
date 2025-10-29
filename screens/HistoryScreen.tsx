@@ -139,6 +139,10 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
     
             const shouldOpen = finalTranslateX < -ACTION_WIDTH / 2;
             onOpen(shouldOpen ? expense.id : '');
+            setTranslateX(shouldOpen ? -ACTION_WIDTH : 0, true);
+        } else {
+            // This case handles small drags that didn't lock: snap back.
+            setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
         }
     };
     

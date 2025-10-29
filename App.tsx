@@ -39,72 +39,51 @@ const fileToBase64 = (file: File): Promise<string> => {
 };
 
 const pickImage = (source: 'camera' | 'gallery'): Promise<File> => {
-  return new Promise((resolve, reject) => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
+    return new Promise((resolve, reject) => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
 
-    if (source === 'camera') {
-      input.capture = 'environment';
-    }
-
-    const handleOnChange = (event: Event) => {
-      const file = (event.target as HTMLInputElement).files?.[0];
-      cleanup();
-      if (file) {
-        resolve(file);
-      } else {
-        reject(new Error('Nessun file selezionato.'));
-      }
-    };
-
-    const handleCancel = () => {
-      setTimeout(() => {
-        if (document.body.contains(input)) {
-          cleanup();
-          reject(new Error('Selezione immagine annullata.'));
+        if (source === 'camera') {
+            input.capture = 'environment';
         }
-      }, 300);
-    };
 
-    const cleanup = () => {
-      input.removeEventListener('change', handleOnChange);
-      window.removeEventListener('focus', handleCancel);
-      if (document.body.contains(input)) {
-        document.body.removeChild(input);
-      }
-    };
+        const handleOnChange = (event: Event) => {
+            const file = (event.target as HTMLInputElement).files?.[0];
+            cleanup();
+            if (file) {
+                resolve(file);
+            } else {
+                reject(new Error('Nessun file selezionato.'));
+            }
+        };
+        
+        const handleCancel = () => {
+             setTimeout(() => {
+                if (document.body.contains(input)) {
+                     cleanup();
+                     reject(new Error('Selezione immagine annullata.'));
+                }
+            }, 300);
+        };
+        
+        const cleanup = () => {
+            input.removeEventListener('change', handleOnChange);
+            window.removeEventListener('focus', handleCancel);
+            if (document.body.contains(input)) {
+                document.body.removeChild(input);
+            }
+        };
 
-    input.addEventListener('change', handleOnChange);
-    window.addEventListener('focus', handleCancel, { once: true });
+        input.addEventListener('change', handleOnChange);
+        window.addEventListener('focus', handleCancel, { once: true });
 
-    input.style.display = 'none';
-    document.body.appendChild(input);
-    input.click();
-  });
+        input.style.display = 'none';
+        document.body.appendChild(input);
+        input.click();
+    });
 };
 
-/* ===== Deep link Reset PIN (patch minima e idempotente) ===== */
-function useResetPinDeepLink() {
-  useEffect(() => {
-    const sp = new URLSearchParams(window.location.search);
-    const token = sp.get('resetToken');
-    const email = sp.get('email');
-    if (token && email) {
-      try {
-        localStorage.setItem('gs:resetIntent', JSON.stringify({ token, email, ts: Date.now() }));
-      } catch {}
-      try {
-        window.dispatchEvent(new CustomEvent('gs:open-new-pin', { detail: { token, email } }));
-      } catch {}
-
-      // Pulisce l'URL per evitare ri-trigger
-      const clean = window.location.origin + window.location.pathname + window.location.hash;
-      try { window.history.replaceState({}, '', clean); } catch {}
-    }
-  }, []);
-}
-/* ===== Fine patch ===== */
 
 const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const [expenses, setExpenses] = useLocalStorage<Expense[]>('expenses_v2', []);
@@ -142,9 +121,6 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const [isHistoryItemInteracting, setIsHistoryItemInteracting] = useState(false);
   const [showSuccessIndicator, setShowSuccessIndicator] = useState(false);
   const successIndicatorTimerRef = useRef<number | null>(null);
-
-  // ⬇️ Attiva il deep-link reset PIN all'avvio (non altera layout)
-  useResetPinDeepLink();
 
   const triggerSuccessIndicator = useCallback(() => {
     if (successIndicatorTimerRef.current) {
@@ -243,12 +219,13 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
             clearTimeout(backPressExitTimeoutRef.current);
         }
     };
-  }, [
+}, [
     activeView, handleNavigation, showToast,
     isCalculatorContainerOpen, isFormOpen, isImageSourceModalOpen,
     isVoiceModalOpen, isConfirmDeleteModalOpen, isMultipleExpensesModalOpen,
     imageForAnalysis
-  ]);
+]);
+
 
   const swipeContainerRef = useRef<HTMLDivElement>(null);
   
@@ -285,19 +262,19 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     };
   }, []);
 
-  const handleInstallClick = async () => {
+const handleInstallClick = async () => {
     if (!installPromptEvent) {
         return;
     }
-    (installPromptEvent as any).prompt();
-    const { outcome } = await (installPromptEvent as any).userChoice;
+    installPromptEvent.prompt();
+    const { outcome } = await installPromptEvent.userChoice;
     setInstallPromptEvent(null);
     if (outcome === 'accepted') {
         showToast({ message: 'App installata!', type: 'success' });
     } else {
         showToast({ message: 'Installazione annullata.', type: 'info' });
     }
-  };
+};
 
   // Funzione per caricare le immagini in coda e gestire le notifiche
   const refreshPendingImages = useCallback(() => {
