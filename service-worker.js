@@ -1,16 +1,3 @@
-
-// --- Bypass /gestore/reset/ (no SPA fallback) ---
-self.addEventListener('fetch', function(event){
-  try {
-    const u = new URL(event.request.url);
-    if (event.request.mode === 'navigate' && u.pathname.startsWith('/gestore/reset/')) {
-      if (event.stopImmediatePropagation) event.stopImmediatePropagation();
-      event.respondWith(fetch(event.request, { cache: 'no-store' }));
-    }
-  } catch(e) {}
-});
-// -------------------------------------------------
-
 // Importa la libreria idb per un accesso più semplice a IndexedDB
 importScripts('https://cdn.jsdelivr.net/npm/idb@8/build/iife/index-min.js');
 

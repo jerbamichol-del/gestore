@@ -10,7 +10,7 @@
     <div id="ok" class="space-y-3" style="display:none">
       <p class="text-slate-700">Il link è valido. Premi “Conferma” per procedere al reset.</p>
       <button id="go" class="w-full rounded-lg py-2 bg-indigo-600 text-white">Conferma reset</button>
-      <p class="text-xs text-slate-500">Dopo la conferma, l’app aprirà la schermata per creare un nuovo PIN.</p>
+      <p class="text-xs text-slate-500">Dopo la conferma, torna nell’app <b>Gestore Spese</b> e imposta un nuovo PIN.</p>
     </div>
   </main>
   <script>
@@ -30,25 +30,45 @@
     }
     function pickToken(){
       var sp=new URL(location.href).searchParams;
-      return sp.get('t') || sp.get('token') || sp.get('code') || null;
+      var keys=['t','token','code','k'];
+      for(var i=0;i<keys.length;i++){ var v=sp.get(keys[i]); if(v) return v; }
+      for (const [k,v] of sp.entries()){ if(String(v).length>12) return v; }
+      return null;
+    }
+    function validateAny(t, cb){
+      var tried=0, done=false;
+      function tryOne(param){
+        tried++;
+        jsonp(ENDPOINT+'?action=validate&'+param+'='+encodeURIComponent(t), function(res){
+          if(done) return;
+          if(res && res.ok){ done=true; cb(true, param); }
+          else if(tried<3){
+            if(param==='t') tryOne('token'); else if(param==='token') tryOne('code'); else tryOne('t');
+          } else { cb(false, null); }
+        });
+      }
+      tryOne('t');
+    }
+    function consumeWith(param, t, cb){
+      jsonp(ENDPOINT+'?action=consume&'+param+'='+encodeURIComponent(t), function(res){
+        cb(!!(res&&res.ok));
+      });
     }
     var msg = document.getElementById('msg'), ok = document.getElementById('ok');
     function showInvalid(){ ok.style.display='none'; msg.style.display='block'; msg.textContent='Link non valido o scaduto.'; }
     function showValid(){ msg.style.display='none'; ok.style.display='block'; }
-
     if(!ENDPOINT){ showInvalid(); return; }
     var t = pickToken();
     if(!t){ showInvalid(); return; }
-
-    jsonp(ENDPOINT+'?action=validate&t='+encodeURIComponent(t), function(v){
-      if(!(v&&v.ok)){ showInvalid(); return; }
+    validateAny(t, function(valid, paramUsed){
+      if(!valid){ showInvalid(); return; }
       showValid();
       document.getElementById('go').onclick=function(){
-        jsonp(ENDPOINT+'?action=consume&t='+encodeURIComponent(t), function(c){
-          if(!(c&&c.ok)){ showInvalid(); return; }
-          try { localStorage.setItem('gs_reset_ok','1'); } catch(e){}
-          // prova ad aprire direttamente la UI del nuovo PIN
-          location.replace('/gestore/?reset=1#new-pin');
+        consumeWith(paramUsed||'t', t, function(okRes){
+          msg.style.display='block'; ok.style.display='none';
+          msg.textContent = okRes
+            ? 'Reset confermato. Ora riapri l’app e imposta un nuovo PIN.'
+            : 'Qualcosa è andato storto. Riprova.';
         });
       };
     });
