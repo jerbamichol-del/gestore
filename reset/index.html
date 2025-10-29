@@ -46,8 +46,8 @@
       document.getElementById('go').onclick=function(){
         jsonp(ENDPOINT+'?action=consume&t='+encodeURIComponent(t), function(c){
           if(!(c&&c.ok)){ showInvalid(); return; }
-          try { sessionStorage.setItem('gs_reset_grant', String(Date.now())); } catch(e){}
-          // Porta l’app alla schermata NUOVO PIN
+          try { localStorage.setItem('gs_reset_ok','1'); } catch(e){}
+          // prova ad aprire direttamente la UI del nuovo PIN
           location.replace('/gestore/?reset=1#new-pin');
         });
       };
