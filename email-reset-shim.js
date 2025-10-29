@@ -28,7 +28,7 @@
     if (!armed) return;
     if (!email || !API) return;
     const now = Date.now();
-    if (inFlight || (now - lastSent) < 8000) return; // debounce
+    if (inFlight || (now - lastSent) < 8000) return;
     inFlight = true; lastSent = now;
     const url=API+'?action=request&email='+encodeURIComponent(email)+'&redirect='+encodeURIComponent(REDIRECT);
     fetch(url,{method:'GET',cache:'no-store',mode:'no-cors'}).catch(()=>{});

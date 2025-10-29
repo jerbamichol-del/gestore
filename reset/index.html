@@ -27,10 +27,8 @@
         s.remove(); cb({ok:false,error:'NETWORK'}); };
       document.head.appendChild(s);
     }
-    function getScope(){
-      // deduce '/gestore/' dal manifest della pagina index (se servisse)
-      return '/gestore/';
-    }
+    function getScope(){ return '/gestore/'; }
+
     var sp = new URL(location.href).searchParams;
     var t = sp.get('t') || sp.get('token') || sp.get('code') || sp.get('k');
     var email = sp.get('email') || '';
@@ -39,21 +37,17 @@
     function showValid(){ msg.style.display='none'; ok.style.display='block'; }
     if(!ENDPOINT || !t){ showInvalid(); return; }
 
-    // 1) validate (riceviamo anche email se non presente)
+    // 1) validate → NON consumare qui
     jsonp(ENDPOINT+'?action=validate&t='+encodeURIComponent(t), function(v){
       if(!(v&&v.ok)){ showInvalid(); return; }
       if(!email && v.email){ email = v.email; }
       showValid();
 
       document.getElementById('go').onclick=function(){
-        // 2) consume
-        jsonp(ENDPOINT+'?action=consume&t='+encodeURIComponent(t), function(c){
-          if(!(c&&c.ok)){ showInvalid(); return; }
-          // 3) redirect all'app con ?resetToken=&email=
-          var SCOPE = getScope();
-          var appUrl = location.origin + SCOPE + '?resetToken=' + encodeURIComponent(t) + '&email=' + encodeURIComponent(email || '');
-          location.replace(appUrl);
-        });
+        // 2) redirect all'app con ?resetToken=&email=
+        var SCOPE = getScope();
+        var appUrl = location.origin + SCOPE + '?resetToken=' + encodeURIComponent(t) + '&email=' + encodeURIComponent(email || '');
+        location.replace(appUrl);
       };
     });
   })();
