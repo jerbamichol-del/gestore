@@ -5,14 +5,14 @@ import { hashPinWithSalt, verifyPin } from './auth';
 // NOTA: Salvare dati sensibili nel localStorage non è sicuro per app in produzione.
 // Questo è solo a scopo dimostrativo.
 
-const getUsers = () => {
+export const getUsers = () => {
     try {
         return JSON.parse(localStorage.getItem('users_db') || '{}');
     } catch (e) {
         return {};
     }
 };
-const saveUsers = (users: any) => localStorage.setItem('users_db', JSON.stringify(users));
+export const saveUsers = (users: any) => localStorage.setItem('users_db', JSON.stringify(users));
 
 // URL per lo script di Google Apps
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzmq-PTrMcMdrYqCRX29_S034zCaj5ttyc3tZhdhjV77wF6n99LKricFgzy7taGqKOo/exec';

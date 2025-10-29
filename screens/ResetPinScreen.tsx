@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import AuthLayout from '../components/auth/AuthLayout';
 import PinInput from '../components/auth/PinInput';
-import { resetPin } from '../utils/api';
+import { resetPin, getUsers, saveUsers } from '../utils/api';
+import { hashPinWithSalt } from '../utils/auth';
 import { SpinnerIcon } from '../components/icons/SpinnerIcon';
 
 interface ResetPinScreenProps {
@@ -21,12 +22,35 @@ const ResetPinScreen: React.FC<ResetPinScreenProps> = ({ email, token, onResetSu
   const handleReset = async () => {
     setIsLoading(true);
     setError(null);
+    
+    // Step 1: Validate token with the backend.
     const response = await resetPin(email, token, pin);
+
     if (response.success) {
-        setSuccessMessage(response.message);
-        setTimeout(() => {
-            onResetSuccess();
-        }, 2000);
+        try {
+            // Step 2: On success, also update the local mock database.
+            // This is the key fix to ensure the new PIN works for login.
+            const users = getUsers();
+            const normalizedEmail = email.toLowerCase();
+            if (users[normalizedEmail]) {
+                const { hash, salt } = await hashPinWithSalt(pin); // Re-hash with a new salt.
+                users[normalizedEmail].pinHash = hash;
+                users[normalizedEmail].pinSalt = salt;
+                saveUsers(users);
+
+                setSuccessMessage(response.message);
+                setTimeout(() => {
+                    onResetSuccess();
+                }, 2000);
+            } else {
+                setError('Utente non trovato nel database locale. Sincronizzazione fallita.');
+                setIsLoading(false);
+            }
+        } catch (e) {
+            console.error("Failed to update local PIN", e);
+            setError('Errore durante l\'aggiornamento del PIN locale.');
+            setIsLoading(false);
+        }
     } else {
       setError(response.message);
       setIsLoading(false);
