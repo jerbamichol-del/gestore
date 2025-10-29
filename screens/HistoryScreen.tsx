@@ -106,7 +106,6 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
         const elapsed = performance.now() - dragState.current.startTime;
         const isTap = distance < 12 && elapsed < 250;
     
-        // Reset dragging state immediately
         dragState.current.isDragging = false;
         dragState.current.isLocked = false;
         if (wasLocked) {
@@ -116,33 +115,28 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
     
         const wasOpen = Math.abs(dragState.current.initialTranslateX) > 1;
     
-        // 1. Handle Tap Interaction
         if (isTap) {
             e.preventDefault();
             e.stopPropagation();
             if (wasOpen) {
-                onOpen(''); // Close menu on tap if it was open
+                onOpen('');
             } else {
-                onEdit(expense); // Open edit modal on tap if it was closed
+                onEdit(expense);
             }
             return;
         }
     
-        // 2. Handle Swipe Interaction (only if it was locked)
         if (wasLocked) {
             e.stopPropagation();
-            
             const transform = window.getComputedStyle(itemRef.current).transform;
             const finalTranslateX = new DOMMatrixReadOnly(transform).m41;
     
-            // Check for right swipe to navigate home
             if (!wasOpen && deltaX > ACTION_WIDTH * 0.75) {
                  onNavigateHome();
                  onOpen(''); 
                  return;
             }
     
-            // Decision is purely based on how much the item is revealed
             const shouldOpen = finalTranslateX < -ACTION_WIDTH / 2;
             onOpen(shouldOpen ? expense.id : '');
         }

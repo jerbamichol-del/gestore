@@ -67,6 +67,7 @@ FormInput.displayName = 'FormInput';
 
 const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, initialData, prefilledData, accounts }) => {
   const [isAnimating, setIsAnimating] = useState(false);
+  const [isClosableByBackdrop, setIsClosableByBackdrop] = useState(false);
   const [formData, setFormData] = useState<Partial<Omit<Expense, 'id' | 'amount'>> & { amount?: number | string }>({});
   const [error, setError] = useState<string | null>(null);
   
@@ -95,6 +96,12 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
     setIsAnimating(false);
     setTimeout(onClose, 300);
   };
+  
+  const handleBackdropClick = () => {
+    if (isClosableByBackdrop) {
+      handleClose();
+    }
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -120,11 +127,18 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
         titleRef.current?.focus();
       }, 50);
       
+      const closableTimer = setTimeout(() => {
+        setIsClosableByBackdrop(true);
+      }, 300);
+      
       return () => {
         clearTimeout(animTimer);
+        clearTimeout(closableTimer);
+        setIsClosableByBackdrop(false);
       };
     } else {
       setIsAnimating(false);
+      setIsClosableByBackdrop(false);
     }
   }, [isOpen, initialData, prefilledData, resetForm, accounts]);
   
@@ -246,7 +260,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
   return (
     <div
       className={`fixed inset-0 z-50 transition-opacity duration-300 ease-in-out ${isAnimating ? 'opacity-100' : 'opacity-0'} bg-slate-900/60 backdrop-blur-sm`}
-      onClick={handleClose}
+      onClick={handleBackdropClick}
       aria-modal="true"
       role="dialog"
     >
