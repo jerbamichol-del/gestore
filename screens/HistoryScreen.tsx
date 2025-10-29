@@ -43,9 +43,13 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
     }, []);
 
     const handlePointerDown = (e: React.PointerEvent) => {
-        if ((e.target as HTMLElement).closest('button')) return;
+        if ((e.target as HTMLElement).closest('button') || !itemRef.current) return;
         
-        const initialTranslateX = isOpen ? -ACTION_WIDTH : 0;
+        // Leggi lo stato visivo DIRETTAMENTE dal DOM.
+        // Questo risolve la race condition in cui lo stato di React (prop 'isOpen')
+        // potrebbe non essere aggiornato durante interazioni rapide.
+        const transform = window.getComputedStyle(itemRef.current).transform;
+        const currentTranslateX = new DOMMatrixReadOnly(transform).m41;
         
         dragState.current = {
             isDragging: true,
@@ -53,10 +57,11 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
             startX: e.clientX,
             startY: e.clientY,
             startTime: performance.now(),
-            initialTranslateX: initialTranslateX,
+            initialTranslateX: currentTranslateX,
         };
         
-        setTranslateX(initialTranslateX, false);
+        // Ferma qualsiasi animazione in corso prima di iniziare il trascinamento
+        setTranslateX(currentTranslateX, false);
     };
 
     const handlePointerMove = (e: React.PointerEvent) => {
@@ -112,7 +117,8 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
             try { itemRef.current?.releasePointerCapture(e.pointerId); } catch {}
         }
 
-        const wasOpen = dragState.current.initialTranslateX !== 0;
+        // 'wasOpen' ora è affidabile perché basato sulla posizione letta dal DOM.
+        const wasOpen = Math.abs(dragState.current.initialTranslateX) > 1;
 
         if (isTap) {
             e.preventDefault();
@@ -151,8 +157,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
             const finalId = shouldOpen ? expense.id : '';
             onOpen(finalId);
 
-            // Manual snapback if state won't change, preventing items from getting stuck.
-            // This is crucial when a user performs a small swipe that shouldn't change the state.
+            // Failsafe per lo snapback se lo stato non cambia.
             if (isOpen === shouldOpen) {
                 setTranslateX(shouldOpen ? -ACTION_WIDTH : 0, true);
             }
@@ -160,6 +165,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
     };
     
     useEffect(() => {
+        // Sincronizza lo stato visivo con lo stato di React quando non c'è interazione.
         if (!dragState.current.isDragging) {
             setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
         }
