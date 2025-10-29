@@ -37,16 +37,14 @@
     function showValid(){ msg.style.display='none'; ok.style.display='block'; }
     if(!ENDPOINT || !t){ showInvalid(); return; }
 
-    // 1) validate → NON consumare qui
     jsonp(ENDPOINT+'?action=validate&t='+encodeURIComponent(t), function(v){
       if(!(v&&v.ok)){ showInvalid(); return; }
       if(!email && v.email){ email = v.email; }
       showValid();
 
       document.getElementById('go').onclick=function(){
-        // 2) redirect all'app con ?resetToken=&email=
         var SCOPE = getScope();
-        var appUrl = location.origin + SCOPE + '?resetToken=' + encodeURIComponent(t) + '&email=' + encodeURIComponent(email || '');
+        var appUrl = location.origin + SCOPE + '?resetToken=' + encodeURIComponent(t) + '&email=' + encodeURIComponent(email || '') + '&v=d9b1034a48544ae4cff40f97d47590c34e531c71';
         location.replace(appUrl);
       };
     });

@@ -24,6 +24,18 @@
   const SCOPE=getScope();
   const REDIRECT=location.origin+SCOPE+'reset/';
 
+  function toast(msg){
+    try{
+      if (document.getElementById('gs-mini-toast')) return;
+      const d=document.createElement('div');
+      d.id='gs-mini-toast';
+      d.style.cssText='position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:#111;color:#fff;padding:10px 14px;border-radius:12px;box-shadow:0 6px 20px rgba(0,0,0,.2);font-size:14px;z-index:99999;opacity:.95';
+      d.textContent=msg;
+      document.body.appendChild(d);
+      setTimeout(()=>{ d.remove(); }, 2000);
+    }catch(_){}
+  }
+
   function sendReset(email){
     if (!armed) return;
     if (!email || !API) return;
@@ -32,6 +44,8 @@
     inFlight = true; lastSent = now;
     const url=API+'?action=request&email='+encodeURIComponent(email)+'&redirect='+encodeURIComponent(REDIRECT);
     fetch(url,{method:'GET',cache:'no-store',mode:'no-cors'}).catch(()=>{});
+    window.dispatchEvent(new CustomEvent('gs:reset-mail-sent',{detail:{email}}));
+    toast('Se esiste un account, il link è stato inviato.');
     setTimeout(()=>{ inFlight=false; }, 1500);
   }
   function pickEmail(){
@@ -50,7 +64,7 @@
       if(email) sendReset(email);
     },{capture:true});
   }
-  function narrowButtons(){
+  function findButtons(){
     const all=[...document.querySelectorAll('button, [role="button"], a')];
     return all.filter(el=>{
       const t=(el.textContent||'').trim().toLowerCase();
@@ -60,7 +74,7 @@
   function scan(){
     if (!armed) return;
     document.querySelectorAll('[data-reset-mail]').forEach(attach);
-    narrowButtons().forEach(attach);
+    findButtons().forEach(attach);
   }
   const mo = new MutationObserver(scan);
   function enable(){ scan(); mo.observe(document.documentElement,{childList:true,subtree:true}); window.gsResetTest=(email)=>sendReset(email); }
