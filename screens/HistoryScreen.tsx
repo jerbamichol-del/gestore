@@ -258,7 +258,6 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({ expenses, accounts, onEdi
     const [openItemId, setOpenItemId] = useState<string | null>(null);
     const [isInteracting, setIsInteracting] = useState(false);
     const autoCloseTimerRef = useRef<number | null>(null);
-    const tapStartRef = useRef<{ x: number; y: number; time: number; target: EventTarget | null } | null>(null);
 
 
     useEffect(() => {
@@ -367,34 +366,10 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({ expenses, accounts, onEdi
     const handleInteractionChange = (isInteracting: boolean) => {
         setIsInteracting(isInteracting);
     };
-
-    const handlePointerDownCapture = (e: React.PointerEvent) => {
-        tapStartRef.current = { x: e.clientX, y: e.clientY, time: performance.now(), target: e.target };
-    };
-
-    const handlePointerUpCapture = (e: React.PointerEvent) => {
-        const start = tapStartRef.current;
-        if (openItemId && start) {
-            const targetElement = start.target as HTMLElement | null;
-
-            const dist = Math.sqrt(Math.pow(e.clientX - start.x, 2) + Math.pow(e.clientY - start.y, 2));
-            const elapsed = performance.now() - start.time;
-            const isTap = dist < 10 && elapsed < 200;
-
-            if (isTap && !targetElement?.closest('[data-expense-item-root]')) {
-                e.preventDefault();
-                e.stopPropagation();
-                setOpenItemId(null);
-            }
-        }
-        tapStartRef.current = null;
-    };
     
     return (
         <div 
             className="h-full flex flex-col bg-slate-100"
-            onPointerDownCapture={handlePointerDownCapture}
-            onPointerUpCapture={handlePointerUpCapture}
         >
             <div className="flex-1 overflow-y-auto" style={{ touchAction: 'pan-y' }}>
                 {expenseGroups.length > 0 ? (
