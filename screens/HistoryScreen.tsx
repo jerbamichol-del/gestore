@@ -45,9 +45,6 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
     const handlePointerDown = (e: React.PointerEvent) => {
         if ((e.target as HTMLElement).closest('button') || !itemRef.current) return;
         
-        // Leggi lo stato visivo DIRETTAMENTE dal DOM.
-        // Questo risolve la race condition in cui lo stato di React (prop 'isOpen')
-        // potrebbe non essere aggiornato durante interazioni rapide.
         const transform = window.getComputedStyle(itemRef.current).transform;
         const currentTranslateX = new DOMMatrixReadOnly(transform).m41;
         
@@ -60,7 +57,6 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
             initialTranslateX: currentTranslateX,
         };
         
-        // Ferma qualsiasi animazione in corso prima di iniziare il trascinamento
         setTranslateX(currentTranslateX, false);
     };
 
@@ -101,7 +97,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
     };
 
     const handlePointerUp = (e: React.PointerEvent) => {
-        if (!dragState.current.isDragging) return;
+        if (!dragState.current.isDragging || !itemRef.current) return;
     
         const wasLocked = dragState.current.isLocked;
         const deltaX = e.clientX - dragState.current.startX;
@@ -110,62 +106,49 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, accounts, onEdit, on
         const elapsed = performance.now() - dragState.current.startTime;
         const isTap = distance < 12 && elapsed < 250;
     
+        // Reset dragging state immediately
         dragState.current.isDragging = false;
         dragState.current.isLocked = false;
         if (wasLocked) {
             onInteractionChange(false);
             try { itemRef.current?.releasePointerCapture(e.pointerId); } catch {}
         }
-
-        // 'wasOpen' ora è affidabile perché basato sulla posizione letta dal DOM.
+    
         const wasOpen = Math.abs(dragState.current.initialTranslateX) > 1;
-
+    
+        // 1. Handle Tap Interaction
         if (isTap) {
             e.preventDefault();
             e.stopPropagation();
             if (wasOpen) {
-                onOpen('');
+                onOpen(''); // Close menu on tap if it was open
             } else {
-                onEdit(expense);
+                onEdit(expense); // Open edit modal on tap if it was closed
             }
             return;
         }
     
+        // 2. Handle Swipe Interaction (only if it was locked)
         if (wasLocked) {
             e.stopPropagation();
-    
-            const velocityX = elapsed > 10 ? deltaX / elapsed : 0;
-    
-            const isConfirmedRightSwipeNav = !wasOpen && ((deltaX > ACTION_WIDTH / 2) || (velocityX > 0.4 && deltaX > 20));
-            if (isConfirmedRightSwipeNav) {
-                onNavigateHome();
-                return;
-            }
-    
-            let shouldOpen: boolean;
-            const flickedRight = velocityX > 0.2 && deltaX > 15;
-            const draggedFarRight = deltaX > ACTION_WIDTH * 0.4;
-            const flickedLeft = velocityX < -0.2 && deltaX < -15;
-            const draggedFarLeft = deltaX < -ACTION_WIDTH * 0.4;
-    
-            if (wasOpen) {
-                shouldOpen = !(flickedRight || draggedFarRight);
-            } else {
-                shouldOpen = flickedLeft || draggedFarLeft;
-            }
             
-            const finalId = shouldOpen ? expense.id : '';
-            onOpen(finalId);
-
-            // Failsafe per lo snapback se lo stato non cambia.
-            if (isOpen === shouldOpen) {
-                setTranslateX(shouldOpen ? -ACTION_WIDTH : 0, true);
+            const transform = window.getComputedStyle(itemRef.current).transform;
+            const finalTranslateX = new DOMMatrixReadOnly(transform).m41;
+    
+            // Check for right swipe to navigate home
+            if (!wasOpen && deltaX > ACTION_WIDTH * 0.75) {
+                 onNavigateHome();
+                 onOpen(''); 
+                 return;
             }
+    
+            // Decision is purely based on how much the item is revealed
+            const shouldOpen = finalTranslateX < -ACTION_WIDTH / 2;
+            onOpen(shouldOpen ? expense.id : '');
         }
     };
     
     useEffect(() => {
-        // Sincronizza lo stato visivo con lo stato di React quando non c'è interazione.
         if (!dragState.current.isDragging) {
             setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
         }
