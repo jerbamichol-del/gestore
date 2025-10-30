@@ -9,10 +9,9 @@ interface FloatingActionButtonProps {
   onAddFromImage: () => void;
   onAddFromVoice: () => void;
   style?: React.CSSProperties;
-  isAppModalOpen?: boolean;
 }
 
-const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({ onAddManually, onAddFromImage, onAddFromVoice, style, isAppModalOpen }) => {
+const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({ onAddManually, onAddFromImage, onAddFromVoice, style }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [isMounted, setIsMounted] = useState(false);
     const timerRef = useRef<number | null>(null);
@@ -60,7 +59,6 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({ onAddManual
     const finalStyle: React.CSSProperties = {
         ...baseStyle,
         ...style,
-        pointerEvents: isAppModalOpen ? 'none' : 'auto',
     };
 
     return (
