@@ -10,8 +10,8 @@
     if (document.getElementById('pwa-update-banner')) return;
     var w=document.createElement('div');
     w.id='pwa-update-banner';
-    w.className='fixed bottom-4 left-1/2 -translate-x-1/2 z-[9999] w-[92%] max-w-md rounded-xl border border-slate-200 bg-white shadow-xl p-4 flex items-start gap-3';
-    w.innerHTML='<div class="flex-1"><h3 class="text-slate-900 font-semibold">Aggiornamento disponibile</h3><p class="text-slate-600 text-sm mt-1">È pronta una nuova versione dell\'app.</p></div><div class="flex gap-2"><button id="pwa-update-later" class="px-3 py-2 text-sm rounded-lg bg-slate-200 text-slate-800">Più tardi</button><button id="pwa-update-now" class="px-3 py-2 text-sm rounded-lg bg-indigo-600 text-white">Aggiorna</button></div>';
+    w.className='fixed bottom-4 left-1/2 -translate-x-1/2 z-[9999] w-[92%] max-w-md rounded-xl border bg-white shadow-xl p-4 flex items-start gap-3';
+    w.innerHTML='<div class="flex-1"><h3 class="font-semibold">Aggiornamento disponibile</h3><p class="text-sm mt-1">È pronta una nuova versione dell\'app.</p></div><div class="flex gap-2"><button id="pwa-update-later" class="px-3 py-2 text-sm rounded-lg bg-slate-200">Più tardi</button><button id="pwa-update-now" class="px-3 py-2 text-sm rounded-lg bg-indigo-600 text-white">Aggiorna</button></div>';
     document.body.appendChild(w);
     document.getElementById('pwa-update-later').onclick=function(){ w.remove(); onDismiss&&onDismiss(); };
     document.getElementById('pwa-update-now').onclick=function(){ w.remove(); try { sessionStorage.setItem(FLAG,'1'); } catch(e){} onAccept&&onAccept(); };

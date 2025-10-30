@@ -28,7 +28,6 @@
       document.head.appendChild(s);
     }
     function getScope(){ return '/gestore/'; }
-
     var sp = new URL(location.href).searchParams;
     var t = sp.get('t') || sp.get('token') || sp.get('code') || sp.get('k');
     var email = sp.get('email') || '';
@@ -36,16 +35,17 @@
     function showInvalid(){ ok.style.display='none'; msg.style.display='block'; msg.textContent='Link non valido o scaduto.'; }
     function showValid(){ msg.style.display='none'; ok.style.display='block'; }
     if(!ENDPOINT || !t){ showInvalid(); return; }
-
     jsonp(ENDPOINT+'?action=validate&t='+encodeURIComponent(t), function(v){
       if(!(v&&v.ok)){ showInvalid(); return; }
       if(!email && v.email){ email = v.email; }
       showValid();
-
       document.getElementById('go').onclick=function(){
-        var SCOPE = getScope();
-        var appUrl = location.origin + SCOPE + '?resetToken=' + encodeURIComponent(t) + '&email=' + encodeURIComponent(email || '') + '&v=9721a6403c1765557d79dff8bb01209031e937af';
-        location.replace(appUrl);
+        jsonp(ENDPOINT+'?action=consume&t='+encodeURIComponent(t), function(c){
+          if(!(c&&c.ok)){ showInvalid(); return; }
+          var SCOPE = getScope();
+          var appUrl = location.origin + SCOPE + '?resetToken=' + encodeURIComponent(t) + '&email=' + encodeURIComponent(email || '');
+          location.replace(appUrl);
+        });
       };
     });
   })();
