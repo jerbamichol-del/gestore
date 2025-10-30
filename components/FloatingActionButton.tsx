@@ -60,7 +60,7 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({ onAddManual
     const finalStyle: React.CSSProperties = {
         ...baseStyle,
         ...style,
-        pointerEvents: isAppModalOpen ? 'none' : (isOpen ? 'auto' : 'none'),
+        pointerEvents: isAppModalOpen ? 'none' : 'auto',
     };
 
     return (
