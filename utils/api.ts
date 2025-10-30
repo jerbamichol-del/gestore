@@ -12,7 +12,7 @@ export const getUsers = () => {
 };
 export const saveUsers = (users: any) => localStorage.setItem('users_db', JSON.stringify(users));
 
-// URL Apps Script (web app "exec")
+// URL Apps Script (web app "exec") — usato SOLO per inviare la mail
 const SCRIPT_URL =
   'https://script.google.com/macros/s/AKfycbzmq-PTrMcMdrYqCRX29_S034zCaj5ttyc3tZhdhjV77wF6n99LKricFgzy7taGqKOo/exec';
 
@@ -24,17 +24,16 @@ function buildResetRedirect(): string {
   // La tua pagina /reset su GitHub Pages
   return 'https://jerbamichol-del.github.io/gestore/reset/';
 }
+// Facoltativo: helper POST JSON (al momento non usato dopo la modifica)
 async function postJSON<T = any>(url: string, data: any): Promise<T> {
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' }, // JSON vero
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
-  // Apps Script risponde con JSON (ContentService JSON)
   const out = await res.json().catch(() => ({}));
-  // uniforma shape: { ok:true } o { success:true }
-  const ok = (out && (out.ok === true || out.success === true)) ? true : false;
-  return { ...out, ok, success: ok } as T;
+  const ok = out && (out.ok === true || out.success === true);
+  return { ...out, ok, success: !!ok } as T;
 }
 
 // ------ API MOCK + integrazioni ------
@@ -88,7 +87,7 @@ export const login = async (
 
 /**
  * Invia l’email di reset PIN.
- * ⚠️ Il tuo Apps Script si aspetta **GET ?action=request&email=...&redirect=...**
+ * Il tuo Apps Script si aspetta **GET ?action=request&email=...&redirect=...**
  */
 export const forgotPassword = async (email: string): Promise<{ success: boolean; message: string }> => {
   const normalizedEmail = normalizeEmail(email);
@@ -99,10 +98,9 @@ export const forgotPassword = async (email: string): Promise<{ success: boolean;
     `&redirect=${encodeURIComponent(redirect)}`;
 
   try {
-    // fire-and-forget; con JSONP lato server non serve leggere la risposta
+    // fire-and-forget: non ci interessa leggere la risposta
     await fetch(url, { method: 'GET', mode: 'no-cors', cache: 'no-store' });
   } catch (err) {
-    // errori di rete veri (offline, ecc.). Proseguiamo comunque con la UI di conferma.
     console.warn('forgotPassword (fire-and-forget) warning:', err);
   }
   return { success: true, message: "Se l'email è registrata, riceverai un link per il reset." };
@@ -115,7 +113,7 @@ export const findEmailByPhoneNumber = async (
   return new Promise(resolve => {
     setTimeout(() => {
       const users = getUsers();
-      const foundUser = Object.values(users).find((user: any) => user.phoneNumber === phoneNumber);
+      const foundUser = Object.values(users).find((user: any) => (user as any).phoneNumber === phoneNumber);
       if (foundUser) {
         console.log(`(SIMULAZIONE) SMS a ${phoneNumber} con email: ${(foundUser as any).email}`);
       } else {
@@ -127,36 +125,34 @@ export const findEmailByPhoneNumber = async (
 };
 
 /**
- * Reimposta il PIN: chiama Apps Script (POST JSON action=resetPin)
- * Restituisce { success:true } se il token è valido e consumato lato server.
+ * Reimposta il PIN **in locale**.
+ * Il token è già stato validato/consumato nella pagina /reset, quindi qui NON chiamiamo Apps Script.
  */
 export const resetPin = async (
   email: string,
-  token: string,
+  _token: string,          // ignorato: già consumato in /reset
   newPin: string
 ): Promise<{ success: boolean; message: string }> => {
   const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail || !newPin || newPin.length !== 4) {
+    return { success: false, message: 'Dati non validi.' };
+  }
+
+  const users = getUsers();
+  const user = users[normalizedEmail];
+  if (!user) {
+    return { success: false, message: 'Utente non trovato.' };
+  }
 
   try {
-    const result: any = await postJSON(SCRIPT_URL, {
-      action: 'resetPin',
-      email: normalizedEmail,
-      token,
-      newPin,
-    });
-
-    if (result.success === true || result.ok === true) {
-      return { success: true, message: 'PIN aggiornato con successo.' };
-    }
-
-    // Messaggio dal server o default
-    const msg =
-      result?.message ||
-      result?.error ||
-      'Token non valido o scaduto.';
-    return { success: false, message: msg };
-  } catch (error) {
-    console.error('Errore di rete durante resetPin:', error);
-    return { success: false, message: 'Impossibile completare la richiesta. Controlla la connessione e riprova.' };
+    const { hash, salt } = await hashPinWithSalt(newPin);
+    user.pinHash = hash;
+    user.pinSalt = salt;
+    users[normalizedEmail] = user;
+    saveUsers(users);
+    return { success: true, message: 'PIN aggiornato con successo.' };
+  } catch (e) {
+    console.error('Errore aggiornando il PIN locale:', e);
+    return { success: false, message: 'Errore durante l’aggiornamento del PIN.' };
   }
 };
