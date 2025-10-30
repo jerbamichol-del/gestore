@@ -9,9 +9,10 @@ interface FloatingActionButtonProps {
   onAddFromImage: () => void;
   onAddFromVoice: () => void;
   style?: React.CSSProperties;
+  isAppModalOpen?: boolean;
 }
 
-const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({ onAddManually, onAddFromImage, onAddFromVoice, style }) => {
+const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({ onAddManually, onAddFromImage, onAddFromVoice, style, isAppModalOpen }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [isMounted, setIsMounted] = useState(false);
     const timerRef = useRef<number | null>(null);
@@ -55,11 +56,17 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({ onAddManual
         bottom: `calc(1.5rem + env(safe-area-inset-bottom, 0px))`,
         right: `calc(1.5rem + env(safe-area-inset-right, 0px))`,
     };
+    
+    const finalStyle: React.CSSProperties = {
+        ...baseStyle,
+        ...style,
+        pointerEvents: isAppModalOpen ? 'none' : (isOpen ? 'auto' : 'none'),
+    };
 
     return (
         <div 
-            className={`fixed flex flex-col items-center transition-all duration-300 ${isOpen ? 'z-[110]' : 'z-40 pointer-events-none'}`}
-            style={{ ...baseStyle, ...style }}
+            className={`fixed flex flex-col items-center transition-all duration-300 ${isOpen ? 'z-[110]' : 'z-40'}`}
+            style={finalStyle}
         >
             <div 
                 className={`flex flex-col-reverse items-center gap-4 mb-4 ${!isOpen ? 'pointer-events-none' : ''}`}

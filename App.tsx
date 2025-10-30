@@ -461,7 +461,6 @@ const handleInstallClick = async () => {
     transform: activeView === 'history' ? 'translateY(-70px)' : 'translateY(0)',
     opacity: isAnyModalOpen ? 0 : 1,
     transition: 'transform 0.25s cubic-bezier(0.22, 0.61, 0.36, 1), opacity 0.2s ease-out',
-    pointerEvents: isAnyModalOpen ? 'none' : 'auto',
   };
 
   return (
@@ -523,6 +522,7 @@ const handleInstallClick = async () => {
                 onAddFromImage={() => setIsImageSourceModalOpen(true)}
                 onAddFromVoice={() => setIsVoiceModalOpen(true)}
                 style={fabStyle}
+                isAppModalOpen={isAnyModalOpen}
             />
         )}
         
