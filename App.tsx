@@ -448,11 +448,20 @@ const handleInstallClick = async () => {
   const dragTranslatePercent = progress * 50;
   const viewTranslate = baseTranslatePercent + dragTranslatePercent;
 
+  const isAnyModalOpen = isFormOpen || 
+    isImageSourceModalOpen || 
+    isVoiceModalOpen || 
+    isConfirmDeleteModalOpen || 
+    isMultipleExpensesModalOpen || 
+    isDateModalOpen || 
+    isParsingImage ||
+    !!imageForAnalysis;
+
   const fabStyle: React.CSSProperties = {
     transform: activeView === 'history' ? 'translateY(-70px)' : 'translateY(0)',
-    opacity: isDateModalOpen ? 0 : 1,
+    opacity: isAnyModalOpen ? 0 : 1,
     transition: 'transform 0.25s cubic-bezier(0.22, 0.61, 0.36, 1), opacity 0.2s ease-out',
-    pointerEvents: isDateModalOpen ? 'none' : 'auto',
+    pointerEvents: isAnyModalOpen ? 'none' : 'auto',
   };
 
   return (
