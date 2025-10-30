@@ -8,9 +8,9 @@
     <h1 class="text-xl font-semibold text-slate-900">Reimposta PIN</h1>
     <div id="msg" class="text-slate-700">Verifica del link…</div>
     <div id="ok" class="space-y-3" style="display:none">
-      <p class="text-slate-700">Il link è valido. Premi “Conferma” per procedere al reset.</p>
+      <p class="text-slate-700">Il link è valido. Premi “Conferma” per procedere al reset nell’app.</p>
       <button id="go" class="w-full rounded-lg py-2 bg-indigo-600 text-white">Conferma reset</button>
-      <p class="text-xs text-slate-500">Dopo la conferma verrai portato all’app per impostare il nuovo PIN.</p>
+      <p class="text-xs text-slate-500">Verrai portato su <b>Gestore Spese</b> per impostare il nuovo PIN.</p>
     </div>
   </main>
   <script>
@@ -36,10 +36,10 @@
     function showValid(){ msg.style.display='none'; ok.style.display='block'; }
     if(!ENDPOINT || !t){ showInvalid(); return; }
 
-    // SOLO validate (non consumiamo qui)
+    // SOLO VALIDATE (niente consume qui!)
     jsonp(ENDPOINT+'?action=validate&t='+encodeURIComponent(t), function(v){
       if(!(v&&v.ok)){ showInvalid(); return; }
-      if(!email && v.email){ email = v.email; }
+      if(!email && v.email){ email = v.email || ''; }
       showValid();
       document.getElementById('go').onclick=function(){
         var SCOPE = getScope();
