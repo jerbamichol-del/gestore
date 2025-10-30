@@ -88,7 +88,7 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({ onAddManual
             
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className={`pointer-events-auto flex justify-center items-center w-16 h-16 bg-indigo-600 text-white rounded-full shadow-lg hover:bg-indigo-700 transition-all transform duration-500 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${isMounted ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-16 scale-90'}`}
+                className={`flex justify-center items-center w-16 h-16 bg-indigo-600 text-white rounded-full shadow-lg hover:bg-indigo-700 transition-all transform duration-500 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${isMounted ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-16 scale-90'}`}
                 aria-expanded={isOpen}
                 aria-label={isOpen ? "Chiudi menu azioni" : "Apri menu azioni"}
             >
