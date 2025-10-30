@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { XMarkIcon } from './icons/XMarkIcon';
 import { ChevronLeftIcon } from './icons/ChevronLeftIcon';
 import { ChevronRightIcon } from './icons/ChevronRightIcon';
@@ -46,47 +46,103 @@ const CalendarView = React.memo(({
     const firstDay = getFirstDayOfMonth(year, month);
     const grid: (number | null)[] = Array(firstDay).fill(null);
     for (let i = 1; i <= daysInMonth; i++) grid.push(i);
+    // Pad to 6 weeks (42 cells) to maintain consistent height
+    while (grid.length < 42) {
+      grid.push(null);
+    }
     return grid;
   }, [viewDate]);
 
   const renderDay = (day: number | null, index: number) => {
-    if (!day) return <div key={index} />;
+    if (!day) return <div key={index} className="h-10" />;
 
     const date = new Date(viewDate.getFullYear(), viewDate.getMonth(), day);
-    const isToday = date.getTime() === today.getTime();
+    const dateTime = date.getTime();
+    const isToday = dateTime === today.getTime();
     const isFuture = date > today;
-    const isSelectedStart = !!(startDate && date.getTime() === startDate.getTime());
-    const isSelectedEnd = !!(endDate && date.getTime() === endDate.getTime());
 
-    let inRange = false;
-    let inHoverRange = false;
+    // Selection states
+    const isSelectedStart = !!(startDate && dateTime === startDate.getTime());
+    const isSelectedEnd = !!(endDate && dateTime === endDate.getTime());
+
+    // Hover states (for preview)
+    const isHovering = !!(hoverDate && dateTime === hoverDate.getTime());
+
+    // Range states
+    let inRange = false; // Final selected range
+    let inPreviewRange = false; // Hover preview range
 
     if (startDate && endDate) {
-      inRange = date > startDate && date < endDate;
-    } else if (!isHoverDisabled && startDate && hoverDate) {
-      if (hoverDate > startDate) inHoverRange = date > startDate && date < hoverDate;
-      else if (hoverDate < startDate) inHoverRange = date < startDate && date > hoverDate;
+        const startTime = startDate.getTime();
+        const endTime = endDate.getTime();
+        inRange = dateTime > startTime && dateTime < endTime;
+    } else if (startDate && !endDate && hoverDate && !isHoverDisabled) {
+        const startTime = startDate.getTime();
+        const hoverTime = hoverDate.getTime();
+        if (hoverTime > startTime) {
+            inPreviewRange = dateTime > startTime && dateTime < hoverTime;
+        } else if (hoverTime < startTime) {
+            inPreviewRange = dateTime < startTime && dateTime > hoverTime;
+        }
     }
 
+    // --- CSS Logic ---
+
+    // Wrapper for pill background
+    let wrapperClasses = 'flex justify-center items-center';
+    
+    const effectiveStartDate = startDate;
+    const effectiveEndDate = endDate;
+    
+    if (effectiveStartDate && effectiveEndDate) {
+        const startTime = effectiveStartDate.getTime();
+        const endTime = effectiveEndDate.getTime();
+        const minTime = Math.min(startTime, endTime);
+        const maxTime = Math.max(startTime, endTime);
+
+        if (dateTime > minTime && dateTime < maxTime) {
+            wrapperClasses += ' bg-indigo-100';
+        }
+        
+        if (dateTime === minTime) {
+            wrapperClasses += ' rounded-l-full bg-indigo-100';
+        }
+        if (dateTime === maxTime) {
+            wrapperClasses += ' rounded-r-full bg-indigo-100';
+        }
+        if (startTime === endTime && (isSelectedStart || isSelectedEnd)) {
+             wrapperClasses += ' rounded-full';
+        }
+    }
+
+
+    // Button for day number and selection dot
     const baseClasses = "w-10 h-10 flex items-center justify-center text-sm transition-colors duration-150 rounded-full select-none";
-    let dayClasses = "font-bold text-slate-800 hover:bg-slate-200";
-    if (isToday) dayClasses += " text-indigo-600";
-    if (inRange || inHoverRange) dayClasses = "font-bold bg-indigo-100 text-indigo-800 rounded-none";
-    if (isSelectedStart || isSelectedEnd) dayClasses = "bg-indigo-600 text-white font-bold";
-    if (isSelectedStart) dayClasses += " rounded-r-none";
-    if (isSelectedEnd) dayClasses += " rounded-l-none";
-    if (isFuture) dayClasses = "text-slate-400 cursor-not-allowed font-normal";
+    let dayClasses = "";
+
+    if (isFuture) {
+        dayClasses = "text-slate-400 cursor-not-allowed font-normal";
+    } else if (isSelectedStart || isSelectedEnd || (isHovering && !isFuture)) {
+        dayClasses = "bg-indigo-600 text-white font-bold";
+    } else if (inRange || inPreviewRange) {
+        dayClasses = "font-bold bg-transparent text-indigo-800 hover:bg-slate-200/50";
+    } else {
+        dayClasses = "font-bold text-slate-800 hover:bg-slate-200";
+        if (isToday) {
+            dayClasses += " text-indigo-600";
+        }
+    }
 
     return (
-      <div
-        key={index}
-        className={`flex justify-center items-center ${(inRange || inHoverRange) ? 'bg-indigo-100' : ''} ${isSelectedStart ? 'rounded-l-full bg-indigo-100' : ''} ${isSelectedEnd ? 'rounded-r-full bg-indigo-100' : ''}`}
-        onMouseEnter={() => !isFuture && !isHoverDisabled && onHoverDate(date)}
-      >
-        <button onClick={() => !isFuture && onDateClick(day)} className={`${baseClasses} ${dayClasses}`} disabled={isFuture}>
-          {day}
-        </button>
-      </div>
+        <div
+            key={index}
+            className={wrapperClasses}
+            onMouseEnter={() => !isFuture && !isHoverDisabled && onHoverDate(date)}
+        >
+            <button onClick={() => !isFuture && onDateClick(day)} className={`${baseClasses} ${dayClasses}`} disabled={isFuture}>
+                {day}
+            </button>
+        </div>
     );
   };
 
@@ -105,50 +161,95 @@ const CalendarView = React.memo(({
   );
 });
 
+const DateInputButton = ({ label, date, isActive, onClick }: {
+  label: string;
+  date: Date | null;
+  isActive: boolean;
+  onClick: () => void;
+}) => {
+  const buttonClasses = `w-full p-2 rounded-lg border-2 text-left transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-400 ${
+    isActive ? 'border-indigo-500 bg-indigo-50' : 'border-slate-300 bg-white hover:border-slate-400'
+  }`;
+
+  const formattedDate = date 
+    ? new Intl.DateTimeFormat('it-IT', { day: 'numeric', month: 'short', year: 'numeric' }).format(date).replace('.', '')
+    : 'Seleziona';
+
+  return (
+    <button onClick={onClick} className={buttonClasses}>
+      <span className="block text-xs font-semibold text-slate-500">{label}</span>
+      <span className={`block text-base font-bold ${date ? 'text-slate-800' : 'text-slate-400'}`}>{formattedDate}</span>
+    </button>
+  );
+};
+
 export const DateRangePickerModal: React.FC<DateRangePickerModalProps> = ({ isOpen, onClose, onApply, initialRange }) => {
   const [isAnimating, setIsAnimating] = useState(false);
-  const [pickerView, setPickerView] = useState<'days' | 'months'>('days');
+  const [pickerView, setPickerView] = useState<'days' | 'months' | 'years'>('days');
+  const [selectingFor, setSelectingFor] = useState<'start' | 'end' | null>('start');
 
   const today = useMemo(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
     return d;
   }, []);
-
-  const initialDate = parseLocalYYYYMMDD(initialRange.start) || today;
-
-  const [displayDate, setDisplayDate] = useState(new Date(initialDate.getFullYear(), initialDate.getMonth(), 1));
+  
+  const [displayDate, setDisplayDate] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
   const [transition, setTransition] = useState<{ direction: 'left' | 'right' } | null>(null);
-
-  const [startDate, setStartDate] = useState<Date | null>(parseLocalYYYYMMDD(initialRange.start));
-  const [endDate, setEndDate] = useState<Date | null>(parseLocalYYYYMMDD(initialRange.end));
+  
+  const [startDate, setStartDate] = useState<Date | null>(null);
+  const [endDate, setEndDate] = useState<Date | null>(null);
   const [hoverDate, setHoverDate] = useState<Date | null>(null);
-
+  
   const swipeContainerRef = useRef<HTMLDivElement>(null);
   const swipeState = useRef({ isDragging: false, startX: 0, startY: 0, isLocked: false });
   const ignoreClickRef = useRef<boolean>(false);
 
-  const { isNextMonthDisabled, isNextYearDisabled, prevMonthDate, nextMonthDate } = useMemo(() => {
-    const d = displayDate;
-    const nextMonth = new Date(d.getFullYear(), d.getMonth() + 1, 1);
-    const nextYear = new Date(d.getFullYear() + 1, 0, 1);
-    return {
-      isNextMonthDisabled: nextMonth > today,
-      isNextYearDisabled: nextYear > today,
-      prevMonthDate: new Date(d.getFullYear(), d.getMonth() - 1, 1),
-      nextMonthDate: nextMonth,
-    };
-  }, [displayDate, today]);
-
   useEffect(() => {
     if (isOpen) {
+      const newStartDate = parseLocalYYYYMMDD(initialRange.start);
+      const newEndDate = parseLocalYYYYMMDD(initialRange.end);
+      setStartDate(newStartDate);
+      setEndDate(newEndDate);
+
+      setSelectingFor('start');
+      const initialDisplay = newStartDate || today;
+      setDisplayDate(new Date(initialDisplay.getFullYear(), initialDisplay.getMonth(), 1));
+      
       setPickerView('days');
       const timer = setTimeout(() => setIsAnimating(true), 10);
       return () => clearTimeout(timer);
     } else {
       setIsAnimating(false);
     }
-  }, [isOpen]);
+  }, [isOpen, initialRange.start, initialRange.end, today]);
+
+  const {
+    isNextMonthDisabled,
+    isNextYearDisabled,
+    isNextYearRangeDisabled,
+    prevMonthDate,
+    nextMonthDate
+  } = useMemo(() => {
+    const d = displayDate;
+    const nextMonth = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+    const nextYear = new Date(d.getFullYear() + 1, 0, 1);
+    const nextRangeYear = new Date(d.getFullYear() + 12, 0, 1);
+    return {
+      isNextMonthDisabled: nextMonth > today,
+      isNextYearDisabled: nextYear > today,
+      isNextYearRangeDisabled: nextRangeYear > today,
+      prevMonthDate: new Date(d.getFullYear(), d.getMonth() - 1, 1),
+      nextMonthDate: nextMonth,
+    };
+  }, [displayDate, today]);
+  
+  const { yearsInView, yearRangeLabel } = useMemo(() => {
+    const year = displayDate.getFullYear();
+    const startYear = Math.floor(year / 12) * 12;
+    const years = Array.from({ length: 12 }, (_, i) => startYear + i);
+    return { yearsInView: years, yearRangeLabel: `${startYear} - ${startYear + 11}` };
+  }, [displayDate]);
 
   const triggerTransition = (direction: 'left' | 'right') => {
     if (transition) return;
@@ -158,44 +259,71 @@ export const DateRangePickerModal: React.FC<DateRangePickerModalProps> = ({ isOp
 
   const handleAnimationEnd = () => {
     if (transition) {
-      if (transition.direction === 'left') {
-        setDisplayDate(nextMonthDate);
-      } else {
-        setDisplayDate(prevMonthDate);
-      }
+      setDisplayDate(transition.direction === 'left' ? nextMonthDate : prevMonthDate);
       setTransition(null);
     }
   };
 
   const changeYear = (delta: number) => {
-    if (delta > 0 && isNextYearDisabled) return;
     setHoverDate(null);
-    setDisplayDate(current => new Date(current.getFullYear() + delta, current.getMonth(), 1));
+    setDisplayDate(current => {
+      const newYear = current.getFullYear() + delta;
+      if (delta > 0 && new Date(newYear, 0, 1) > today) return current;
+      return new Date(newYear, current.getMonth(), 1);
+    });
   };
+
+  const changeYearRange = (delta: number) => changeYear(delta * 12);
 
   const handleDateClick = (day: number) => {
     if (ignoreClickRef.current) return;
     const clickedDate = new Date(displayDate.getFullYear(), displayDate.getMonth(), day);
+    const clickedTime = clickedDate.getTime();
     setHoverDate(null);
-    if (!startDate || (startDate && endDate)) {
-      setStartDate(clickedDate);
-      setEndDate(null);
-    } else if (clickedDate < startDate) {
-      setEndDate(startDate);
-      setStartDate(clickedDate);
-    } else {
-      setEndDate(clickedDate);
+
+    const startTime = startDate ? startDate.getTime() : null;
+    const endTime = endDate ? endDate.getTime() : null;
+
+    if (selectingFor === 'start') {
+        if (startTime === clickedTime) {
+            // Deselect start date
+            setStartDate(null);
+        } else {
+            // Set new start date
+            setStartDate(clickedDate);
+            // If new start is after end, clear end date
+            if (endTime && clickedTime > endTime) {
+                setEndDate(null);
+            }
+            // And move to select end date
+            setSelectingFor('end');
+        }
+    } else if (selectingFor === 'end') {
+        if (endTime === clickedTime) {
+            // Deselect end date
+            setEndDate(null);
+        } else {
+            // Set a new end date, handling swaps if necessary
+            if (startTime && clickedTime < startTime) {
+                setEndDate(startDate);
+                setStartDate(clickedDate);
+            } else {
+                setEndDate(clickedDate);
+            }
+            // Finish selection
+            setSelectingFor(null);
+        }
+    } else { // selectingFor is null, a range is complete
+        // Clicking a date after a range is selected should start a new selection.
+        setStartDate(clickedDate);
+        setEndDate(null);
+        setSelectingFor('end');
     }
   };
 
   const handleApply = () => {
     if (startDate && endDate) {
-      const toYYYYMMDD = (date: Date) => {
-        const y = date.getFullYear();
-        const m = String(date.getMonth() + 1).padStart(2, '0');
-        const d = String(date.getDate()).padStart(2, '0');
-        return `${y}-${m}-${d}`;
-      };
+      const toYYYYMMDD = (date: Date) => date.toISOString().split('T')[0];
       onApply({ start: toYYYYMMDD(startDate), end: toYYYYMMDD(endDate) });
     }
   };
@@ -212,16 +340,11 @@ export const DateRangePickerModal: React.FC<DateRangePickerModalProps> = ({ isOp
     const dy = e.clientY - swipeState.current.startY;
     if (!swipeState.current.isLocked) {
       if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
-        if (Math.abs(dx) > Math.abs(dy)) {
-          swipeState.current.isLocked = true;
-        } else {
-          swipeState.current.isDragging = false; // Vertical scroll, cancel swipe
-        }
+        swipeState.current.isLocked = Math.abs(dx) > Math.abs(dy);
       }
     }
      if (swipeState.current.isLocked) {
-       e.preventDefault();
-       e.stopPropagation();
+       if (e.cancelable) { e.preventDefault(); e.stopPropagation(); }
     }
   };
 
@@ -232,13 +355,8 @@ export const DateRangePickerModal: React.FC<DateRangePickerModalProps> = ({ isOp
     if (swipeState.current.isLocked) {
       const dx = e.clientX - swipeState.current.startX;
       const SWIPE_THRESHOLD = 50;
-
-      if (dx < -SWIPE_THRESHOLD) {
-        triggerTransition('left');
-      } else if (dx > SWIPE_THRESHOLD) {
-        triggerTransition('right');
-      }
-      
+      if (dx < -SWIPE_THRESHOLD) triggerTransition('left');
+      else if (dx > SWIPE_THRESHOLD) triggerTransition('right');
       if (Math.abs(dx) > 10) {
         ignoreClickRef.current = true;
         setTimeout(() => { ignoreClickRef.current = false; }, 0);
@@ -252,6 +370,16 @@ export const DateRangePickerModal: React.FC<DateRangePickerModalProps> = ({ isOp
   const months = Array.from({ length: 12 }, (_, i) =>
     new Date(0, i).toLocaleString('it-IT', { month: 'long' })
   );
+  
+  const getNavLabel = (direction: 'prev' | 'next') => {
+    const action = direction === 'prev' ? 'precedente' : 'successivo';
+    switch (pickerView) {
+        case 'days': return `Mese ${action}`;
+        case 'months': return `Anno ${action}`;
+        case 'years': return `Intervallo di anni ${action}`;
+        default: return '';
+    }
+  };
 
   return (
     <div
@@ -272,52 +400,69 @@ export const DateRangePickerModal: React.FC<DateRangePickerModalProps> = ({ isOp
         </header>
 
         <div className="p-4 overflow-hidden">
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            <DateInputButton label="Da" date={startDate} isActive={selectingFor === 'start'} onClick={() => setSelectingFor('start')} />
+            <DateInputButton label="A" date={endDate} isActive={selectingFor === 'end'} onClick={() => setSelectingFor('end')} />
+          </div>
+
           <div className="flex items-center justify-between mb-4">
-            <button onClick={() => pickerView === 'days' ? triggerTransition('right') : changeYear(-1)} className="p-2 rounded-full hover:bg-slate-200" aria-label={`${pickerView === 'days' ? "Mese precedente" : "Anno precedente"}`}>
+            <button
+              onClick={() => {
+                if (pickerView === 'days') triggerTransition('right');
+                else if (pickerView === 'months') changeYear(-1);
+                else if (pickerView === 'years') changeYearRange(-1);
+              }}
+              className="p-2 rounded-full hover:bg-slate-200"
+              aria-label={getNavLabel('prev')}
+            >
               <ChevronLeftIcon className="w-5 h-5 text-slate-600" />
             </button>
             <button
-              onClick={() => setPickerView(pickerView === 'days' ? 'months' : 'days')}
+              onClick={() => {
+                  if (pickerView === 'days') setPickerView('months');
+                  else if (pickerView === 'months') setPickerView('years');
+              }}
               className="font-semibold text-slate-700 capitalize p-1 rounded-md hover:bg-slate-200 flex items-center gap-1"
               aria-live="polite"
-              aria-expanded={pickerView === 'months'}
+              aria-expanded={pickerView !== 'days'}
             >
               <span>
-                {pickerView === 'days'
-                  ? displayDate.toLocaleString('it-IT', { month: 'long', year: 'numeric' })
-                  : displayDate.getFullYear()}
+                {pickerView === 'days' ? displayDate.toLocaleString('it-IT', { month: 'long', year: 'numeric' })
+                  : pickerView === 'months' ? displayDate.getFullYear()
+                  : yearRangeLabel
+                }
               </span>
-              <ChevronDownIcon className={`w-4 h-4 text-slate-500 transition-transform duration-200 ${pickerView === 'months' ? 'rotate-180' : ''}`} />
+              <ChevronDownIcon className={`w-4 h-4 text-slate-500 transition-transform duration-200 ${pickerView !== 'days' ? 'rotate-180' : ''}`} />
             </button>
             <button
-              onClick={() => pickerView === 'days' ? triggerTransition('left') : changeYear(1)}
-              disabled={pickerView === 'days' ? isNextMonthDisabled : isNextYearDisabled}
+              onClick={() => {
+                if (pickerView === 'days') triggerTransition('left');
+                else if (pickerView === 'months') changeYear(1);
+                else if (pickerView === 'years') changeYearRange(1);
+              }}
+              disabled={ pickerView === 'days' ? isNextMonthDisabled : pickerView === 'months' ? isNextYearDisabled : isNextYearRangeDisabled }
               className="p-2 rounded-full hover:bg-slate-200 disabled:text-slate-300 disabled:hover:bg-transparent disabled:cursor-not-allowed"
-              aria-label={`${pickerView === 'days' ? "Mese successivo" : "Anno successivo"}`}
+              aria-label={getNavLabel('next')}
             >
-              <ChevronRightIcon className="w-5 h-5 text-slate-600" />
+              <ChevronRightIcon className="w-5 h-5" />
             </button>
           </div>
 
           <div
             ref={swipeContainerRef}
-            className="relative h-[284px] overflow-hidden"
+            className="relative h-[312px] overflow-hidden"
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerEnd}
             onPointerCancel={handlePointerEnd}
             style={{ touchAction: 'pan-y' }}
           >
-            {pickerView === 'days' && (
+            {pickerView === 'days' ? (
                <>
                 <div
                   key={displayDate.getTime()}
                   onAnimationEnd={handleAnimationEnd}
-                  className={
-                    `w-full h-full px-1 ` +
-                    (transition?.direction === 'left' ? 'animate-slide-out-left' : 
-                     transition?.direction === 'right' ? 'animate-slide-out-right' : '')
-                  }
+                  className={`w-full h-full px-1 ${transition?.direction === 'left' ? 'animate-slide-out-left' : transition?.direction === 'right' ? 'animate-slide-out-right' : ''}`}
                 >
                   <CalendarView
                     viewDate={displayDate}
@@ -327,16 +472,13 @@ export const DateRangePickerModal: React.FC<DateRangePickerModalProps> = ({ isOp
                     hoverDate={hoverDate}
                     onDateClick={handleDateClick}
                     onHoverDate={setHoverDate}
-                    isHoverDisabled={!!transition || swipeState.current.isLocked}
+                    isHoverDisabled={!!transition || swipeState.current.isLocked || selectingFor !== 'end'}
                   />
                 </div>
                 {transition && (
                   <div
                     key={transition.direction === 'left' ? nextMonthDate.getTime() : prevMonthDate.getTime()}
-                    className={
-                      `absolute top-0 left-0 w-full h-full px-1 ` +
-                      (transition.direction === 'left' ? 'animate-slide-in-from-right' : 'animate-slide-in-from-left')
-                    }
+                    className={`absolute top-0 left-0 w-full h-full px-1 ${transition.direction === 'left' ? 'animate-slide-in-from-right' : 'animate-slide-in-from-left'}`}
                   >
                     <CalendarView
                       viewDate={transition.direction === 'left' ? nextMonthDate : prevMonthDate}
@@ -351,25 +493,35 @@ export const DateRangePickerModal: React.FC<DateRangePickerModalProps> = ({ isOp
                   </div>
                 )}
               </>
-            )}
-
-            {pickerView === 'months' && (
-              <div className="grid grid-cols-3 gap-2">
+            ) : pickerView === 'months' ? (
+              <div className="grid grid-cols-3 gap-2 animate-fade-in-up">
                 {months.map((month, index) => {
-                  const isFutureMonth =
-                    displayDate.getFullYear() > today.getFullYear() ||
-                    (displayDate.getFullYear() === today.getFullYear() && index > today.getMonth());
+                  const isFutureMonth = displayDate.getFullYear() > today.getFullYear() || (displayDate.getFullYear() === today.getFullYear() && index > today.getMonth());
                   return (
                     <button
                       key={month}
-                      onClick={() => {
-                        setDisplayDate(new Date(displayDate.getFullYear(), index, 1));
-                        setPickerView('days');
-                      }}
+                      onClick={() => { setDisplayDate(new Date(displayDate.getFullYear(), index, 1)); setPickerView('days'); }}
                       disabled={isFutureMonth}
                       className="p-3 text-sm font-semibold rounded-lg text-slate-700 hover:bg-indigo-100 hover:text-indigo-700 transition-colors capitalize disabled:text-slate-400 disabled:hover:bg-transparent disabled:cursor-not-allowed"
                     >
                       {month}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : ( // pickerView === 'years'
+              <div className="grid grid-cols-3 gap-2 animate-fade-in-up">
+                {yearsInView.map((year) => {
+                  const isFutureYear = year > today.getFullYear();
+                  const isCurrentYear = year === displayDate.getFullYear();
+                  return (
+                    <button
+                      key={year}
+                      onClick={() => { setDisplayDate(new Date(year, displayDate.getMonth(), 1)); setPickerView('months'); }}
+                      disabled={isFutureYear}
+                      className={`p-3 text-sm font-semibold rounded-lg transition-colors capitalize disabled:text-slate-400 disabled:hover:bg-transparent disabled:cursor-not-allowed ${isCurrentYear ? 'bg-indigo-600 text-white' : 'text-slate-700 hover:bg-indigo-100 hover:text-indigo-700'}`}
+                    >
+                      {year}
                     </button>
                   );
                 })}
