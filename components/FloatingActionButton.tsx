@@ -62,7 +62,7 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({ onAddManual
             style={{ ...baseStyle, ...style }}
         >
             <div 
-                className="flex flex-col-reverse items-center gap-4 mb-4"
+                className={`flex flex-col-reverse items-center gap-4 mb-4 ${!isOpen ? 'pointer-events-none' : ''}`}
             >
                 {actions.map((action, index) => (
                      <div 
@@ -72,7 +72,7 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({ onAddManual
                      >
                         <button
                             onClick={action.onClick}
-                            className={`flex justify-center items-center w-14 h-14 ${action.bgColor} text-white rounded-full shadow-lg ${action.hoverBgColor} focus:outline-none focus:ring-2 focus:ring-offset-2 ring-white/80`}
+                            className={`flex justify-center items-center w-14 h-14 ${action.bgColor} text-white rounded-full shadow-lg ${action.hoverBgColor} focus:outline-none focus:ring-2 focus:ring-offset-2 ring-white/80 ${isOpen ? 'pointer-events-auto' : ''}`}
                             aria-label={action.label}
                         >
                             {action.icon}
@@ -83,7 +83,7 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({ onAddManual
             
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className={`flex justify-center items-center w-16 h-16 bg-indigo-600 text-white rounded-full shadow-lg hover:bg-indigo-700 transition-all transform duration-500 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 pointer-events-auto ${isMounted ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-16 scale-90'}`}
+                className={`pointer-events-auto flex justify-center items-center w-16 h-16 bg-indigo-600 text-white rounded-full shadow-lg hover:bg-indigo-700 transition-all transform duration-500 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${isMounted ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-16 scale-90'}`}
                 aria-expanded={isOpen}
                 aria-label={isOpen ? "Chiudi menu azioni" : "Apri menu azioni"}
             >

@@ -98,6 +98,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const [isConfirmDeleteModalOpen, setIsConfirmDeleteModalOpen] = useState(false);
   const [isMultipleExpensesModalOpen, setIsMultipleExpensesModalOpen] = useState(false);
   const [isParsingImage, setIsParsingImage] = useState(false);
+  const [isDateModalOpen, setIsDateModalOpen] = useState(false);
   
   // Data for Modals
   const [editingExpense, setEditingExpense] = useState<Expense | undefined>(undefined);
@@ -242,7 +243,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       onSwipeRight: activeView === 'history' ? handleNavigateHome : undefined,
     },
     { 
-      enabled: !isCalculatorContainerOpen && !isHistoryItemInteracting,
+      enabled: !isCalculatorContainerOpen && !isHistoryItemInteracting && !isDateModalOpen,
       threshold: 32,
       slop: 6,
       ignoreSelector: '[data-swipeable-item="true"]',
@@ -447,6 +448,13 @@ const handleInstallClick = async () => {
   const dragTranslatePercent = progress * 50;
   const viewTranslate = baseTranslatePercent + dragTranslatePercent;
 
+  const fabStyle: React.CSSProperties = {
+    transform: activeView === 'history' ? 'translateY(-70px)' : 'translateY(0)',
+    opacity: isDateModalOpen ? 0 : 1,
+    transition: 'transform 0.25s cubic-bezier(0.22, 0.61, 0.36, 1), opacity 0.2s ease-out',
+    ...(isDateModalOpen && { pointerEvents: 'none' }),
+  };
+
   return (
     <div className="h-full w-full bg-slate-100 flex flex-col font-sans overflow-hidden">
         <div className={`flex-shrink-0 z-20 ${mainContentClasses}`}>
@@ -494,6 +502,7 @@ const handleInstallClick = async () => {
                       isEditingOrDeleting={isEditingOrDeletingInHistory}
                       onNavigateHome={handleNavigateHome}
                       isActive={activeView === 'history'}
+                      onDateModalStateChange={setIsDateModalOpen}
                     />
                 </div>
             </div>
@@ -504,18 +513,15 @@ const handleInstallClick = async () => {
                 onAddManually={() => setIsCalculatorContainerOpen(true)}
                 onAddFromImage={() => setIsImageSourceModalOpen(true)}
                 onAddFromVoice={() => setIsVoiceModalOpen(true)}
-                style={{
-                  transform: activeView === 'history' ? 'translateY(-70px)' : 'translateY(0)',
-                  opacity: 1,
-                  transition: 'transform 0.25s cubic-bezier(0.22, 0.61, 0.36, 1)',
-                }}
+                style={fabStyle}
             />
         )}
         
         <SuccessIndicator
-            show={showSuccessIndicator}
+            show={showSuccessIndicator && !isDateModalOpen}
             style={{
               transform: activeView === 'history' ? 'translateY(-70px)' : 'translateY(0)',
+              transition: 'transform 0.25s cubic-bezier(0.22, 0.61, 0.36, 1)',
             }}
         />
         

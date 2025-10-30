@@ -203,6 +203,7 @@ interface HistoryScreenProps {
   isEditingOrDeleting: boolean;
   onNavigateHome: () => void;
   isActive: boolean;
+  onDateModalStateChange: (isOpen: boolean) => void;
 }
 
 interface ExpenseGroup {
@@ -232,8 +233,13 @@ const getWeekLabel = (year: number, week: number): string => {
     return `Settimana ${week}, ${year}`;
 };
 
+const parseLocalYYYYMMDD = (dateString: string): Date => {
+    const parts = dateString.split('-').map(Number);
+    return new Date(parts[0], parts[1] - 1, parts[2]);
+};
 
-const HistoryScreen: React.FC<HistoryScreenProps> = ({ expenses, accounts, onEditExpense, onDeleteExpense, onItemStateChange, isEditingOrDeleting, onNavigateHome, isActive }) => {
+
+const HistoryScreen: React.FC<HistoryScreenProps> = ({ expenses, accounts, onEditExpense, onDeleteExpense, onItemStateChange, isEditingOrDeleting, onNavigateHome, isActive, onDateModalStateChange }) => {
     const [dateFilter, setDateFilter] = useState<DateFilter>('all');
     const [customRange, setCustomRange] = useState<{ start: string | null, end: string | null }>({ start: null, end: null });
     const [openItemId, setOpenItemId] = useState<string | null>(null);
@@ -271,14 +277,16 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({ expenses, accounts, onEdi
     
     const filteredExpenses = useMemo(() => {
         if (isCustomRangeActive) {
-             const startTime = new Date(customRange.start!).getTime();
-             const endTime = new Date(customRange.end!).getTime() + (24 * 60 * 60 * 1000 - 1);
+             const startTime = parseLocalYYYYMMDD(customRange.start!).getTime();
+             const endDay = parseLocalYYYYMMDD(customRange.end!);
+             endDay.setDate(endDay.getDate() + 1);
+             const endTime = endDay.getTime();
 
              return expenses.filter(e => {
-                const expenseDate = new Date(e.date);
+                const expenseDate = parseLocalYYYYMMDD(e.date);
                 if (isNaN(expenseDate.getTime())) return false;
                 const expenseTime = expenseDate.getTime();
-                return expenseTime >= startTime && expenseTime <= endTime;
+                return expenseTime >= startTime && expenseTime < endTime;
              });
         }
         
@@ -307,7 +315,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({ expenses, accounts, onEdi
         const startTime = startDate.getTime();
 
         return expenses.filter(e => {
-            const expenseDate = new Date(e.date);
+            const expenseDate = parseLocalYYYYMMDD(e.date);
             return !isNaN(expenseDate.getTime()) && expenseDate.getTime() >= startTime;
         });
     }, [expenses, dateFilter, customRange, isCustomRangeActive]);
@@ -316,7 +324,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({ expenses, accounts, onEdi
         const sortedExpenses = [...filteredExpenses].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     
         return sortedExpenses.reduce<Record<string, ExpenseGroup>>((acc, expense) => {
-            const expenseDate = new Date(expense.date);
+            const expenseDate = parseLocalYYYYMMDD(expense.date);
             if (isNaN(expenseDate.getTime())) return acc;
     
             const [year, week] = getISOWeek(expenseDate);
@@ -396,6 +404,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({ expenses, accounts, onEdi
                 }}
                 currentCustomRange={customRange}
                 isCustomRangeActive={isCustomRangeActive}
+                onDateModalStateChange={onDateModalStateChange}
             />
         </div>
     );

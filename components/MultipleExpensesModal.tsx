@@ -17,6 +17,13 @@ interface MultipleExpensesModalProps {
   onConfirm: (expenses: Omit<Expense, 'id'>[]) => void;
 }
 
+const toYYYYMMDD = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
 // A custom styled checkbox component
 const CustomCheckbox = ({ checked, onChange, id, label }: { checked: boolean, onChange: () => void, id: string, label: string }) => (
     <div className="flex items-center">
@@ -146,7 +153,7 @@ const MultipleExpensesModal: React.FC<MultipleExpensesModalProps> = ({ isOpen, o
       .map(exp => ({
         description: exp.description || 'Senza descrizione',
         amount: exp.amount!,
-        date: exp.date || new Date().toISOString().split('T')[0],
+        date: exp.date || toYYYYMMDD(new Date()),
         category: exp.category || 'Altro',
         subcategory: exp.subcategory || undefined,
         accountId: exp.accountId,
@@ -163,7 +170,7 @@ const MultipleExpensesModal: React.FC<MultipleExpensesModalProps> = ({ isOpen, o
   if (!isOpen) return null;
   
   const areAllSelected = selectedIndices.size === editableExpenses.length && editableExpenses.length > 0;
-  const today = new Date().toISOString().split('T')[0];
+  const today = toYYYYMMDD(new Date());
 
   const categoryOptions = Object.keys(CATEGORIES).map(cat => ({
     value: cat,

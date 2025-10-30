@@ -1,13 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { DateRangePickerModal } from './DateRangePickerModal';
 
 type DateFilter = 'all' | '7d' | '30d' | '6m' | '1y';
 
 interface HistoryFilterCardProps {
   onSelectQuickFilter: (value: DateFilter) => void;
   currentQuickFilter: DateFilter;
-  onCustomRangeChange: (range: { start: string, end: string }) => void;
+  onCustomRangeChange: (range: { start: string | null, end: string | null }) => void;
   currentCustomRange: { start: string | null, end: string | null };
   isCustomRangeActive: boolean;
+  onDateModalStateChange: (isOpen: boolean) => void;
 }
 
 const QuickFilterTable: React.FC<{
@@ -48,72 +50,66 @@ const QuickFilterTable: React.FC<{
   );
 };
 
-const CustomDateFilter: React.FC<{
-  onChange: (range: { start: string, end: string }) => void;
-  currentRange: { start: string | null, end: string | null };
-}> = ({ onChange, currentRange }) => {
-  const today = new Date().toISOString().split('T')[0];
+const formatDateForButton = (dateString: string): string => {
+    // Correctly parse YYYY-MM-DD as a local date to avoid timezone issues.
+    const parts = dateString.split('-').map(Number);
+    // Date constructor month is 0-indexed
+    const date = new Date(parts[0], parts[1] - 1, parts[2]);
+    
+    return new Intl.DateTimeFormat('it-IT', { day: '2-digit', month: 'short', year: '2-digit' }).format(date).replace('.', '');
+};
 
-  const handleDateChange = (part: 'start' | 'end', value: string) => {
-    const newStart = part === 'start' ? value : currentRange.start || today;
-    const newEnd   = part === 'end'   ? value : currentRange.end   || today;
-
-    if (new Date(newStart) > new Date(newEnd)) {
-      onChange({ start: value, end: value });
-    } else {
-      onChange({ start: newStart, end: newEnd });
-    }
-  };
-
+const CustomDateRangeInputs: React.FC<{
+  onClick: () => void;
+  range: { start: string | null; end: string | null };
+}> = ({ onClick, range }) => {
   return (
-    <div className="flex items-center justify-center gap-2 bg-slate-100 border border-slate-400 h-11 box-border px-2">
-      <div className="flex items-center gap-1 flex-1 min-w-0">
-        <label htmlFor="start-date" className="text-sm font-semibold text-slate-700 shrink-0">Da:</label>
-        <input
-          type="date"
-          id="start-date"
-          value={currentRange.start || ''}
-          onChange={e => handleDateChange('start', e.target.value)}
-          max={today}
-          className="w-full min-w-0 text-sm rounded-md border border-slate-300 bg-white py-1 px-2 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-        />
-      </div>
-      <div className="flex items-center gap-1 flex-1 min-w-0">
-        <label htmlFor="end-date" className="text-sm font-semibold text-slate-700 shrink-0">A:</label>
-        <input
-          type="date"
-          id="end-date"
-          value={currentRange.end || ''}
-          onChange={e => handleDateChange('end', e.target.value)}
-          max={today}
-          min={currentRange.start || undefined}
-          className="w-full min-w-0 text-sm rounded-md border border-slate-300 bg-white py-1 px-2 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-        />
-      </div>
+    <div className="grid grid-cols-2 border border-slate-400 h-11">
+      <button
+        onClick={onClick}
+        aria-label={`Seleziona intervallo di date. Inizio: ${range.start ? formatDateForButton(range.start) : 'non impostato'}.`}
+        className="flex items-center justify-center gap-2 px-2 bg-slate-100 hover:bg-slate-200 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 border-r border-slate-400"
+      >
+        <span className="text-sm font-semibold text-slate-700">
+          {range.start ? formatDateForButton(range.start) : 'Da...'}
+        </span>
+      </button>
+      <button
+        onClick={onClick}
+        aria-label={`Seleziona intervallo di date. Fine: ${range.end ? formatDateForButton(range.end) : 'non impostato'}.`}
+        className="flex items-center justify-center gap-2 px-2 bg-slate-100 hover:bg-slate-200 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500"
+      >
+        <span className="text-sm font-semibold text-slate-700">
+          {range.end ? formatDateForButton(range.end) : '...A'}
+        </span>
+      </button>
     </div>
   );
 };
 
+
 export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = ({
-  onSelectQuickFilter, currentQuickFilter, onCustomRangeChange, currentCustomRange, isCustomRangeActive
+  onSelectQuickFilter, currentQuickFilter, onCustomRangeChange, currentCustomRange, isCustomRangeActive, onDateModalStateChange
 }) => {
   const [activeView, setActiveView] = useState<'quick' | 'custom'>('quick');
+  const [isDateModalOpen, setIsDateModalOpen] = useState(false);
   const swipeContainerRef = useRef<HTMLDivElement>(null);
+  
+  useEffect(() => {
+    onDateModalStateChange(isDateModalOpen);
+  }, [isDateModalOpen, onDateModalStateChange]);
 
-  // Stato "drag live" in % della larghezza del container:
-  // translate finale: base(0 o -50) + dragPct
   const [dragPct, setDragPct] = useState<number | null>(null);
   const [dragging, setDragging] = useState(false);
 
-  // Gesture nativa: catturiamo il puntatore e trasciniamo in % della larghezza
   useEffect(() => {
     const el = swipeContainerRef.current;
     if (!el) return;
 
-    const ANG = 30; // lock orizzontale
+    const ANG = 30; 
     const TAN = Math.tan((ANG * Math.PI) / 180);
-    const SLOP = 6; // px per lock
-    const TRIGGER_RATIO = 0.10; // 10% della larghezza per cambiare vista
+    const SLOP = 6; 
+    const TRIGGER_RATIO = 0.10;
 
     let hasDown = false;
     let lock: null | 'h' | 'v' = null;
@@ -128,16 +124,12 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = ({
       sx = e.clientX; sy = e.clientY;
       width = el.getBoundingClientRect().width || 1;
       pid = e.pointerId ?? 1;
-
-      // prendiamo SUBITO il controllo degli eventi successivi
       try { el.setPointerCapture?.(pid as any); } catch {}
-      // impediamo che il parent armi il suo swipe
       e.stopPropagation();
     };
 
     const onMove = (e: PointerEvent) => {
       if (!hasDown || (pid !== null && e.pointerId !== pid)) return;
-
       const dx = e.clientX - sx;
       const dy = e.clientY - sy;
 
@@ -151,21 +143,15 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = ({
       e.stopPropagation();
       setDragging(true);
 
-      // Convertiamo i px in % del nostro "slider": 50% = mezza larghezza (secondo pannello)
-      const deltaPct = (dx / width) * 50; // dx negativo → sposta verso la seconda tab
+      const deltaPct = (dx / width) * 50; 
       let t = basePct() + deltaPct;
-
-      // Limita l'escursione tra 0% e -50% (non oltre)
       if (t > 0) t = 0;
       if (t < -50) t = -50;
-
       setDragPct(t);
     };
 
     const onEnd = (e: PointerEvent) => {
       if (!hasDown || (pid !== null && e.pointerId !== pid)) return;
-
-      // Decisione: se lo spostamento supera il 10% della larghezza, cambia vista
       const dx = e.clientX - sx;
       const triggerPx = (el.getBoundingClientRect().width || 1) * TRIGGER_RATIO;
 
@@ -175,7 +161,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = ({
       }
 
       setDragging(false);
-      setDragPct(null); // torna alla posizione base con transizione dolce
+      setDragPct(null); 
       hasDown = false; pid = null; lock = null;
       e.stopPropagation();
     };
@@ -197,54 +183,64 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = ({
   const translateX = dragPct !== null ? dragPct : baseTranslate;
 
   return (
-    <div className="flex-shrink-0 z-30">
-      <div className="bg-white/95 backdrop-blur-sm shadow-[0_-8px_20px_-5px_rgba(0,0,0,0.08)]">
-        <div className="mx-auto pt-3 pb-2 rounded-t-2xl">
-          <div
-            className="overflow-hidden"
-            ref={swipeContainerRef}
-            // Lascia lo scroll verticale al browser, blocca tutti i back/overscroll orizzontali
-            style={{ touchAction: 'pan-y', overscrollBehaviorX: 'contain' }}
-          >
+    <>
+      <div className="flex-shrink-0 z-30">
+        <div className="bg-white/95 backdrop-blur-sm shadow-[0_-8px_20px_-5px_rgba(0,0,0,0.08)]">
+          <div className="mx-auto pt-3 pb-2 rounded-t-2xl">
             <div
-              className="flex"
-              style={{
-                width: '200%',
-                transform: `translateX(${translateX}%)`,
-                transition: dragging ? 'none' : 'transform 0.12s ease-out'
-              }}
+              className="overflow-hidden"
+              ref={swipeContainerRef}
+              style={{ touchAction: 'pan-y', overscrollBehaviorX: 'contain' }}
             >
-              <div className="w-1/2 flex-shrink-0 px-4">
-                <QuickFilterTable
-                  onSelect={onSelectQuickFilter}
-                  currentValue={currentQuickFilter}
-                  isCustomActive={isCustomRangeActive}
-                />
-              </div>
-              <div className="w-1/2 flex-shrink-0 px-4">
-                <CustomDateFilter
-                  onChange={onCustomRangeChange}
-                  currentRange={currentCustomRange}
-                />
+              <div
+                className="flex"
+                style={{
+                  width: '200%',
+                  transform: `translateX(${translateX}%)`,
+                  transition: dragging ? 'none' : 'transform 0.12s ease-out'
+                }}
+              >
+                <div className="w-1/2 flex-shrink-0 px-4">
+                  <QuickFilterTable
+                    onSelect={onSelectQuickFilter}
+                    currentValue={currentQuickFilter}
+                    isCustomActive={isCustomRangeActive}
+                  />
+                </div>
+                <div className="w-1/2 flex-shrink-0 px-4">
+                  <CustomDateRangeInputs
+                    onClick={() => setIsDateModalOpen(true)}
+                    range={currentCustomRange}
+                  />
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="flex justify-center items-center gap-2.5 pt-2">
-            <button
-              onClick={() => setActiveView('quick')}
-              aria-label="Vai ai filtri rapidi"
-              className={`w-3 h-3 rounded-full transition-colors ${activeView === 'quick' ? 'bg-indigo-600' : 'bg-slate-300 hover:bg-slate-400'}`}
-            />
-            <button
-              onClick={() => setActiveView('custom')}
-              aria-label="Vai al filtro per data personalizzata"
-              className={`w-3 h-3 rounded-full transition-colors ${activeView === 'custom' ? 'bg-indigo-600' : 'bg-slate-300 hover:bg-slate-400'}`}
-            />
+            <div className="flex justify-center items-center gap-2.5 pt-2">
+              <button
+                onClick={() => setActiveView('quick')}
+                aria-label="Vai ai filtri rapidi"
+                className={`w-3 h-3 rounded-full transition-colors ${activeView === 'quick' ? 'bg-indigo-600' : 'bg-slate-300 hover:bg-slate-400'}`}
+              />
+              <button
+                onClick={() => setActiveView('custom')}
+                aria-label="Vai al filtro per data personalizzata"
+                className={`w-3 h-3 rounded-full transition-colors ${activeView === 'custom' ? 'bg-indigo-600' : 'bg-slate-300 hover:bg-slate-400'}`}
+              />
+            </div>
           </div>
+          <div style={{ height: `env(safe-area-inset-bottom, 0px)` }} />
         </div>
-        <div style={{ height: `env(safe-area-inset-bottom, 0px)` }} />
       </div>
-    </div>
+      <DateRangePickerModal
+          isOpen={isDateModalOpen}
+          onClose={() => setIsDateModalOpen(false)}
+          initialRange={currentCustomRange}
+          onApply={(range) => {
+              onCustomRangeChange(range);
+              setIsDateModalOpen(false);
+          }}
+      />
+    </>
   );
 };

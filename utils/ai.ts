@@ -10,6 +10,13 @@ if (!process.env.API_KEY) {
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
 
+const toYYYYMMDD = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
 // --- Image Parsing Logic ---
 
 const expenseSchema = {
@@ -54,7 +61,7 @@ export async function parseExpensesFromImage(base64Image: string, mimeType: stri
         Le categorie e sottocategorie disponibili sono:
         ${getCategoryPrompt()}
         Se una categoria o sottocategoria non è chiara, imposta la categoria su "Altro" e lascia vuota la sottocategoria.
-        Formatta la data come YYYY-MM-DD. Se non trovi una data, usa la data di oggi: ${new Date().toISOString().split('T')[0]}.
+        Formatta la data come YYYY-MM-DD. Se non trovi una data, usa la data di oggi: ${toYYYYMMDD(new Date())}.
         Estrai una descrizione concisa per ogni spesa.
         Fornisci il risultato esclusivamente in formato JSON, anche se trovi una sola spesa (in quel caso, sarà un array con un solo elemento). Se non trovi nessuna spesa valida, restituisci un array vuoto.`
     };
