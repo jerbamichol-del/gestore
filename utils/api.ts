@@ -1,156 +1,162 @@
+// utils/api.ts
 import { hashPinWithSalt, verifyPin } from './auth';
 
 // --- MOCK USER DATABASE in localStorage ---
-// In una vera applicazione, questo sarebbe un database lato server.
-// NOTA: Salvare dati sensibili nel localStorage non è sicuro per app in produzione.
-// Questo è solo a scopo dimostrativo.
-
+// (Solo demo: NON sicuro per produzione)
 export const getUsers = () => {
-    try {
-        return JSON.parse(localStorage.getItem('users_db') || '{}');
-    } catch (e) {
-        return {};
-    }
+  try {
+    return JSON.parse(localStorage.getItem('users_db') || '{}');
+  } catch {
+    return {};
+  }
 };
 export const saveUsers = (users: any) => localStorage.setItem('users_db', JSON.stringify(users));
 
-// URL per lo script di Google Apps
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzmq-PTrMcMdrYqCRX29_S034zCaj5ttyc3tZhdhjV77wF6n99LKricFgzy7taGqKOo/exec';
+// URL Apps Script (web app "exec")
+const SCRIPT_URL =
+  'https://script.google.com/macros/s/AKfycbzmq-PTrMcMdrYqCRX29_S034zCaj5ttyc3tZhdhjV77wF6n99LKricFgzy7taGqKOo/exec';
 
+// ------ Helpers ------
+function normalizeEmail(email: string) {
+  return email.trim().toLowerCase();
+}
+function buildResetRedirect(): string {
+  // La tua pagina /reset su GitHub Pages
+  return 'https://jerbamichol-del.github.io/gestore/reset/';
+}
+async function postJSON<T = any>(url: string, data: any): Promise<T> {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' }, // JSON vero
+    body: JSON.stringify(data),
+  });
+  // Apps Script risponde con JSON (ContentService JSON)
+  const out = await res.json().catch(() => ({}));
+  // uniforma shape: { ok:true } o { success:true }
+  const ok = (out && (out.ok === true || out.success === true)) ? true : false;
+  return { ...out, ok, success: ok } as T;
+}
 
-// --- MOCK API FUNCTIONS ---
-// Queste funzioni simulano richieste di rete con un ritardo.
-// Sostituiscile con chiamate fetch() reali al tuo backend.
+// ------ API MOCK + integrazioni ------
 
-/**
- * Registra un nuovo utente.
- */
-export const register = async (email: string, pin: string, phoneNumber?: string): Promise<{ success: boolean; message: string }> => {
-    return new Promise(resolve => {
-        setTimeout(async () => {
-            const users = getUsers();
-            const normalizedEmail = email.toLowerCase();
-            if (users[normalizedEmail]) {
-                resolve({ success: false, message: 'Un utente con questa email esiste già.' });
-                return;
-            }
-            const { hash, salt } = await hashPinWithSalt(pin);
-            users[normalizedEmail] = { email: normalizedEmail, pinHash: hash, pinSalt: salt, phoneNumber: phoneNumber || null };
-            saveUsers(users);
-            resolve({ success: true, message: 'Registrazione completata.' });
-        }, 1000);
-    });
+/** Registra un nuovo utente (mock locale). */
+export const register = async (
+  email: string,
+  pin: string,
+  phoneNumber?: string
+): Promise<{ success: boolean; message: string }> => {
+  return new Promise(resolve => {
+    setTimeout(async () => {
+      const users = getUsers();
+      const normalizedEmail = normalizeEmail(email);
+      if (users[normalizedEmail]) {
+        resolve({ success: false, message: 'Un utente con questa email esiste già.' });
+        return;
+      }
+      const { hash, salt } = await hashPinWithSalt(pin);
+      users[normalizedEmail] = { email: normalizedEmail, pinHash: hash, pinSalt: salt, phoneNumber: phoneNumber || null };
+      saveUsers(users);
+      resolve({ success: true, message: 'Registrazione completata.' });
+    }, 1000);
+  });
+};
+
+/** Login (mock locale). */
+export const login = async (
+  email: string,
+  pin: string
+): Promise<{ success: boolean; message: string; token?: string }> => {
+  return new Promise(resolve => {
+    setTimeout(async () => {
+      const users = getUsers();
+      const normalizedEmail = normalizeEmail(email);
+      const user = users[normalizedEmail];
+      if (!user) {
+        resolve({ success: false, message: 'Nessun account trovato per questa email.' });
+        return;
+      }
+      const isPinValid = await verifyPin(pin, user.pinHash, user.pinSalt);
+      if (isPinValid) {
+        const mockToken = `mock_token_${Date.now()}`;
+        resolve({ success: true, message: 'Login effettuato con successo.', token: mockToken });
+      } else {
+        resolve({ success: false, message: 'PIN errato.' });
+      }
+    }, 1000);
+  });
 };
 
 /**
- * Autentica un utente e restituisce un token di sessione fittizio.
- */
-export const login = async (email: string, pin: string): Promise<{ success: boolean; message: string; token?: string }> => {
-     return new Promise(resolve => {
-        setTimeout(async () => {
-            const users = getUsers();
-            const normalizedEmail = email.toLowerCase();
-            const user = users[normalizedEmail];
-
-            if (!user) {
-                resolve({ success: false, message: 'Nessun account trovato per questa email.' });
-                return;
-            }
-
-            const isPinValid = await verifyPin(pin, user.pinHash, user.pinSalt);
-
-            if (isPinValid) {
-                const mockToken = `mock_token_${Date.now()}`;
-                resolve({ success: true, message: 'Login effettuato con successo.', token: mockToken });
-            } else {
-                resolve({ success: false, message: 'PIN errato.' });
-            }
-        }, 1000);
-    });
-};
-
-/**
- * Invokes a Google App Script to send a password reset email.
+ * Invia l’email di reset PIN.
+ * ⚠️ Il tuo Apps Script si aspetta **GET ?action=request&email=...&redirect=...**
  */
 export const forgotPassword = async (email: string): Promise<{ success: boolean; message: string }> => {
-    const normalizedEmail = email.toLowerCase();
-    
-    try {
-        await fetch(SCRIPT_URL, {
-            method: 'POST',
-            mode: 'no-cors', // Aggiunto per evitare errori CORS su richieste "fire-and-forget"
-            headers: {
-                'Content-Type': 'text/plain',
-            },
-            body: JSON.stringify({ action: 'requestReset', email: normalizedEmail }), 
-        });
-        // Con 'no-cors', non possiamo vedere la risposta, ma la richiesta viene inviata.
-    } catch (error) {
-        console.error('Network error calling the password reset script:', error);
-        // Questo blocco catturerà ora solo veri errori di rete (es. offline), non errori CORS.
-        // In ogni caso, procediamo alla schermata di successo come richiesto.
-    }
-    
-    return { success: true, message: 'Se l\'email è registrata, riceverai un link per il reset.' };
+  const normalizedEmail = normalizeEmail(email);
+  const redirect = buildResetRedirect();
+  const url =
+    `${SCRIPT_URL}?action=request` +
+    `&email=${encodeURIComponent(normalizedEmail)}` +
+    `&redirect=${encodeURIComponent(redirect)}`;
+
+  try {
+    // fire-and-forget; con JSONP lato server non serve leggere la risposta
+    await fetch(url, { method: 'GET', mode: 'no-cors', cache: 'no-store' });
+  } catch (err) {
+    // errori di rete veri (offline, ecc.). Proseguiamo comunque con la UI di conferma.
+    console.warn('forgotPassword (fire-and-forget) warning:', err);
+  }
+  return { success: true, message: "Se l'email è registrata, riceverai un link per il reset." };
+};
+
+/** Recupero email da telefono (mock). */
+export const findEmailByPhoneNumber = async (
+  phoneNumber: string
+): Promise<{ success: boolean; message: string }> => {
+  return new Promise(resolve => {
+    setTimeout(() => {
+      const users = getUsers();
+      const foundUser = Object.values(users).find((user: any) => user.phoneNumber === phoneNumber);
+      if (foundUser) {
+        console.log(`(SIMULAZIONE) SMS a ${phoneNumber} con email: ${(foundUser as any).email}`);
+      } else {
+        console.log(`(SIMULAZIONE) Numero non registrato: ${phoneNumber}`);
+      }
+      resolve({ success: true, message: 'Se il numero è associato a un account, riceverai un SMS con la tua email.' });
+    }, 1500);
+  });
 };
 
 /**
- * Simula la ricerca di un'email tramite numero di telefono e l'invio di un SMS.
+ * Reimposta il PIN: chiama Apps Script (POST JSON action=resetPin)
+ * Restituisce { success:true } se il token è valido e consumato lato server.
  */
-export const findEmailByPhoneNumber = async (phoneNumber: string): Promise<{ success: boolean; message: string }> => {
-    return new Promise(resolve => {
-        setTimeout(() => {
-            const users = getUsers();
-            const foundUser = Object.values(users).find((user: any) => user.phoneNumber === phoneNumber);
-            
-            if (foundUser) {
-                console.log(`(SIMULAZIONE) SMS inviato a ${phoneNumber} con l'email: ${(foundUser as any).email}`);
-            } else {
-                console.log(`(SIMULAZIONE) Tentativo di recupero per numero non registrato: ${phoneNumber}`);
-            }
-            resolve({ success: true, message: 'Se il numero è associato a un account, riceverai un SMS con la tua email.' });
-        }, 1500);
+export const resetPin = async (
+  email: string,
+  token: string,
+  newPin: string
+): Promise<{ success: boolean; message: string }> => {
+  const normalizedEmail = normalizeEmail(email);
+
+  try {
+    const result: any = await postJSON(SCRIPT_URL, {
+      action: 'resetPin',
+      email: normalizedEmail,
+      token,
+      newPin,
     });
-};
 
-/**
- * Reimposta il PIN di un utente inviando il token e il nuovo PIN allo script di Google per la validazione.
- */
-export const resetPin = async (email: string, token: string, newPin: string): Promise<{ success: boolean; message: string }> => {
-    const normalizedEmail = email.toLowerCase();
-
-    try {
-        const response = await fetch(SCRIPT_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'text/plain',
-            },
-            body: JSON.stringify({
-                action: 'resetPin',
-                email: normalizedEmail,
-                token: token,
-                newPin: newPin
-            }),
-        });
-
-        if (!response.ok) {
-            console.error(`Lo script di App Script ha restituito un errore: ${response.status}`);
-            return { success: false, message: 'Si è verificato un errore sul server. Riprova più tardi.' };
-        }
-
-        const result = await response.json();
-
-        if (result.success) {
-            // L'aggiornamento del PIN è gestito dallo script.
-            // La nostra DB locale mock potrebbe non essere sincronizzata, ma per la demo va bene.
-            return { success: true, message: 'PIN aggiornato con successo.' };
-        } else {
-            // Restituisce il messaggio di errore specifico dallo script (es. "Token non valido")
-            return { success: false, message: result.message || 'Token non valido o scaduto.' };
-        }
-
-    } catch (error) {
-        console.error('Errore di rete durante il reset del PIN:', error);
-        return { success: false, message: 'Impossibile completare la richiesta. Controlla la tua connessione e riprova.' };
+    if (result.success === true || result.ok === true) {
+      return { success: true, message: 'PIN aggiornato con successo.' };
     }
+
+    // Messaggio dal server o default
+    const msg =
+      result?.message ||
+      result?.error ||
+      'Token non valido o scaduto.';
+    return { success: false, message: msg };
+  } catch (error) {
+    console.error('Errore di rete durante resetPin:', error);
+    return { success: false, message: 'Impossibile completare la richiesta. Controlla la connessione e riprova.' };
+  }
 };
