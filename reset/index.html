@@ -36,15 +36,22 @@
     function showValid(){ msg.style.display='none'; ok.style.display='block'; }
     if(!ENDPOINT || !t){ showInvalid(); return; }
 
-    // SOLO VALIDATE (niente consume qui!)
+    // 1) validate
     jsonp(ENDPOINT+'?action=validate&t='+encodeURIComponent(t), function(v){
       if(!(v&&v.ok)){ showInvalid(); return; }
       if(!email && v.email){ email = v.email || ''; }
       showValid();
+
+      // 2) consume + redirect
       document.getElementById('go').onclick=function(){
-        var SCOPE = getScope();
-        var appUrl = location.origin + SCOPE + '?resetToken=' + encodeURIComponent(t) + '&email=' + encodeURIComponent(email || '');
-        location.replace(appUrl);
+        jsonp(ENDPOINT+'?action=consume&t='+encodeURIComponent(t), function(c){
+          if(!(c&&c.ok)){ showInvalid(); return; }
+          try { sessionStorage.setItem('gs_reset_consumed','1'); } catch(e){}
+          var SCOPE = getScope();
+          var appUrl = location.origin + SCOPE + '?resetToken=' +
+                       encodeURIComponent(t) + '&email=' + encodeURIComponent(email || '');
+          location.replace(appUrl);
+        });
       };
     });
   })();
