@@ -14,7 +14,9 @@ interface FloatingActionButtonProps {
 const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({ onAddManually, onAddFromImage, onAddFromVoice, style }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [isMounted, setIsMounted] = useState(false);
+    const [renderActions, setRenderActions] = useState(false); // State to control rendering for animations
     const timerRef = useRef<number | null>(null);
+    const animationTimerRef = useRef<number | null>(null);
 
     useEffect(() => {
         // Trigger the entrance animation shortly after the component mounts
@@ -22,17 +24,32 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({ onAddManual
         return () => clearTimeout(timer);
     }, []);
 
+    // Effect to manage rendering for animations
+    useEffect(() => {
+        if (isOpen) {
+            setRenderActions(true);
+        } else {
+            if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
+            // Wait for the animation to finish before removing elements from the DOM
+            animationTimerRef.current = window.setTimeout(() => {
+                setRenderActions(false);
+            }, 300); // This duration must match the CSS transition duration
+        }
+        return () => {
+            if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
+        };
+    }, [isOpen]);
+
+    // Autoclose timer
     useEffect(() => {
         if (timerRef.current) {
             clearTimeout(timerRef.current);
         }
-
         if (isOpen) {
             timerRef.current = window.setTimeout(() => {
                 setIsOpen(false);
             }, 5000);
         }
-
         return () => {
             if (timerRef.current) {
                 clearTimeout(timerRef.current);
@@ -56,28 +73,25 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({ onAddManual
         right: `calc(1.5rem + env(safe-area-inset-right, 0px))`,
     };
     
-    const finalStyle: React.CSSProperties = {
-        ...baseStyle,
-        ...style,
-    };
+    const finalStyle: React.CSSProperties = { ...baseStyle, ...style };
 
     return (
         <div 
-            className={`fixed flex flex-col items-center transition-all duration-300 ${isOpen ? 'z-[110]' : 'z-40'} ${!isOpen ? 'pointer-events-none' : ''}`}
+            className="fixed z-40 flex flex-col items-center"
             style={finalStyle}
         >
-            <div 
-                className={`flex flex-col-reverse items-center gap-4 mb-4 ${!isOpen ? 'pointer-events-none' : ''}`}
-            >
-                {actions.map((action, index) => (
-                     <div 
+            {/* Action buttons are only in the DOM when they should be visible or animating out */}
+            <div className="flex flex-col-reverse items-center gap-4 mb-4">
+                {renderActions && actions.map((action, index) => (
+                    <div 
                          key={action.label} 
-                         className={`transition-all duration-300 ease-in-out ${isOpen ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}`}
+                         className={`transition-all duration-300 ease-in-out ${isOpen ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}
                          style={{ transitionDelay: isOpen ? `${(actions.length - 1 - index) * 50}ms` : '0ms' }}
-                     >
+                    >
                         <button
                             onClick={action.onClick}
-                            className={`flex justify-center items-center w-14 h-14 ${action.bgColor} text-white rounded-full shadow-lg ${action.hoverBgColor} focus:outline-none focus:ring-2 focus:ring-offset-2 ring-white/80 ${isOpen ? 'pointer-events-auto' : ''}`}
+                            tabIndex={isOpen ? 0 : -1}
+                            className={`flex justify-center items-center w-14 h-14 ${action.bgColor} text-white rounded-full shadow-lg ${action.hoverBgColor} focus:outline-none focus:ring-2 focus:ring-offset-2 ring-white/80`}
                             aria-label={action.label}
                         >
                             {action.icon}
