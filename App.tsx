@@ -460,8 +460,9 @@ const handleInstallClick = async () => {
   const fabStyle: React.CSSProperties = {
     transform: activeView === 'history' ? 'translateY(-70px)' : 'translateY(0)',
     opacity: isAnyModalOpen ? 0 : 1,
+    visibility: isAnyModalOpen ? 'hidden' : 'visible',
     pointerEvents: isAnyModalOpen ? 'none' : 'auto',
-    transition: 'transform 0.25s cubic-bezier(0.22, 0.61, 0.36, 1), opacity 0.2s ease-out',
+    transition: `transform 0.25s cubic-bezier(0.22, 0.61, 0.36, 1), opacity 0.2s ease-out, visibility 0s linear ${isAnyModalOpen ? '0.2s' : '0s'}`
   };
 
   return (
