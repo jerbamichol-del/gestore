@@ -69,6 +69,16 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
         );
     }
 
+    const numericAmount = formData.amount || 0;
+    const isInteger = numericAmount % 1 === 0;
+    const numberFormatOptions: Intl.NumberFormatOptions = { style: 'decimal' };
+    if (isInteger) {
+        numberFormatOptions.minimumFractionDigits = 0;
+        numberFormatOptions.maximumFractionDigits = 0;
+    } else {
+        numberFormatOptions.minimumFractionDigits = 2;
+        numberFormatOptions.maximumFractionDigits = 2;
+    }
 
     return (
         <div className="flex flex-col h-full bg-slate-100">
@@ -81,9 +91,14 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
                 <h2 className="text-xl font-bold">Aggiungi Dettagli</h2>
             </header>
             <main className="flex-1 p-4 flex flex-col">
-                <div className="text-center mb-6">
-                    <span className="text-slate-500 text-lg">Importo</span>
-                    <p className="text-5xl font-extrabold text-indigo-600">{formatCurrency(formData.amount || 0)}</p>
+                <div className="mb-6 text-center">
+                    <span className="block text-slate-500 text-lg">Importo</span>
+                    <div>
+                        <p className="text-5xl font-extrabold text-indigo-600 relative inline-block">
+                            <span className="absolute right-full mr-2 text-3xl font-semibold top-1/2 -translate-y-1/2 text-indigo-600/80">€</span>
+                            {new Intl.NumberFormat('it-IT', numberFormatOptions).format(numericAmount)}
+                        </p>
+                    </div>
                 </div>
 
                 <div className="space-y-4">

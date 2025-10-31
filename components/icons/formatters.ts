@@ -1,11 +1,22 @@
 
 export const formatCurrency = (amount: number): string => {
   const numericAmount = (typeof amount === 'number' && !isNaN(amount)) ? amount : 0;
-  const formattedAmount = new Intl.NumberFormat('it-IT', {
+
+  const isInteger = numericAmount % 1 === 0;
+
+  const options: Intl.NumberFormatOptions = {
     style: 'decimal',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(numericAmount);
+  };
+
+  if (isInteger) {
+    options.minimumFractionDigits = 0;
+    options.maximumFractionDigits = 0;
+  } else {
+    options.minimumFractionDigits = 2;
+    options.maximumFractionDigits = 2;
+  }
+
+  const formattedAmount = new Intl.NumberFormat('it-IT', options).format(numericAmount);
   return `€ ${formattedAmount}`;
 };
 
