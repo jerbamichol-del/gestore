@@ -48,10 +48,10 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
     accountId: accounts.length > 0 ? accounts[0].id : '',
     category: 'Altro',
     subcategory: undefined,
-    frequency: undefined,
-    recurrence: undefined,
+    frequency: 'single',
+    recurrence: 'monthly',
     recurrenceInterval: 1,
-    recurrenceEndType: undefined,
+    recurrenceEndType: 'forever',
     recurrenceEndDate: undefined,
     recurrenceCount: undefined,
   }), [accounts]);
@@ -123,7 +123,6 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
       <div
         ref={containerRef}
         className="relative h-full w-full overflow-hidden"
-        style={{ touchAction: 'pan-y' }}
       >
         <div
           ref={swipeableDivRef}
@@ -156,6 +155,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
                 onSubmit={handleFinalSubmit}
                 isDesktop={isDesktop}
                 isVisible={view === 'details' || isDesktop}
+                onMenuStateChange={setIsMenuOpen}
               />
           </div>
         </div>

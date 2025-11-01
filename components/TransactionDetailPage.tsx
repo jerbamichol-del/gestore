@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Expense, Account } from '../types';
 import { ArrowLeftIcon } from './icons/ArrowLeftIcon';
 import { formatDate } from './icons/formatters';
@@ -20,6 +20,7 @@ interface TransactionDetailPageProps {
   onSubmit: (data: Omit<Expense, 'id'>) => void;
   isVisible: boolean;
   isDesktop: boolean;
+  onMenuStateChange: (isOpen: boolean) => void;
 }
 
 const toYYYYMMDD = (date: Date) => {
@@ -54,14 +55,15 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     onSubmit,
     isVisible,
     isDesktop,
+    onMenuStateChange,
 }) => {
+    const [localFormData, setLocalFormData] = useState(formData);
+    const initialSnapshotRef = useRef<string | null>(null);
+
     const [activeMenu, setActiveMenu] = useState<'account' | null>(null);
     const [amountStr, setAmountStr] = useState('');
     const [isAmountFocused, setIsAmountFocused] = useState(false);
     
-    const initialDataOnShowRef = useRef<string | null>(null);
-    const [hasChanges, setHasChanges] = useState(false);
-
     const [isFrequencyModalOpen, setIsFrequencyModalOpen] = useState(false);
     const [isFrequencyModalAnimating, setIsFrequencyModalAnimating] = useState(false);
     
@@ -76,6 +78,28 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     const [isRecurrenceEndModalOpen, setIsRecurrenceEndModalOpen] = useState(false);
     const [isRecurrenceEndModalAnimating, setIsRecurrenceEndModalAnimating] = useState(false);
 
+    useEffect(() => {
+        const isAnyMenuOpen = activeMenu !== null || isFrequencyModalOpen || isRecurrenceModalOpen || isRecurrenceEndModalOpen;
+        onMenuStateChange(isAnyMenuOpen);
+    }, [activeMenu, isFrequencyModalOpen, isRecurrenceModalOpen, isRecurrenceEndModalOpen, onMenuStateChange]);
+    
+     useEffect(() => {
+        if (isVisible) {
+            // When the view becomes visible, copy the current parent state
+            // to our local draft state, and also store a snapshot of it
+            // to compare against for changes.
+            setLocalFormData(formData);
+            initialSnapshotRef.current = JSON.stringify(formData);
+        }
+    }, [isVisible, formData]); // Re-sync if parent formData changes while visible
+
+    const hasChanges = useMemo(() => {
+        if (!isVisible || !initialSnapshotRef.current) return false;
+        // Compare the live local state with the initial snapshot.
+        return JSON.stringify(localFormData) !== initialSnapshotRef.current;
+    }, [localFormData, isVisible]);
+
+
      useEffect(() => {
         if (isFrequencyModalOpen) {
             const timer = setTimeout(() => setIsFrequencyModalAnimating(true), 10);
@@ -88,15 +112,15 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     useEffect(() => {
         if (isRecurrenceModalOpen) {
             // Initialize temp state when modal opens
-            setTempRecurrence(formData.recurrence || 'monthly');
-            setTempRecurrenceInterval(formData.recurrenceInterval || 1);
+            setTempRecurrence(localFormData.recurrence || 'monthly');
+            setTempRecurrenceInterval(localFormData.recurrenceInterval || 1);
             setIsRecurrenceOptionsOpen(false);
             const timer = setTimeout(() => setIsRecurrenceModalAnimating(true), 10);
             return () => clearTimeout(timer);
         } else {
             setIsRecurrenceModalAnimating(false);
         }
-    }, [isRecurrenceModalOpen, formData.recurrence, formData.recurrenceInterval]);
+    }, [isRecurrenceModalOpen, localFormData.recurrence, localFormData.recurrenceInterval]);
 
     useEffect(() => {
         if (isRecurrenceEndModalOpen) {
@@ -108,16 +132,6 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     }, [isRecurrenceEndModalOpen]);
 
     useEffect(() => {
-        if (isVisible) {
-            initialDataOnShowRef.current = JSON.stringify(formData);
-            setHasChanges(false);
-        } else {
-            initialDataOnShowRef.current = null;
-            setHasChanges(false);
-        }
-    }, [isVisible, formData]);
-
-    useEffect(() => {
         if (isVisible && !isAmountFocused) {
             const parentAmount = formData.amount || 0;
             const localAmount = parseFloat(String(amountStr).replace(',', '.')) || 0;
@@ -127,37 +141,23 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
             }
         }
     }, [formData.amount, isVisible, isAmountFocused]);
-
-    // Robust change detection
+    
+    // This effect ensures the parent form data is updated when the local amount string changes.
+    // This is needed because amount is still controlled by a separate string state for formatting.
     useEffect(() => {
-        if (isVisible && initialDataOnShowRef.current) {
-            try {
-                const initialData = JSON.parse(initialDataOnShowRef.current);
-                const changes =
-                    (formData.description || '') !== (initialData.description || '') ||
-                    formData.date !== initialData.date ||
-                    formData.time !== initialData.time ||
-                    formData.accountId !== initialData.accountId ||
-                    (formData.frequency || undefined) !== (initialData.frequency || undefined) ||
-                    (formData.recurrence || undefined) !== (initialData.recurrence || undefined) ||
-                    (formData.recurrenceInterval || 1) !== (initialData.recurrenceInterval || 1) ||
-                    (formData.recurrenceEndType || 'forever') !== (initialData.recurrenceEndType || 'forever') ||
-                    (formData.recurrenceEndDate || undefined) !== (initialData.recurrenceEndDate || undefined) ||
-                    (formData.recurrenceCount || undefined) !== (initialData.recurrenceCount || undefined);
-                setHasChanges(changes);
-            } catch (e) {
-                // If parsing fails, assume changes to be safe
-                setHasChanges(true);
-            }
-        }
-    }, [formData, isVisible]);
+      const num = parseFloat(amountStr.replace(',', '.'));
+      const newAmount = isNaN(num) ? 0 : num;
+      if (newAmount !== localFormData.amount) {
+          setLocalFormData(prev => ({ ...prev, amount: newAmount }));
+      }
+    }, [amountStr, localFormData.amount]);
 
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
         if (name === 'recurrenceCount') {
             const num = parseInt(value, 10);
-            onFormChange({ [name]: isNaN(num) || num <= 0 ? undefined : num });
+            setLocalFormData(prev => ({...prev, [name]: isNaN(num) || num <= 0 ? undefined : num}));
         } else if (name === 'amount') {
             // Sanitize value for Italian decimal format
             let sanitized = value.replace(/[^0-9,]/g, '');
@@ -170,20 +170,18 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
             }
             
             setAmountStr(sanitized);
-            const num = parseFloat(sanitized.replace(',', '.'));
-            onFormChange({ amount: isNaN(num) ? undefined : num });
         } else {
-            onFormChange({ [name]: value });
+            setLocalFormData(prev => ({...prev, [name]: value}));
         }
     };
     
     const handleAccountSelect = (accountId: string) => {
-        onFormChange({ accountId });
+        setLocalFormData(prev => ({ ...prev, accountId }));
         setActiveMenu(null);
     };
     
      const handleFrequencySelect = (frequency: string) => {
-        onFormChange({ frequency: frequency as 'single' | 'recurring' });
+        setLocalFormData(prev => ({ ...prev, frequency: frequency as 'single' | 'recurring' }));
         handleCloseFrequencyModal();
     };
 
@@ -202,10 +200,11 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     };
     
     const handleApplyRecurrence = () => {
-        onFormChange({
+        setLocalFormData(prev => ({
+            ...prev,
             recurrence: tempRecurrence as any,
             recurrenceInterval: tempRecurrence === 'monthly' ? (tempRecurrenceInterval || 1) : 1
-        });
+        }));
         handleCloseRecurrenceModal();
     };
 
@@ -222,30 +221,31 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
             updates.recurrenceEndDate = undefined;
             updates.recurrenceCount = undefined;
         } else if (type === 'date') {
-            updates.recurrenceEndDate = formData.recurrenceEndDate || toYYYYMMDD(new Date());
+            updates.recurrenceEndDate = localFormData.recurrenceEndDate || toYYYYMMDD(new Date());
             updates.recurrenceCount = undefined;
         } else if (type === 'count') {
             updates.recurrenceEndDate = undefined;
-            updates.recurrenceCount = formData.recurrenceCount || 1;
+            updates.recurrenceCount = localFormData.recurrenceCount || 1;
         }
-        onFormChange(updates);
+        setLocalFormData(prev => ({ ...prev, ...updates }));
         handleCloseRecurrenceEndModal();
     };
 
     const handleSubmit = () => {
-        onSubmit(formData as Omit<Expense, 'id'>);
+        onSubmit(localFormData as Omit<Expense, 'id'>);
     };
 
     const handleConfirmDetails = () => {
+        onFormChange(localFormData);
         onClose();
     };
     
-    const selectedAccountLabel = accounts.find(a => a.id === formData.accountId)?.name;
+    const selectedAccountLabel = accounts.find(a => a.id === localFormData.accountId)?.name;
     const accountOptions = accounts.map(acc => ({ value: acc.id, label: acc.name }));
     const today = toYYYYMMDD(new Date());
 
     const getRecurrenceEndLabel = () => {
-        const { recurrenceEndType } = formData;
+        const { recurrenceEndType } = localFormData;
         if (!recurrenceEndType || recurrenceEndType === 'forever') {
             return 'Per sempre';
         }
@@ -299,7 +299,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
                     )}
                 </div>
             </header>
-            <main className="flex-1 p-4 flex flex-col overflow-y-auto">
+            <main className="flex-1 p-4 flex flex-col overflow-y-auto" style={{ touchAction: 'pan-y' }}>
                 <div className="space-y-4">
                      <div>
                         <label htmlFor="amount" className="block text-base font-medium text-slate-700 mb-1">Importo</label>
@@ -331,7 +331,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
                                 id="description"
                                 name="description"
                                 type="text"
-                                value={formData.description || ''}
+                                value={localFormData.description || ''}
                                 onChange={handleInputChange}
                                 className="block w-full rounded-md border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-base"
                                 placeholder="Es. Caffè al bar"
@@ -362,7 +362,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
                                 className="w-full flex items-center justify-between text-left gap-2 px-3 py-2.5 text-base rounded-lg border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors bg-white border-slate-300 text-slate-800 hover:bg-slate-50"
                             >
                                 <span className="truncate flex-1 capitalize">
-                                    {formData.frequency === 'recurring' ? 'Ricorrente' : formData.frequency === 'single' ? 'Singolo' : 'Seleziona'}
+                                    {localFormData.frequency === 'recurring' ? 'Ricorrente' : localFormData.frequency === 'single' ? 'Singolo' : 'Seleziona'}
                                 </span>
                                 <ChevronDownIcon className="w-5 h-5 text-slate-500" />
                             </button>
@@ -370,7 +370,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
                         <div className="grid grid-cols-2 gap-4">
                              <div>
                                 <label htmlFor="date" className="block text-base font-medium text-slate-700 mb-1">
-                                    {formData.frequency === 'recurring' ? 'Data di inizio' : 'Data'}
+                                    {localFormData.frequency === 'recurring' ? 'Data di inizio' : 'Data'}
                                 </label>
                                 <div className="relative">
                                     <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
@@ -380,7 +380,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
                                         id="date"
                                         name="date"
                                         type="date"
-                                        value={formData.date || ''}
+                                        value={localFormData.date || ''}
                                         onChange={handleInputChange}
                                         max={today}
                                         className="block w-full rounded-md border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-base"
@@ -397,14 +397,14 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
                                         id="time"
                                         name="time"
                                         type="time"
-                                        value={formData.time || ''}
+                                        value={localFormData.time || ''}
                                         onChange={handleInputChange}
                                         className="block w-full rounded-md border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-base"
                                     />
                                 </div>
                             </div>
                         </div>
-                        {formData.frequency === 'recurring' && (
+                        {localFormData.frequency === 'recurring' && (
                              <>
                                 <div>
                                     <label className="block text-base font-medium text-slate-700 mb-1">Ricorrenza</label>
@@ -414,7 +414,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
                                         className="w-full flex items-center justify-between text-left gap-2 px-3 py-2.5 text-base rounded-lg border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors bg-white border-slate-300 text-slate-800 hover:bg-slate-50"
                                     >
                                         <span className="truncate flex-1 capitalize">
-                                            {getRecurrenceLabel(formData.recurrence as any) || 'Imposta ricorrenza'}
+                                            {getRecurrenceLabel(localFormData.recurrence as any) || 'Imposta ricorrenza'}
                                         </span>
                                         <ChevronDownIcon className="w-5 h-5 text-slate-500" />
                                     </button>
@@ -434,7 +434,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
                                         </button>
                                     </div>
 
-                                    {formData.recurrenceEndType === 'date' && (
+                                    {localFormData.recurrenceEndType === 'date' && (
                                         <div className="animate-fade-in-up">
                                             <label className="block text-base font-medium text-slate-700 mb-1 invisible" aria-hidden="true">Data fine</label>
                                             <label
@@ -443,31 +443,31 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
                                             >
                                                 <CalendarIcon className="h-5 w-5" />
                                                 <span>
-                                                    {formData.recurrenceEndDate
-                                                        ? formatDate(parseLocalYYYYMMDD(formData.recurrenceEndDate)!)
+                                                    {localFormData.recurrenceEndDate
+                                                        ? formatDate(parseLocalYYYYMMDD(localFormData.recurrenceEndDate)!)
                                                         : 'Seleziona'}
                                                 </span>
                                                 <input
                                                     id="recurrence-end-date"
                                                     type="date"
                                                     name="recurrenceEndDate"
-                                                    value={formData.recurrenceEndDate || ''}
+                                                    value={localFormData.recurrenceEndDate || ''}
                                                     onChange={handleInputChange}
-                                                    min={formData.date}
+                                                    min={localFormData.date}
                                                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                                                     aria-label="Data di fine ricorrenza"
                                                 />
                                             </label>
                                         </div>
                                     )}
-                                    {formData.recurrenceEndType === 'count' && (
+                                    {localFormData.recurrenceEndType === 'count' && (
                                         <div className="animate-fade-in-up">
                                             <label htmlFor="recurrence-count" className="block text-base font-medium text-slate-700 mb-1">N. di volte</label>
                                             <input
                                                 type="number"
                                                 id="recurrence-count"
                                                 name="recurrenceCount"
-                                                value={formData.recurrenceCount || ''}
+                                                value={localFormData.recurrenceCount || ''}
                                                 onChange={handleInputChange}
                                                 min="1"
                                                 placeholder="Es. 12"
@@ -484,7 +484,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
                     <button
                         type="button"
                         onClick={handleSubmit}
-                        disabled={(formData.amount ?? 0) <= 0}
+                        disabled={(localFormData.amount ?? 0) <= 0}
                         className="w-full px-4 py-3 text-base font-semibold text-white bg-indigo-600 rounded-lg shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors disabled:bg-indigo-300 disabled:cursor-not-allowed"
                     >
                        Aggiungi Spesa
@@ -497,7 +497,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
                 onClose={() => setActiveMenu(null)}
                 title="Seleziona un Conto"
                 options={accountOptions}
-                selectedValue={formData.accountId || ''}
+                selectedValue={localFormData.accountId || ''}
                 onSelect={handleAccountSelect}
             />
 
