@@ -228,7 +228,11 @@ const CalculatorInputScreen: React.FC<CalculatorInputScreenProps> = ({
 
   const handleSubmit = () => {
     if (canSubmit) {
-      onSubmit(formData as Omit<Expense, 'id'>);
+      const dataToSubmit = {
+        ...formData,
+        category: formData.category || 'Altro',
+      };
+      onSubmit(dataToSubmit as Omit<Expense, 'id'>);
     }
   };
 
@@ -357,7 +361,7 @@ const CalculatorInputScreen: React.FC<CalculatorInputScreenProps> = ({
       </div>
       
       <div className="flex-shrink-0 flex flex-col" style={{ height: '52vh' }}>
-          <div className="flex justify-between items-center my-2 w-full px-4">
+          <div className="flex justify-between items-center my-2 w-full px-4" style={{ touchAction: 'pan-y' }}>
             <button
               onClick={() => setActiveMenu('account')}
               className="font-semibold text-indigo-600 hover:text-indigo-800 text-lg w-1/3 truncate p-2 rounded-lg focus:outline-none focus:ring-0 text-left">

@@ -237,7 +237,11 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     };
 
     const handleSubmit = () => {
-        onSubmit(formData as Omit<Expense, 'id'>);
+        const dataToSubmit = {
+            ...formData,
+            category: formData.category || 'Altro',
+        };
+        onSubmit(dataToSubmit as Omit<Expense, 'id'>);
     };
     
     const selectedAccountLabel = accounts.find(a => a.id === formData.accountId)?.name;

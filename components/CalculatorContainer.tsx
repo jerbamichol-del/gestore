@@ -46,7 +46,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
     date: new Date().toISOString().split('T')[0],
     time: getCurrentTime(),
     accountId: accounts.length > 0 ? accounts[0].id : '',
-    category: 'Altro',
+    category: '',
     subcategory: undefined,
     frequency: 'single',
     recurrence: 'monthly',
