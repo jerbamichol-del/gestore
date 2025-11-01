@@ -79,15 +79,21 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
 
     const amountInputRef = useRef<HTMLInputElement>(null);
     const descriptionInputRef = useRef<HTMLInputElement>(null);
+    const blurTriggeredForSwipe = useRef(false);
 
     useEffect(() => {
         if (isParentSwiping) {
-            if (document.activeElement === amountInputRef.current) {
-                amountInputRef.current?.blur();
+            if (!blurTriggeredForSwipe.current) {
+                if (document.activeElement === amountInputRef.current) {
+                    amountInputRef.current?.blur();
+                }
+                if (document.activeElement === descriptionInputRef.current) {
+                    descriptionInputRef.current?.blur();
+                }
+                blurTriggeredForSwipe.current = true;
             }
-            if (document.activeElement === descriptionInputRef.current) {
-                descriptionInputRef.current?.blur();
-            }
+        } else {
+            blurTriggeredForSwipe.current = false;
         }
     }, [isParentSwiping]);
 
