@@ -282,7 +282,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
                     )}
                 </div>
             </header>
-            <main className="flex-1 p-4 flex flex-col">
+            <main className="flex-1 p-4 flex flex-col overflow-y-auto">
                 <div className="mb-6 text-center">
                     <span className="block text-slate-500 text-lg">Importo</span>
                     <div>
