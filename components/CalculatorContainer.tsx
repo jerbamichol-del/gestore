@@ -156,6 +156,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
                 isDesktop={isDesktop}
                 isVisible={view === 'details' || isDesktop}
                 onMenuStateChange={setIsMenuOpen}
+                isParentSwiping={isSwiping}
               />
           </div>
         </div>

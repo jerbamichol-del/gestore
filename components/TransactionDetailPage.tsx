@@ -20,6 +20,7 @@ interface TransactionDetailPageProps {
   isVisible: boolean;
   isDesktop: boolean;
   onMenuStateChange: (isOpen: boolean) => void;
+  isParentSwiping: boolean;
 }
 
 const toYYYYMMDD = (date: Date) => {
@@ -55,6 +56,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     isVisible,
     isDesktop,
     onMenuStateChange,
+    isParentSwiping,
 }) => {
     const [activeMenu, setActiveMenu] = useState<'account' | null>(null);
     const [amountStr, setAmountStr] = useState('');
@@ -74,6 +76,20 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     // State for the recurrence end modal
     const [isRecurrenceEndModalOpen, setIsRecurrenceEndModalOpen] = useState(false);
     const [isRecurrenceEndModalAnimating, setIsRecurrenceEndModalAnimating] = useState(false);
+
+    const amountInputRef = useRef<HTMLInputElement>(null);
+    const descriptionInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        if (isParentSwiping) {
+            if (document.activeElement === amountInputRef.current) {
+                amountInputRef.current?.blur();
+            }
+            if (document.activeElement === descriptionInputRef.current) {
+                descriptionInputRef.current?.blur();
+            }
+        }
+    }, [isParentSwiping]);
 
     useEffect(() => {
         const isAnyMenuOpen = activeMenu !== null || isFrequencyModalOpen || isRecurrenceModalOpen || isRecurrenceEndModalOpen;
@@ -275,6 +291,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
                                 <CurrencyEuroIcon className="h-5 w-5 text-slate-400" />
                             </div>
                             <input
+                                ref={amountInputRef}
                                 id="amount"
                                 name="amount"
                                 type="text"
@@ -295,6 +312,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
                                 <DocumentTextIcon className="h-5 w-5 text-slate-400" />
                             </div>
                             <input
+                                ref={descriptionInputRef}
                                 id="description"
                                 name="description"
                                 type="text"
