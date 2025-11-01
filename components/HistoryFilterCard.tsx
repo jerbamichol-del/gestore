@@ -131,7 +131,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = ({
       width = el.getBoundingClientRect().width || 1;
       pid = e.pointerId ?? 1;
       try { el.setPointerCapture?.(pid as any); } catch {}
-      e.stopPropagation();
+      // e.stopPropagation(); // REMOVED: Allows button clicks to register.
     };
 
     const onMove = (e: PointerEvent) => {
@@ -167,12 +167,12 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = ({
       if (lock === 'h') {
         if (activeView === 'quick' && dx <= -triggerPx) setActiveView('custom');
         else if (activeView === 'custom' && dx >= triggerPx) setActiveView('quick');
+        e.stopPropagation(); // MOVED HERE: Stop propagation only if it was a swipe.
       }
 
       setDragging(false);
       setDragPct(null); 
       hasDown = false; pid = null; lock = null;
-      e.stopPropagation();
     };
 
     el.addEventListener('pointerdown', onDown as any, { capture: true, passive: true });
