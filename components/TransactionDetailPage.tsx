@@ -217,12 +217,12 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     const today = toYYYYMMDD(new Date());
 
     const getRecurrenceEndLabel = () => {
-        const { recurrenceEndType, recurrenceEndDate, recurrenceCount } = formData;
+        const { recurrenceEndType } = formData;
         if (!recurrenceEndType || recurrenceEndType === 'forever') {
             return 'Per sempre';
         }
         if (recurrenceEndType === 'date') {
-            return 'Fino a una data';
+            return 'Fino a';
         }
         if (recurrenceEndType === 'count') {
             return 'Numero di volte';
@@ -409,21 +409,28 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
 
                                     {formData.recurrenceEndType === 'date' && (
                                         <div className="animate-fade-in-up">
-                                            <label htmlFor="recurrence-end-date" className="block text-base font-medium text-slate-700 mb-1">Data di fine</label>
-                                            <div className="relative">
-                                                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                                                    <CalendarIcon className="h-5 w-5 text-slate-400" />
-                                                </div>
+                                            <label className="block text-base font-medium text-slate-700 mb-1 invisible" aria-hidden="true">Data fine</label>
+                                            <label
+                                                htmlFor="recurrence-end-date"
+                                                className="relative w-full flex items-center justify-center gap-2 px-3 py-2.5 text-base rounded-lg focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500 text-indigo-600 hover:bg-indigo-100 font-semibold cursor-pointer"
+                                            >
+                                                <CalendarIcon className="h-5 w-5" />
+                                                <span>
+                                                    {formData.recurrenceEndDate
+                                                        ? formatDate(parseLocalYYYYMMDD(formData.recurrenceEndDate)!)
+                                                        : 'Seleziona'}
+                                                </span>
                                                 <input
-                                                    type="date"
                                                     id="recurrence-end-date"
+                                                    type="date"
                                                     name="recurrenceEndDate"
                                                     value={formData.recurrenceEndDate || ''}
                                                     onChange={handleInputChange}
                                                     min={formData.date}
-                                                    className="block w-full rounded-md border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-base"
+                                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                                    aria-label="Data di fine ricorrenza"
                                                 />
-                                            </div>
+                                            </label>
                                         </div>
                                     )}
                                     {formData.recurrenceEndType === 'count' && (
@@ -608,7 +615,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
                         </div>
                         <div className="p-4 space-y-2">
                             <button onClick={() => handleRecurrenceEndTypeSelect('forever')} className="w-full text-center px-4 py-3 text-base font-semibold rounded-lg transition-colors bg-slate-100 text-slate-800 hover:bg-indigo-100 hover:text-indigo-800">Per sempre</button>
-                            <button onClick={() => handleRecurrenceEndTypeSelect('date')} className="w-full text-center px-4 py-3 text-base font-semibold rounded-lg transition-colors bg-slate-100 text-slate-800 hover:bg-indigo-100 hover:text-indigo-800">Fino a una data</button>
+                            <button onClick={() => handleRecurrenceEndTypeSelect('date')} className="w-full text-center px-4 py-3 text-base font-semibold rounded-lg transition-colors bg-slate-100 text-slate-800 hover:bg-indigo-100 hover:text-indigo-800">Fino a</button>
                             <button onClick={() => handleRecurrenceEndTypeSelect('count')} className="w-full text-center px-4 py-3 text-base font-semibold rounded-lg transition-colors bg-slate-100 text-slate-800 hover:bg-indigo-100 hover:text-indigo-800">Numero di volte</button>
                         </div>
                     </div>
