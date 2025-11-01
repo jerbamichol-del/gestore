@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Expense, Account } from './types';
 import { useLocalStorage } from './hooks/useLocalStorage';
@@ -140,9 +141,15 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
   const handleNavigation = useCallback((targetView: NavView) => {
     if (activeView === targetView) return;
+
+    // Chiude il modale del calendario se è aperto quando si naviga via dalla cronologia
+    if (activeView === 'history' && isDateModalOpen) {
+        setIsDateModalOpen(false);
+    }
+
     setActiveView(targetView);
     window.history.pushState({ view: targetView }, '');
-  }, [activeView]);
+  }, [activeView, isDateModalOpen]);
 
   // Back button handling logic
   useEffect(() => {
