@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Expense, Account } from '../types';
 import { ArrowLeftIcon } from './icons/ArrowLeftIcon';
-import { formatCurrency, formatDate } from './icons/formatters';
+import { formatDate } from './icons/formatters';
 import SelectionMenu from './SelectionMenu';
 import { DocumentTextIcon } from './icons/DocumentTextIcon';
 import { CalendarIcon } from './icons/CalendarIcon';
@@ -10,6 +10,7 @@ import { ClockIcon } from './icons/ClockIcon';
 import { ChevronDownIcon } from './icons/ChevronDownIcon';
 import { CheckIcon } from './icons/CheckIcon';
 import { XMarkIcon } from './icons/XMarkIcon';
+import { CurrencyEuroIcon } from './icons/CurrencyEuroIcon';
 
 interface TransactionDetailPageProps {
   formData: Partial<Omit<Expense, 'id'>>;
@@ -55,6 +56,8 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     isDesktop,
 }) => {
     const [activeMenu, setActiveMenu] = useState<'account' | null>(null);
+    const [amountStr, setAmountStr] = useState('');
+    const [isAmountFocused, setIsAmountFocused] = useState(false);
     
     const initialDataOnShowRef = useRef<string | null>(null);
     const [hasChanges, setHasChanges] = useState(false);
@@ -112,7 +115,18 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
             initialDataOnShowRef.current = null;
             setHasChanges(false);
         }
-    }, [isVisible, formData]); // formData dependency ensures the ref is updated if parent changes it while visible
+    }, [isVisible, formData]);
+
+    useEffect(() => {
+        if (isVisible && !isAmountFocused) {
+            const parentAmount = formData.amount || 0;
+            const localAmount = parseFloat(String(amountStr).replace(',', '.')) || 0;
+
+            if (Math.abs(parentAmount - localAmount) > 1e-9) {
+                setAmountStr(parentAmount === 0 ? '' : String(parentAmount).replace('.', ','));
+            }
+        }
+    }, [formData.amount, isVisible, isAmountFocused]);
 
     // Robust change detection
     useEffect(() => {
@@ -144,6 +158,20 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
         if (name === 'recurrenceCount') {
             const num = parseInt(value, 10);
             onFormChange({ [name]: isNaN(num) || num <= 0 ? undefined : num });
+        } else if (name === 'amount') {
+            // Sanitize value for Italian decimal format
+            let sanitized = value.replace(/[^0-9,]/g, '');
+            const parts = sanitized.split(',');
+            if (parts.length > 2) { // If more than one comma, treat subsequent ones as invalid
+                sanitized = parts[0] + ',' + parts.slice(1).join('');
+            }
+            if (parts[1] && parts[1].length > 2) { // Limit to 2 decimal places
+                sanitized = parts[0] + ',' + parts[1].substring(0, 2);
+            }
+            
+            setAmountStr(sanitized);
+            const num = parseFloat(sanitized.replace(',', '.'));
+            onFormChange({ amount: isNaN(num) ? undefined : num });
         } else {
             onFormChange({ [name]: value });
         }
@@ -231,7 +259,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     };
 
 
-    if (typeof formData.amount !== 'number') {
+    if (typeof formData.amount !== 'number' && !isVisible) { // Check visibility to avoid flicker on close
         return (
             <div className="flex flex-col h-full bg-slate-100 items-center justify-center p-4">
                  <header className={`p-4 flex items-center gap-4 text-slate-800 bg-white shadow-sm absolute top-0 left-0 right-0 z-10 transition-opacity ${!isVisible ? 'opacity-0 invisible' : 'opacity-100'}`}>
@@ -245,17 +273,6 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
                 <p className="text-slate-500 text-center">Nessun dato dall'importo. Torna indietro e inserisci una spesa.</p>
             </div>
         );
-    }
-
-    const numericAmount = formData.amount || 0;
-    const isInteger = numericAmount % 1 === 0;
-    const numberFormatOptions: Intl.NumberFormatOptions = { style: 'decimal' };
-    if (isInteger) {
-        numberFormatOptions.minimumFractionDigits = 0;
-        numberFormatOptions.maximumFractionDigits = 0;
-    } else {
-        numberFormatOptions.minimumFractionDigits = 2;
-        numberFormatOptions.maximumFractionDigits = 2;
     }
 
     return (
@@ -283,17 +300,27 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
                 </div>
             </header>
             <main className="flex-1 p-4 flex flex-col overflow-y-auto">
-                <div className="mb-6 text-center">
-                    <span className="block text-slate-500 text-lg">Importo</span>
-                    <div>
-                        <p className="text-5xl font-extrabold text-indigo-600 relative inline-block">
-                            <span className="absolute right-full mr-2 text-3xl font-semibold top-1/2 -translate-y-1/2 text-indigo-600/80">€</span>
-                            {new Intl.NumberFormat('it-IT', numberFormatOptions).format(numericAmount)}
-                        </p>
-                    </div>
-                </div>
-
                 <div className="space-y-4">
+                     <div>
+                        <label htmlFor="amount" className="block text-base font-medium text-slate-700 mb-1">Importo</label>
+                        <div className="relative">
+                            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                                <CurrencyEuroIcon className="h-5 w-5 text-slate-400" />
+                            </div>
+                            <input
+                                id="amount"
+                                name="amount"
+                                type="text"
+                                inputMode="decimal"
+                                value={amountStr}
+                                onChange={handleInputChange}
+                                onFocus={() => setIsAmountFocused(true)}
+                                onBlur={() => setIsAmountFocused(false)}
+                                className="block w-full rounded-md border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-base"
+                                placeholder="0,00"
+                            />
+                        </div>
+                    </div>
                     <div>
                         <label htmlFor="description" className="block text-base font-medium text-slate-700 mb-1">Descrizione</label>
                         <div className="relative">

@@ -48,6 +48,7 @@ const CalculatorInputScreen: React.FC<CalculatorInputScreenProps> = ({
   const [shouldResetCurrentValue, setShouldResetCurrentValue] = useState(false);
   const [justCalculated, setJustCalculated] = useState(false);
   const [activeMenu, setActiveMenu] = useState<'account' | 'category' | 'subcategory' | null>(null);
+  const isSyncingFromParent = useRef(false);
 
   useEffect(() => {
     onMenuStateChange(activeMenu !== null);
@@ -55,17 +56,13 @@ const CalculatorInputScreen: React.FC<CalculatorInputScreenProps> = ({
 
   useEffect(() => {
     const parentAmount = formData.amount || 0;
-    // FIX: Correctly parse the displayed value, removing thousand separators, to prevent incorrect comparisons.
     const currentDisplayAmount = parseFloat(currentValue.replace(/\./g, '').replace(',', '.')) || 0;
 
-    // To prevent feedback loops and display jitters (e.g., "12,3" vs "12,30"),
-    // only sync from the parent if the numeric values are meaningfully different.
     if (Math.abs(parentAmount - currentDisplayAmount) > 1e-9) {
+        isSyncingFromParent.current = true;
         setCurrentValue(String(parentAmount).replace('.', ','));
     }
 
-    // When a new expense starts, the parent resets amount to 0. We use this
-    // as a signal to reset the calculator's internal operation state.
     if (formData.amount === 0 || !formData.amount) {
         setPreviousValue(null);
         setOperator(null);
@@ -76,8 +73,12 @@ const CalculatorInputScreen: React.FC<CalculatorInputScreenProps> = ({
 
 
   useEffect(() => {
+    if (isSyncingFromParent.current) {
+        isSyncingFromParent.current = false;
+        return;
+    }
+      
     const newAmount = parseFloat(currentValue.replace(/\./g, '').replace(',', '.'));
-    // FIX: Use a numeric comparison with tolerance to avoid loops from floating point inaccuracies.
     if (!isNaN(newAmount) && Math.abs((formData.amount || 0) - newAmount) > 1e-9) {
       onFormChange({ amount: newAmount });
     }
