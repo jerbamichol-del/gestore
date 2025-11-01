@@ -153,12 +153,15 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
             return;
         }
 
-        const num = parseFloat(amountStr.replace(',', '.'));
-        const newAmount = isNaN(num) ? 0 : num;
-        if (newAmount !== formData.amount) {
-            onFormChange({ amount: newAmount });
+        // Only push updates if this screen is visible to prevent feedback loops
+        if (isVisible) {
+            const num = parseFloat(amountStr.replace(',', '.'));
+            const newAmount = isNaN(num) ? 0 : num;
+            if (newAmount !== formData.amount) {
+                onFormChange({ amount: newAmount });
+            }
         }
-    }, [amountStr, formData.amount, onFormChange]);
+    }, [amountStr, formData.amount, onFormChange, isVisible]);
 
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {

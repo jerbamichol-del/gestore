@@ -77,12 +77,15 @@ const CalculatorInputScreen: React.FC<CalculatorInputScreenProps> = ({
         isSyncingFromParent.current = false;
         return;
     }
-      
-    const newAmount = parseFloat(currentValue.replace(/\./g, '').replace(',', '.'));
-    if (!isNaN(newAmount) && Math.abs((formData.amount || 0) - newAmount) > 1e-9) {
-      onFormChange({ amount: newAmount });
+    
+    // Only push updates if this screen is visible to prevent feedback loops
+    if (isVisible) {
+      const newAmount = parseFloat(currentValue.replace(/\./g, '').replace(',', '.'));
+      if (!isNaN(newAmount) && Math.abs((formData.amount || 0) - newAmount) > 1e-9) {
+        onFormChange({ amount: newAmount });
+      }
     }
-  }, [currentValue, onFormChange, formData.amount]);
+  }, [currentValue, onFormChange, formData.amount, isVisible]);
   
   const handleClearAmount = useCallback(() => {
     setCurrentValue('0');

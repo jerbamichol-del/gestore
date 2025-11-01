@@ -108,7 +108,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = ({
 
     const ANG = 30; 
     const TAN = Math.tan((ANG * Math.PI) / 180);
-    const SLOP = 10; // Increased slop to avoid accidental swipes on tap
+    const SLOP = 10;
     const TRIGGER_RATIO = 0.10;
 
     let hasDown = false;
@@ -140,7 +140,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = ({
       if (lock !== 'h') return;
 
       // Prevent default only on significant movement to avoid killing taps.
-      if (Math.abs(dx) > SLOP * 1.5 && e.cancelable) {
+      if (Math.abs(dx) > SLOP * 2.5 && e.cancelable) {
         e.preventDefault();
       }
       e.stopPropagation();
