@@ -333,8 +333,11 @@ const CalculatorInputScreen: React.FC<CalculatorInputScreenProps> = ({
             </div>
           </div>
           
-           <button
+           <div
+              role="button"
+              tabIndex={0}
               onClick={onNavigateToDetails}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onNavigateToDetails(); }}
               className={`absolute top-1/2 -right-px w-8 h-[148px] flex items-center justify-center cursor-pointer ${isDesktop ? 'hidden' : ''}`}
               style={{ transform: 'translateY(calc(-50% + 2px))' }}
               title="Aggiungi dettagli" aria-label="Aggiungi dettagli alla spesa"
@@ -349,7 +352,7 @@ const CalculatorInputScreen: React.FC<CalculatorInputScreenProps> = ({
                   </div>
                 </div>
                 <ChevronLeftIcon className="relative z-10 w-6 h-6 text-indigo-600 transition-colors" />
-            </button>
+            </div>
         </main>
       </div>
       
