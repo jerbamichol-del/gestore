@@ -186,7 +186,10 @@ export function useSwipe(
 
       // 3) Modalità pagina: gestiamo il gesto rispetto al punto di handoff
       if (st.current.mode === "page") {
-        if (e.cancelable) e.preventDefault();
+        // Prevent default only on significant movement to avoid killing taps.
+        if (Math.abs(dx) > slop * 1.5 && e.cancelable) {
+          e.preventDefault();
+        }
         setIsSwiping(true);
 
         const baseX = st.current.handoffX ?? st.current.startX;
