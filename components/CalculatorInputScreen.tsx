@@ -322,7 +322,7 @@ const CalculatorInputScreen: React.FC<CalculatorInputScreenProps> = ({
            {isDesktop && <div className="w-11 h-11" />}
         </header>
 
-        <main className="flex-1 flex flex-col overflow-hidden relative">
+        <main className="flex-1 flex flex-col overflow-hidden relative" style={{ touchAction: 'pan-y' }}>
           <div className="flex-1 flex flex-col justify-center items-center p-4 pt-0">
             <div className="w-full px-4 text-center">
               <span className="text-slate-500 text-2xl font-light h-8 block">{smallDisplayValue}</span>
