@@ -17,7 +17,6 @@ interface TransactionDetailPageProps {
   accounts: Account[];
   onClose: () => void; // Per tornare alla calcolatrice
   onSubmit: (data: Omit<Expense, 'id'>) => void;
-  isVisible: boolean;
   isDesktop: boolean;
   onMenuStateChange: (isOpen: boolean) => void;
   isParentSwiping: boolean;
@@ -53,7 +52,6 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     accounts,
     onClose,
     onSubmit,
-    isVisible,
     isDesktop,
     onMenuStateChange,
     isParentSwiping,
@@ -135,7 +133,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
 
     // Sync from parent state to local amount string
     useEffect(() => {
-        if (isVisible && !isAmountFocused) {
+        if (!isAmountFocused) {
             const parentAmount = formData.amount || 0;
             const localAmount = parseFloat(String(amountStr).replace(',', '.')) || 0;
 
@@ -144,7 +142,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
                 setAmountStr(parentAmount === 0 ? '' : String(parentAmount).replace('.', ','));
             }
         }
-    }, [formData.amount, isVisible, isAmountFocused]);
+    }, [formData.amount, isAmountFocused]);
     
     // Sync from local amount string to parent state
     useEffect(() => {
@@ -153,15 +151,12 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
             return;
         }
 
-        // Only push updates if this screen is visible to prevent feedback loops
-        if (isVisible) {
-            const num = parseFloat(amountStr.replace(',', '.'));
-            const newAmount = isNaN(num) ? 0 : num;
-            if (newAmount !== formData.amount) {
-                onFormChange({ amount: newAmount });
-            }
+        const num = parseFloat(amountStr.replace(',', '.'));
+        const newAmount = isNaN(num) ? 0 : num;
+        if (newAmount !== formData.amount) {
+            onFormChange({ amount: newAmount });
         }
-    }, [amountStr, formData.amount, onFormChange, isVisible]);
+    }, [amountStr, formData.amount, onFormChange]);
 
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -266,10 +261,10 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     };
 
 
-    if (typeof formData.amount !== 'number' && !isVisible) {
+    if (typeof formData.amount !== 'number') {
         return (
             <div className="flex flex-col h-full bg-slate-100 items-center justify-center p-4">
-                 <header className={`p-4 flex items-center gap-4 text-slate-800 bg-white shadow-sm absolute top-0 left-0 right-0 z-10 transition-opacity ${!isVisible ? 'opacity-0 invisible' : 'opacity-100'}`}>
+                 <header className={`p-4 flex items-center gap-4 text-slate-800 bg-white shadow-sm absolute top-0 left-0 right-0 z-10`}>
                     {!isDesktop && (
                         <button onClick={onClose} className="p-2 rounded-full hover:bg-slate-200" aria-label="Torna alla calcolatrice">
                             <ArrowLeftIcon className="w-6 h-6" />
@@ -284,7 +279,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
 
     return (
         <div className="flex flex-col h-full bg-slate-100">
-             <header className={`p-4 flex items-center justify-between gap-4 text-slate-800 bg-white shadow-sm sticky top-0 z-10 transition-opacity ${!isVisible ? 'opacity-0 invisible' : 'opacity-100'}`}>
+             <header className={`p-4 flex items-center justify-between gap-4 text-slate-800 bg-white shadow-sm sticky top-0 z-10`}>
                 <div className="flex items-center gap-4">
                     {!isDesktop && (
                         <button onClick={onClose} className="p-2 rounded-full hover:bg-slate-200" aria-label="Torna alla calcolatrice">

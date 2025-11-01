@@ -33,7 +33,9 @@ const QuickFilterTable: React.FC<{
             return (
               <td key={filter.value} className="border border-slate-400 p-0 h-11">
                 <button
-                  onClick={() => onSelect(currentValue === filter.value ? 'all' : filter.value)}
+                  onPointerUp={(e) => { e.preventDefault(); onSelect(currentValue === filter.value ? 'all' : filter.value); }}
+                  onClick={(e) => e.preventDefault()}
+                  style={{ touchAction: 'manipulation' }}
                   className={`w-full h-full flex items-center justify-center px-2 text-center font-semibold text-sm transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 ${
                     isActive ? 'bg-indigo-600 text-white'
                              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
@@ -66,7 +68,9 @@ const CustomDateRangeInputs: React.FC<{
   return (
     <div className="grid grid-cols-2 border border-slate-400 h-11">
       <button
-        onClick={onClick}
+        onPointerUp={(e) => { e.preventDefault(); onClick(); }}
+        onClick={(e) => e.preventDefault()}
+        style={{ touchAction: 'manipulation' }}
         aria-label={`Seleziona intervallo di date. Inizio: ${range.start ? formatDateForButton(range.start) : 'non impostato'}.`}
         className="flex items-center justify-center gap-2 px-2 bg-slate-100 hover:bg-slate-200 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 border-r border-slate-400"
       >
@@ -75,7 +79,9 @@ const CustomDateRangeInputs: React.FC<{
         </span>
       </button>
       <button
-        onClick={onClick}
+        onPointerUp={(e) => { e.preventDefault(); onClick(); }}
+        onClick={(e) => e.preventDefault()}
+        style={{ touchAction: 'manipulation' }}
         aria-label={`Seleziona intervallo di date. Fine: ${range.end ? formatDateForButton(range.end) : 'non impostato'}.`}
         className="flex items-center justify-center gap-2 px-2 bg-slate-100 hover:bg-slate-200 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500"
       >
@@ -140,7 +146,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = ({
       if (lock !== 'h') return;
 
       // Prevent default only on significant movement to avoid killing taps.
-      if (Math.abs(dx) > SLOP * 2.5 && e.cancelable) {
+      if (Math.abs(dx) > SLOP && e.cancelable) {
         e.preventDefault();
       }
       e.stopPropagation();
@@ -221,12 +227,16 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = ({
 
             <div className="flex justify-center items-center gap-2.5 pt-2">
               <button
-                onClick={() => setActiveView('quick')}
+                onPointerUp={() => setActiveView('quick')}
+                onClick={(e) => e.preventDefault()}
+                style={{ touchAction: 'manipulation' }}
                 aria-label="Vai ai filtri rapidi"
                 className={`w-3 h-3 rounded-full transition-colors ${activeView === 'quick' ? 'bg-indigo-600' : 'bg-slate-300 hover:bg-slate-400'}`}
               />
               <button
-                onClick={() => setActiveView('custom')}
+                onPointerUp={() => setActiveView('custom')}
+                onClick={(e) => e.preventDefault()}
+                style={{ touchAction: 'manipulation' }}
                 aria-label="Vai al filtro per data personalizzata"
                 className={`w-3 h-3 rounded-full transition-colors ${activeView === 'custom' ? 'bg-indigo-600' : 'bg-slate-300 hover:bg-slate-400'}`}
               />

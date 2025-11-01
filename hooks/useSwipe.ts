@@ -44,8 +44,8 @@ export function useSwipe(
 ) {
   const {
     enabled = true,
-    slop = 12,
-    threshold = 56,
+    slop = 6,
+    threshold = 32,
     angle = 30,
     enableLeftAtRightEdge = true,
     enableRightAtLeftEdge = false,

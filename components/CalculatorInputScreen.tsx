@@ -13,7 +13,6 @@ interface CalculatorInputScreenProps {
   onSubmit: (data: Omit<Expense, 'id'>) => void;
   accounts: Account[];
   onNavigateToDetails: () => void;
-  isVisible: boolean;
   formData: Partial<Omit<Expense, 'id'>>;
   onFormChange: (newData: Partial<Omit<Expense, 'id'>>) => void;
   onMenuStateChange: (isOpen: boolean) => void;
@@ -39,7 +38,7 @@ const getAmountFontSize = (value: string): string => {
 };
 
 const CalculatorInputScreen: React.FC<CalculatorInputScreenProps> = ({
-  onClose, onSubmit, accounts, onNavigateToDetails, isVisible,
+  onClose, onSubmit, accounts, onNavigateToDetails,
   formData, onFormChange, onMenuStateChange, isDesktop
 }) => {
   const [currentValue, setCurrentValue] = useState('0');
@@ -78,14 +77,11 @@ const CalculatorInputScreen: React.FC<CalculatorInputScreenProps> = ({
         return;
     }
     
-    // Only push updates if this screen is visible to prevent feedback loops
-    if (isVisible) {
-      const newAmount = parseFloat(currentValue.replace(/\./g, '').replace(',', '.'));
-      if (!isNaN(newAmount) && Math.abs((formData.amount || 0) - newAmount) > 1e-9) {
-        onFormChange({ amount: newAmount });
-      }
+    const newAmount = parseFloat(currentValue.replace(/\./g, '').replace(',', '.'));
+    if (!isNaN(newAmount) && Math.abs((formData.amount || 0) - newAmount) > 1e-9) {
+      onFormChange({ amount: newAmount });
     }
-  }, [currentValue, onFormChange, formData.amount, isVisible]);
+  }, [currentValue, onFormChange, formData.amount]);
   
   const handleClearAmount = useCallback(() => {
     setCurrentValue('0');
@@ -306,7 +302,7 @@ const CalculatorInputScreen: React.FC<CalculatorInputScreenProps> = ({
   return (
     <div className="bg-slate-100 w-full h-full flex flex-col">
       <div className="flex-1 flex flex-col">
-        <header className={`flex items-center justify-between p-4 flex-shrink-0 transition-opacity ${!isVisible ? 'opacity-0 invisible' : 'opacity-100'}`}>
+        <header className={`flex items-center justify-between p-4 flex-shrink-0`}>
           <button
             onClick={onClose}
             aria-label="Chiudi calcolatrice"

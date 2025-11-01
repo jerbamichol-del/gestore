@@ -143,7 +143,6 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
               onNavigateToDetails={() => navigateTo('details')}
               onMenuStateChange={setIsMenuOpen}
               isDesktop={isDesktop}
-              isVisible={view === 'calculator' || isDesktop}
             />
           </div>
           <div className="w-1/2 md:w-auto h-full relative">
@@ -154,7 +153,6 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
                 onClose={() => navigateTo('calculator')}
                 onSubmit={handleFinalSubmit}
                 isDesktop={isDesktop}
-                isVisible={view === 'details' || isDesktop}
                 onMenuStateChange={setIsMenuOpen}
                 isParentSwiping={isSwiping}
               />
