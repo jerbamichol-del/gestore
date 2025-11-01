@@ -180,6 +180,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         }
         if (isConfirmDeleteModalOpen) {
             setIsConfirmDeleteModalOpen(false);
+            setExpenseToDeleteId(null);
             pushStateAfterHandling();
             return;
         }
@@ -617,7 +618,10 @@ const handleInstallClick = async () => {
 
         <ConfirmationModal 
             isOpen={isConfirmDeleteModalOpen}
-            onClose={() => setIsConfirmDeleteModalOpen(false)}
+            onClose={() => {
+                setIsConfirmDeleteModalOpen(false);
+                setExpenseToDeleteId(null);
+            }}
             onConfirm={confirmDelete}
             title="Conferma Eliminazione"
             message={<>Sei sicuro di voler eliminare questa spesa? <br/>L'azione è irreversibile.</>}

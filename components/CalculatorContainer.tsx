@@ -29,6 +29,7 @@ const useMediaQuery = (query: string) => {
   return matches;
 };
 
+const getCurrentTime = () => new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
 
 const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   isOpen,
@@ -43,9 +44,13 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
     amount: 0,
     description: '',
     date: new Date().toISOString().split('T')[0],
+    time: getCurrentTime(),
     accountId: accounts.length > 0 ? accounts[0].id : '',
     category: 'Altro',
     subcategory: undefined,
+    frequency: undefined,
+    recurrence: undefined,
+    recurrenceInterval: 1,
   }), [accounts]);
 
   const [formData, setFormData] = useState<Partial<Omit<Expense, 'id'>>>(resetFormData);

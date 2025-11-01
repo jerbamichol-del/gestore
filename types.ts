@@ -5,13 +5,17 @@ export interface Account {
 }
 
 export interface Expense {
-  id: string;
+  id:string;
   description: string;
   amount: number;
   date: string;
+  time?: string;
   category: string;
   subcategory?: string;
   accountId: string;
+  frequency?: 'single' | 'recurring';
+  recurrence?: 'daily' | 'weekly' | 'monthly' | 'yearly';
+  recurrenceInterval?: number;
 }
 
 export const CATEGORIES: Record<string, string[]> = {

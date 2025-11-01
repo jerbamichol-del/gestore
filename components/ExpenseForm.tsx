@@ -8,6 +8,7 @@ import { TagIcon } from './icons/TagIcon';
 import { CreditCardIcon } from './icons/CreditCardIcon';
 import SelectionMenu from './SelectionMenu';
 import { getCategoryStyle } from '../utils/categoryStyles';
+import { ClockIcon } from './icons/ClockIcon';
 
 interface ExpenseFormProps {
   isOpen: boolean;
@@ -24,6 +25,8 @@ const toYYYYMMDD = (date: Date) => {
     const day = String(date.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
 };
+
+const getCurrentTime = () => new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
 
 const getTodayString = () => toYYYYMMDD(new Date());
 
@@ -80,6 +83,10 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
   
   const [activeMenu, setActiveMenu] = useState<'category' | 'subcategory' | 'account' | null>(null);
 
+  // New states for change detection
+  const [originalExpenseState, setOriginalExpenseState] = useState<Partial<Expense> | null>(null);
+  const [hasChanges, setHasChanges] = useState(false);
+
   const amountInputRef = useRef<HTMLInputElement>(null);
   const descriptionInputRef = useRef<HTMLInputElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
@@ -92,11 +99,13 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
       description: '',
       amount: '',
       date: getTodayString(),
+      time: getCurrentTime(),
       category: '',
       subcategory: '',
       accountId: defaultAccountId,
     });
     setError(null);
+    setOriginalExpenseState(null);
   }, [accounts]);
   
   const handleClose = () => {
@@ -113,20 +122,28 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
   useEffect(() => {
     if (isOpen) {
       if (initialData) {
-        setFormData(initialData);
+        const dataWithTime = {
+            ...initialData,
+            time: initialData.time || getCurrentTime()
+        };
+        setFormData(dataWithTime);
+        setOriginalExpenseState(dataWithTime);
       } else if (prefilledData) {
         const defaultAccountId = accounts.length > 0 ? accounts[0].id : '';
         setFormData({
           description: prefilledData.description || '',
           amount: prefilledData.amount || '',
           date: prefilledData.date || getTodayString(),
+          time: prefilledData.time || getCurrentTime(),
           category: prefilledData.category || '',
           subcategory: prefilledData.subcategory || '',
           accountId: prefilledData.accountId || defaultAccountId,
         });
+        setOriginalExpenseState(null);
       } else {
         resetForm();
       }
+      setHasChanges(false);
       
       const animTimer = setTimeout(() => {
         setIsAnimating(true);
@@ -149,6 +166,31 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
     }
   }, [isOpen, initialData, prefilledData, resetForm, accounts]);
   
+    // Effect to detect changes
+  useEffect(() => {
+    if (!isEditing || !originalExpenseState) {
+        setHasChanges(false);
+        return;
+    }
+
+    // Normalize amount for comparison (formData can be string with comma)
+    const currentAmount = parseFloat(String(formData.amount || '0').replace(',', '.'));
+    const originalAmount = originalExpenseState.amount || 0;
+    const amountChanged = Math.abs(currentAmount - originalAmount) > 0.001; // Use tolerance for float comparison
+
+    const descriptionChanged = (formData.description || '') !== (originalExpenseState.description || '');
+    const dateChanged = formData.date !== originalExpenseState.date;
+    const timeChanged = (formData.time || '') !== (originalExpenseState.time || '');
+    const categoryChanged = (formData.category || '') !== (originalExpenseState.category || '');
+    const subcategoryChanged = (formData.subcategory || '') !== (originalExpenseState.subcategory || '');
+    const accountIdChanged = formData.accountId !== originalExpenseState.accountId;
+
+    const changed = amountChanged || descriptionChanged || dateChanged || timeChanged || categoryChanged || subcategoryChanged || accountIdChanged;
+    
+    setHasChanges(changed);
+
+  }, [formData, originalExpenseState, isEditing]);
+
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -188,6 +230,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
       ...formData,
       amount: amountAsNumber,
       date: finalDate,
+      time: formData.time || undefined,
       description: formData.description || '',
       category: formData.category || '',
       subcategory: formData.subcategory || undefined,
@@ -318,16 +361,38 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                      required
                      autoComplete="off"
                   />
-                  <FormInput
-                      id="date"
-                      name="date"
-                      label="Data (opzionale)"
-                      value={formData.date || ''}
-                      onChange={handleInputChange}
-                      icon={<CalendarIcon className="h-5 w-5 text-slate-400" />}
-                      type="date"
-                      max={getTodayString()}
-                  />
+                  <div>
+                    <label htmlFor="date" className="block text-base font-medium text-slate-700 mb-1">Data e Ora (opzionali)</label>
+                    <div className="grid grid-cols-2 gap-2">
+                        <div className="relative">
+                            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                                <CalendarIcon className="h-5 w-5 text-slate-400" />
+                            </div>
+                            <input
+                                id="date"
+                                name="date"
+                                value={formData.date || ''}
+                                onChange={handleInputChange}
+                                className="block w-full rounded-md border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-base"
+                                type="date"
+                                max={getTodayString()}
+                            />
+                        </div>
+                        <div className="relative">
+                           <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                               <ClockIcon className="h-5 w-5 text-slate-400" />
+                           </div>
+                           <input
+                               id="time"
+                               name="time"
+                               value={formData.time || ''}
+                               onChange={handleInputChange}
+                               className="block w-full rounded-md border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-base"
+                               type="time"
+                           />
+                        </div>
+                    </div>
+                  </div>
                </div>
               
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -360,20 +425,32 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
 
                {error && <p className="text-base text-red-600 bg-red-100 p-3 rounded-md">{error}</p>}
           </div>
-          <footer className="px-6 py-4 bg-slate-100 border-t border-slate-200 flex justify-end gap-3 flex-shrink-0">
-              <button
-                type="button"
-                onClick={handleClose}
-                className="px-4 py-2 text-base font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg shadow-sm hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors"
-              >
-                Annulla
-              </button>
-              <button
-                type="submit"
-                className="px-4 py-2 text-base font-semibold text-white bg-indigo-600 rounded-lg shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors"
-              >
-                {isEditing ? 'Salva Modifiche' : 'Aggiungi Spesa'}
-              </button>
+          <footer className={`px-6 py-4 bg-slate-100 border-t border-slate-200 flex flex-shrink-0 ${isEditing && !hasChanges ? 'justify-stretch' : 'justify-end gap-3'}`}>
+              {isEditing && !hasChanges ? (
+                  <button
+                    type="button"
+                    onClick={handleClose}
+                    className="w-full px-4 py-2 text-base font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg shadow-sm hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors"
+                  >
+                    Chiudi
+                  </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleClose}
+                    className="px-4 py-2 text-base font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg shadow-sm hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors"
+                  >
+                    Annulla
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 text-base font-semibold text-white bg-indigo-600 rounded-lg shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors"
+                  >
+                    {isEditing ? 'Salva Modifiche' : 'Aggiungi Spesa'}
+                  </button>
+                </>
+              )}
           </footer>
         </form>
       </div>

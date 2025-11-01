@@ -24,6 +24,8 @@ const toYYYYMMDD = (date: Date) => {
     return `${year}-${month}-${day}`;
 };
 
+const getCurrentTime = () => new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+
 // A custom styled checkbox component
 const CustomCheckbox = ({ checked, onChange, id, label }: { checked: boolean, onChange: () => void, id: string, label: string }) => (
     <div className="flex items-center">
@@ -154,6 +156,7 @@ const MultipleExpensesModal: React.FC<MultipleExpensesModalProps> = ({ isOpen, o
         description: exp.description || 'Senza descrizione',
         amount: exp.amount!,
         date: exp.date || toYYYYMMDD(new Date()),
+        time: exp.time || getCurrentTime(),
         category: exp.category || 'Altro',
         subcategory: exp.subcategory || undefined,
         accountId: exp.accountId,

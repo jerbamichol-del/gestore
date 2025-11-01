@@ -246,6 +246,13 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({ expenses, accounts, onEdi
     const [isInteracting, setIsInteracting] = useState(false);
     const autoCloseTimerRef = useRef<number | null>(null);
 
+    const prevIsEditingOrDeleting = useRef(isEditingOrDeleting);
+    useEffect(() => {
+        if (prevIsEditingOrDeleting.current && !isEditingOrDeleting) {
+            setOpenItemId(null);
+        }
+        prevIsEditingOrDeleting.current = isEditingOrDeleting;
+    }, [isEditingOrDeleting]);
 
     useEffect(() => {
         if (!isActive) {
@@ -321,7 +328,21 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({ expenses, accounts, onEdi
     }, [expenses, dateFilter, customRange, isCustomRangeActive]);
 
     const groupedExpenses = useMemo(() => {
-        const sortedExpenses = [...filteredExpenses].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        const sortedExpenses = [...filteredExpenses].sort((a, b) => {
+            const dateB = parseLocalYYYYMMDD(b.date);
+            const dateA = parseLocalYYYYMMDD(a.date);
+
+            if (b.time) {
+                const [h, m] = b.time.split(':').map(Number);
+                if (!isNaN(h) && !isNaN(m)) dateB.setHours(h, m);
+            }
+            if (a.time) {
+                const [h, m] = a.time.split(':').map(Number);
+                if (!isNaN(h) && !isNaN(m)) dateA.setHours(h, m);
+            }
+
+            return dateB.getTime() - dateA.getTime();
+        });
     
         return sortedExpenses.reduce<Record<string, ExpenseGroup>>((acc, expense) => {
             const expenseDate = parseLocalYYYYMMDD(expense.date);
