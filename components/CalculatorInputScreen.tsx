@@ -404,7 +404,10 @@ const CalculatorInputScreen: React.FC<CalculatorInputScreenProps> = ({
               </KeypadButton>
             </div>
 
-            <div className="h-full w-1/5 flex flex-col gap-2 bg-slate-200 rounded-2xl p-1">
+            <div 
+                className="h-full w-1/5 flex flex-col gap-2 bg-slate-200 rounded-2xl p-1"
+                style={{ touchAction: 'pan-y' }}
+            >
               <OperatorButton onClick={() => handleKeyPress('÷')}>÷</OperatorButton>
               <OperatorButton onClick={() => handleKeyPress('×')}>×</OperatorButton>
               <OperatorButton onClick={() => handleKeyPress('-')}>-</OperatorButton>
