@@ -1,4 +1,5 @@
 
+
 export const formatCurrency = (amount: number): string => {
   const numericAmount = (typeof amount === 'number' && !isNaN(amount)) ? amount : 0;
 

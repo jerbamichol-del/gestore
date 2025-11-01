@@ -51,6 +51,9 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
     frequency: undefined,
     recurrence: undefined,
     recurrenceInterval: 1,
+    recurrenceEndType: undefined,
+    recurrenceEndDate: undefined,
+    recurrenceCount: undefined,
   }), [accounts]);
 
   const [formData, setFormData] = useState<Partial<Omit<Expense, 'id'>>>(resetFormData);

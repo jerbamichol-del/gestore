@@ -1,4 +1,5 @@
 
+
 export interface Account {
   id: string;
   name: string;
@@ -16,6 +17,9 @@ export interface Expense {
   frequency?: 'single' | 'recurring';
   recurrence?: 'daily' | 'weekly' | 'monthly' | 'yearly';
   recurrenceInterval?: number;
+  recurrenceEndType?: 'forever' | 'date' | 'count';
+  recurrenceEndDate?: string;
+  recurrenceCount?: number;
 }
 
 export const CATEGORIES: Record<string, string[]> = {

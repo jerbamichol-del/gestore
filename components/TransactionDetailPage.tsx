@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Expense, Account } from '../types';
 import { ArrowLeftIcon } from './icons/ArrowLeftIcon';
-import { formatCurrency } from './icons/formatters';
+import { formatCurrency, formatDate } from './icons/formatters';
 import SelectionMenu from './SelectionMenu';
 import { DocumentTextIcon } from './icons/DocumentTextIcon';
 import { CalendarIcon } from './icons/CalendarIcon';
@@ -26,6 +26,12 @@ const toYYYYMMDD = (date: Date) => {
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
+};
+
+const parseLocalYYYYMMDD = (dateString: string | null): Date | null => {
+  if (!dateString) return null;
+  const parts = dateString.split('-').map(Number);
+  return new Date(parts[0], parts[1] - 1, parts[2]); // locale 00:00
 };
 
 const recurrenceLabels = {
@@ -63,6 +69,9 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     const [tempRecurrence, setTempRecurrence] = useState(formData.recurrence);
     const [tempRecurrenceInterval, setTempRecurrenceInterval] = useState<number | undefined>(formData.recurrenceInterval);
 
+    // State for the recurrence end modal
+    const [isRecurrenceEndModalOpen, setIsRecurrenceEndModalOpen] = useState(false);
+    const [isRecurrenceEndModalAnimating, setIsRecurrenceEndModalAnimating] = useState(false);
 
      useEffect(() => {
         if (isFrequencyModalOpen) {
@@ -87,6 +96,15 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     }, [isRecurrenceModalOpen, formData.recurrence, formData.recurrenceInterval]);
 
     useEffect(() => {
+        if (isRecurrenceEndModalOpen) {
+            const timer = setTimeout(() => setIsRecurrenceEndModalAnimating(true), 10);
+            return () => clearTimeout(timer);
+        } else {
+            setIsRecurrenceEndModalAnimating(false);
+        }
+    }, [isRecurrenceEndModalOpen]);
+
+    useEffect(() => {
         if (isVisible) {
             initialDataOnShowRef.current = JSON.stringify(formData);
             setHasChanges(false);
@@ -108,7 +126,10 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
                     formData.accountId !== initialData.accountId ||
                     (formData.frequency || undefined) !== (initialData.frequency || undefined) ||
                     (formData.recurrence || undefined) !== (initialData.recurrence || undefined) ||
-                    (formData.recurrenceInterval || 1) !== (initialData.recurrenceInterval || 1);
+                    (formData.recurrenceInterval || 1) !== (initialData.recurrenceInterval || 1) ||
+                    (formData.recurrenceEndType || 'forever') !== (initialData.recurrenceEndType || 'forever') ||
+                    (formData.recurrenceEndDate || undefined) !== (initialData.recurrenceEndDate || undefined) ||
+                    (formData.recurrenceCount || undefined) !== (initialData.recurrenceCount || undefined);
                 setHasChanges(changes);
             } catch (e) {
                 // If parsing fails, assume changes to be safe
@@ -120,7 +141,12 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
-        onFormChange({ [name]: value });
+        if (name === 'recurrenceCount') {
+            const num = parseInt(value, 10);
+            onFormChange({ [name]: isNaN(num) || num <= 0 ? undefined : num });
+        } else {
+            onFormChange({ [name]: value });
+        }
     };
     
     const handleAccountSelect = (accountId: string) => {
@@ -155,6 +181,29 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
         handleCloseRecurrenceModal();
     };
 
+    const handleCloseRecurrenceEndModal = () => {
+        setIsRecurrenceEndModalAnimating(false);
+        setTimeout(() => {
+            setIsRecurrenceEndModalOpen(false);
+        }, 300);
+    };
+    
+    const handleRecurrenceEndTypeSelect = (type: 'forever' | 'date' | 'count') => {
+        const updates: Partial<Expense> = { recurrenceEndType: type };
+        if (type === 'forever') {
+            updates.recurrenceEndDate = undefined;
+            updates.recurrenceCount = undefined;
+        } else if (type === 'date') {
+            updates.recurrenceEndDate = formData.recurrenceEndDate || toYYYYMMDD(new Date());
+            updates.recurrenceCount = undefined;
+        } else if (type === 'count') {
+            updates.recurrenceEndDate = undefined;
+            updates.recurrenceCount = formData.recurrenceCount || 1;
+        }
+        onFormChange(updates);
+        handleCloseRecurrenceEndModal();
+    };
+
     const handleSubmit = () => {
         onSubmit(formData as Omit<Expense, 'id'>);
     };
@@ -166,6 +215,21 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     const selectedAccountLabel = accounts.find(a => a.id === formData.accountId)?.name;
     const accountOptions = accounts.map(acc => ({ value: acc.id, label: acc.name }));
     const today = toYYYYMMDD(new Date());
+
+    const getRecurrenceEndLabel = () => {
+        const { recurrenceEndType, recurrenceEndDate, recurrenceCount } = formData;
+        if (!recurrenceEndType || recurrenceEndType === 'forever') {
+            return 'Per sempre';
+        }
+        if (recurrenceEndType === 'date') {
+            return 'Fino a una data';
+        }
+        if (recurrenceEndType === 'count') {
+            return 'Numero di volte';
+        }
+        return 'Per sempre';
+    };
+
 
     if (typeof formData.amount !== 'number') {
         return (
@@ -328,6 +392,56 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
                                         <ChevronDownIcon className="w-5 h-5 text-slate-500" />
                                     </button>
                                 </div>
+                                <div className="grid grid-cols-2 gap-4 items-end">
+                                    <div>
+                                        <label className="block text-base font-medium text-slate-700 mb-1">Termina</label>
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsRecurrenceEndModalOpen(true)}
+                                            className="w-full flex items-center justify-between text-left gap-2 px-3 py-2.5 text-base rounded-lg border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors bg-white border-slate-300 text-slate-800 hover:bg-slate-50"
+                                        >
+                                            <span className="truncate flex-1">
+                                                {getRecurrenceEndLabel()}
+                                            </span>
+                                            <ChevronDownIcon className="w-5 h-5 text-slate-500" />
+                                        </button>
+                                    </div>
+
+                                    {formData.recurrenceEndType === 'date' && (
+                                        <div className="animate-fade-in-up">
+                                            <label htmlFor="recurrence-end-date" className="block text-base font-medium text-slate-700 mb-1">Data di fine</label>
+                                            <div className="relative">
+                                                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                                                    <CalendarIcon className="h-5 w-5 text-slate-400" />
+                                                </div>
+                                                <input
+                                                    type="date"
+                                                    id="recurrence-end-date"
+                                                    name="recurrenceEndDate"
+                                                    value={formData.recurrenceEndDate || ''}
+                                                    onChange={handleInputChange}
+                                                    min={formData.date}
+                                                    className="block w-full rounded-md border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-base"
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+                                    {formData.recurrenceEndType === 'count' && (
+                                        <div className="animate-fade-in-up">
+                                            <label htmlFor="recurrence-count" className="block text-base font-medium text-slate-700 mb-1">N. di volte</label>
+                                            <input
+                                                type="number"
+                                                id="recurrence-count"
+                                                name="recurrenceCount"
+                                                value={formData.recurrenceCount || ''}
+                                                onChange={handleInputChange}
+                                                min="1"
+                                                placeholder="Es. 12"
+                                                className="block w-full rounded-md border border-slate-300 bg-white py-2.5 px-3 text-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-base"
+                                            />
+                                        </div>
+                                    )}
+                                </div>
                             </>
                         )}
                     </div>
@@ -471,6 +585,32 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
                                 Applica
                             </button>
                         </footer>
+                    </div>
+                </div>
+            )}
+
+            {isRecurrenceEndModalOpen && (
+                <div
+                    className={`absolute inset-0 z-[60] flex justify-center items-center p-4 transition-opacity duration-300 ease-in-out ${isRecurrenceEndModalAnimating ? 'opacity-100' : 'opacity-0'} bg-slate-900/60 backdrop-blur-sm`}
+                    onClick={handleCloseRecurrenceEndModal}
+                    aria-modal="true"
+                    role="dialog"
+                >
+                    <div
+                        className={`bg-white rounded-lg shadow-xl w-full max-w-xs transform transition-all duration-300 ease-in-out ${isRecurrenceEndModalAnimating ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex justify-between items-center p-4 border-b border-slate-200">
+                            <h2 className="text-lg font-bold text-slate-800">Termina Ripetizione</h2>
+                            <button type="button" onClick={handleCloseRecurrenceEndModal} className="text-slate-500 hover:text-slate-800 transition-colors p-1 rounded-full hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500" aria-label="Chiudi">
+                                <XMarkIcon className="w-6 h-6" />
+                            </button>
+                        </div>
+                        <div className="p-4 space-y-2">
+                            <button onClick={() => handleRecurrenceEndTypeSelect('forever')} className="w-full text-center px-4 py-3 text-base font-semibold rounded-lg transition-colors bg-slate-100 text-slate-800 hover:bg-indigo-100 hover:text-indigo-800">Per sempre</button>
+                            <button onClick={() => handleRecurrenceEndTypeSelect('date')} className="w-full text-center px-4 py-3 text-base font-semibold rounded-lg transition-colors bg-slate-100 text-slate-800 hover:bg-indigo-100 hover:text-indigo-800">Fino a una data</button>
+                            <button onClick={() => handleRecurrenceEndTypeSelect('count')} className="w-full text-center px-4 py-3 text-base font-semibold rounded-lg transition-colors bg-slate-100 text-slate-800 hover:bg-indigo-100 hover:text-indigo-800">Numero di volte</button>
+                        </div>
                     </div>
                 </div>
             )}
