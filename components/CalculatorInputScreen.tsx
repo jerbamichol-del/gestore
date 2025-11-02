@@ -48,7 +48,7 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
   const [justCalculated, setJustCalculated] = useState(false);
   const [activeMenu, setActiveMenu] = useState<'account' | 'category' | 'subcategory' | null>(null);
   const isSyncingFromParent = useRef(false);
-  
+
   useEffect(() => {
     onMenuStateChange(activeMenu !== null);
   }, [activeMenu, onMenuStateChange]);
@@ -58,31 +58,30 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
     const currentDisplayAmount = parseFloat(currentValue.replace(/\./g, '').replace(',', '.')) || 0;
 
     if (Math.abs(parentAmount - currentDisplayAmount) > 1e-9) {
-        isSyncingFromParent.current = true;
-        setCurrentValue(String(parentAmount).replace('.', ','));
+      isSyncingFromParent.current = true;
+      setCurrentValue(String(parentAmount).replace('.', ','));
     }
 
     if (formData.amount === 0 || !formData.amount) {
-        setPreviousValue(null);
-        setOperator(null);
-        setShouldResetCurrentValue(false);
-        setJustCalculated(false);
+      setPreviousValue(null);
+      setOperator(null);
+      setShouldResetCurrentValue(false);
+      setJustCalculated(false);
     }
   }, [formData.amount]);
 
-
   useEffect(() => {
     if (isSyncingFromParent.current) {
-        isSyncingFromParent.current = false;
-        return;
+      isSyncingFromParent.current = false;
+      return;
     }
-    
+
     const newAmount = parseFloat(currentValue.replace(/\./g, '').replace(',', '.'));
     if (!isNaN(newAmount) && Math.abs((formData.amount || 0) - newAmount) > 1e-9) {
       onFormChange({ amount: newAmount });
     }
   }, [currentValue, onFormChange, formData.amount]);
-  
+
   const handleClearAmount = useCallback(() => {
     setCurrentValue('0');
     setJustCalculated(false);
@@ -123,29 +122,21 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
     }
   }
 
-  // Fix: Changed event handler types from HTMLButtonElement to HTMLDivElement to match the KeypadButton component which is a div.
-  /** PARTENZA: avvia timer in capture, prima che lo swipe del parent faccia setPointerCapture */
+  // Changed handler generics to HTMLDivElement (il tasto è un <div/>)
   const onDelPointerDownCapture: React.PointerEventHandler<HTMLDivElement> = (e) => {
     delDidLongRef.current = false;
     delStartXRef.current = e.clientX ?? 0;
     delStartYRef.current = e.clientY ?? 0;
-
-    // cattura locale (se possibile) per continuare a ricevere eventi anche se esci di pochi px
     try { (e.currentTarget as any).setPointerCapture?.((e as any).pointerId ?? 1); } catch {}
-
     clearDelTimer();
     delTimerRef.current = window.setTimeout(() => {
       delDidLongRef.current = true;
       clearDelTimer();
-
-      // 🔴 AZZERA L’IMPORTO QUI
       handleClearAmount();
-
-      if (navigator.vibrate) navigator.vibrate(10); // feedback tattile su Android
+      if (navigator.vibrate) navigator.vibrate(10);
     }, DEL_HOLD_MS);
   };
 
-  /** MOVIMENTO: se ti sposti troppo, annulla il long-press (così non collide con lo swipe) */
   const onDelPointerMoveCapture: React.PointerEventHandler<HTMLDivElement> = (e) => {
     if (!delTimerRef.current) return;
     const dx = Math.abs((e.clientX ?? 0) - delStartXRef.current);
@@ -159,11 +150,9 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
     const didLong = delDidLongRef.current;
     clearDelTimer();
     if (didLong) {
-      // abbiamo già azzerato: evita click fantasma che cancellerebbe 1 cifra extra
       delDidLongRef.current = false;
       return;
     }
-    // SHORT TAP: lascia la tua logica esistente (cancella 1 cifra)
     handleSingleBackspace();
   };
 
@@ -171,17 +160,14 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
     clearDelTimer();
   };
 
-  // Evita menu nativo/selection su lungo tap Android
   const onDelContextMenu: React.MouseEventHandler<HTMLDivElement> = (e) => e.preventDefault();
   const onDelSelectStart: React.ReactEventHandler<HTMLDivElement> = (e) => e.preventDefault();
 
-  /** Se lo swipe del parent parte, annulla il long-press (cooperazione, non cambia UI) */
   useEffect(() => {
     const cancel = () => clearDelTimer();
     window.addEventListener('numPad:cancelLongPress', cancel);
     return () => window.removeEventListener('numPad:cancelLongPress', cancel);
   }, []);
-
 
   const calculate = (): string => {
     const prev = parseFloat((previousValue || '0').replace(/\./g, '').replace(',', '.'));
@@ -236,12 +222,12 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
   };
 
   const handleSelectChange = (field: keyof Omit<Expense, 'id'>, value: string) => {
-      const updatedFormData = { [field]: value };
-      if (field === 'category') {
-        (updatedFormData as any).subcategory = ''; // Reset subcategory when category changes
-      }
-      onFormChange(updatedFormData);
-      setActiveMenu(null);
+    const updatedFormData = { [field]: value };
+    if (field === 'category') {
+      (updatedFormData as any).subcategory = ''; // Reset subcategory when category changes
+    }
+    onFormChange(updatedFormData);
+    setActiveMenu(null);
   };
 
   const canSubmit = (formData.amount ?? 0) > 0;
@@ -264,8 +250,8 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
   const fontSizeClass = getAmountFontSize(displayValue);
 
   type KeypadButtonProps = {
-    children: React.ReactNode; 
-    onClick?: () => void; 
+    children: React.ReactNode;
+    onClick?: () => void;
     className?: string;
     onSelectStart?: React.ReactEventHandler<HTMLDivElement>;
   } & React.HTMLAttributes<HTMLDivElement>;
@@ -322,7 +308,7 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
           >
             <CheckIcon className="w-7 h-7" />
           </button>
-           {isDesktop && <div className="w-11 h-11" />}
+          {isDesktop && <div className="w-11 h-11" />}
         </header>
 
         <main className="flex-1 flex flex-col overflow-hidden relative" style={{ touchAction: 'pan-y' }}>
@@ -335,90 +321,90 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
               </div>
             </div>
           </div>
-          
-           <div
-              role="button"
-              tabIndex={0}
-              onClick={onNavigateToDetails}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onNavigateToDetails(); }}
-              className={`absolute top-1/2 -right-px w-8 h-[148px] flex items-center justify-center cursor-pointer ${isDesktop ? 'hidden' : ''}`}
-              style={{ transform: 'translateY(calc(-50% + 2px))' }}
-              title="Aggiungi dettagli" aria-label="Aggiungi dettagli alla spesa"
-            >
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="transform -rotate-90">
-                    <SmoothPullTab
-                      width="148"
-                      height="32"
-                      fill="rgba(199, 210, 254, 0.8)"
-                    />
-                  </div>
-                </div>
-                <ChevronLeftIcon className="relative z-10 w-6 h-6 text-indigo-600 transition-colors" />
+
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={onNavigateToDetails}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onNavigateToDetails(); }}
+            className={`absolute top-1/2 -right-px w-8 h-[148px] flex items-center justify-center cursor-pointer ${isDesktop ? 'hidden' : ''}`}
+            style={{ transform: 'translateY(calc(-50% + 2px))' }}
+            title="Aggiungi dettagli" aria-label="Aggiungi dettagli alla spesa"
+          >
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="transform -rotate-90">
+                <SmoothPullTab
+                  width="148"
+                  height="32"
+                  fill="rgba(199, 210, 254, 0.8)"
+                />
+              </div>
             </div>
+            <ChevronLeftIcon className="relative z-10 w-6 h-6 text-indigo-600 transition-colors" />
+          </div>
         </main>
       </div>
-      
+
       <div className="flex-shrink-0 flex flex-col" style={{ height: '52vh' }}>
-          <div className="flex justify-between items-center my-2 w-full px-4" style={{ touchAction: 'pan-y' }}>
-            <button
-              onClick={() => setActiveMenu('account')}
-              className="font-semibold text-indigo-600 hover:text-indigo-800 text-lg w-1/3 truncate p-2 rounded-lg focus:outline-none focus:ring-0 text-left">
-              {accounts.find(a => a.id === formData.accountId)?.name || 'Conto'}
-            </button>
-            <button
-              onClick={() => setActiveMenu('category')}
-              className="font-semibold text-indigo-600 hover:text-indigo-800 text-lg w-1/3 truncate p-2 rounded-lg focus:outline-none focus:ring-0 text-center">
-              {formData.category ? getCategoryStyle(formData.category).label : 'Categoria'}
-            </button>
-            <button
-              onClick={() => setActiveMenu('subcategory')}
-              disabled={isSubcategoryDisabled}
-              className="font-semibold text-lg w-1/3 truncate p-2 rounded-lg focus:outline-none focus:ring-0 disabled:cursor-not-allowed disabled:text-slate-400 text-indigo-600 hover:text-indigo-800 transition-colors text-right">
-              {formData.subcategory || 'Sottocateg.'}
-            </button>
+        <div className="flex justify-between items-center my-2 w-full px-4" style={{ touchAction: 'pan-y' }}>
+          <button
+            onClick={() => setActiveMenu('account')}
+            className="font-semibold text-indigo-600 hover:text-indigo-800 text-lg w-1/3 truncate p-2 rounded-lg focus:outline-none focus:ring-0 text-left">
+            {accounts.find(a => a.id === formData.accountId)?.name || 'Conto'}
+          </button>
+          <button
+            onClick={() => setActiveMenu('category')}
+            className="font-semibold text-indigo-600 hover:text-indigo-800 text-lg w-1/3 truncate p-2 rounded-lg focus:outline-none focus:ring-0 text-center">
+            {formData.category ? getCategoryStyle(formData.category).label : 'Categoria'}
+          </button>
+          <button
+            onClick={() => setActiveMenu('subcategory')}
+            disabled={isSubcategoryDisabled}
+            className="font-semibold text-lg w-1/3 truncate p-2 rounded-lg focus:outline-none focus:ring-0 disabled:cursor-not-allowed disabled:text-slate-400 text-indigo-600 hover:text-indigo-800 transition-colors text-right">
+            {formData.subcategory || 'Sottocateg.'}
+          </button>
+        </div>
+
+        <div className="flex-1 p-2 flex flex-row gap-2 px-4 pb-4">
+          <div className="h-full w-4/5 grid grid-cols-3 grid-rows-4 gap-2 num-pad">
+            <KeypadButton onClick={() => handleKeyPress('7')} className="text-slate-900 active:bg-slate-200/60">7</KeypadButton>
+            <KeypadButton onClick={() => handleKeyPress('8')} className="text-slate-900 active:bg-slate-200/60">8</KeypadButton>
+            <KeypadButton onClick={() => handleKeyPress('9')} className="text-slate-900 active:bg-slate-200/60">9</KeypadButton>
+            <KeypadButton onClick={() => handleKeyPress('4')} className="text-slate-900 active:bg-slate-200/60">4</KeypadButton>
+            <KeypadButton onClick={() => handleKeyPress('5')} className="text-slate-900 active:bg-slate-200/60">5</KeypadButton>
+            <KeypadButton onClick={() => handleKeyPress('6')} className="text-slate-900 active:bg-slate-200/60">6</KeypadButton>
+            <KeypadButton onClick={() => handleKeyPress('1')} className="text-slate-900 active:bg-slate-200/60">1</KeypadButton>
+            <KeypadButton onClick={() => handleKeyPress('2')} className="text-slate-900 active:bg-slate-200/60">2</KeypadButton>
+            <KeypadButton onClick={() => handleKeyPress('3')} className="text-slate-900 active:bg-slate-200/60">3</KeypadButton>
+            <KeypadButton onClick={() => handleKeyPress(',')} className="text-slate-900 active:bg-slate-200/60">,</KeypadButton>
+            <KeypadButton onClick={() => handleKeyPress('0')} className="text-slate-900 active:bg-slate-200/60">0</KeypadButton>
+            <KeypadButton
+              className="text-slate-900 active:bg-slate-200/60"
+              title="Tocca: cancella una cifra — Tieni premuto: cancella tutto"
+              aria-label="Cancella"
+              onPointerDownCapture={onDelPointerDownCapture}
+              onPointerMoveCapture={onDelPointerMoveCapture}
+              onPointerUpCapture={onDelPointerUpCapture}
+              onPointerCancel={onDelPointerCancelCapture}
+              onContextMenu={onDelContextMenu}
+              onSelectStart={onDelSelectStart}
+            >
+              <BackspaceIcon className="w-8 h-8" />
+            </KeypadButton>
           </div>
 
-          <div className="flex-1 p-2 flex flex-row gap-2 px-4 pb-4">
-            <div className="h-full w-4/5 grid grid-cols-3 grid-rows-4 gap-2 num-pad">
-              <KeypadButton onClick={() => handleKeyPress('7')} className="text-slate-900 active:bg-slate-200/60">7</KeypadButton>
-              <KeypadButton onClick={() => handleKeyPress('8')} className="text-slate-900 active:bg-slate-200/60">8</KeypadButton>
-              <KeypadButton onClick={() => handleKeyPress('9')} className="text-slate-900 active:bg-slate-200/60">9</KeypadButton>
-              <KeypadButton onClick={() => handleKeyPress('4')} className="text-slate-900 active:bg-slate-200/60">4</KeypadButton>
-              <KeypadButton onClick={() => handleKeyPress('5')} className="text-slate-900 active:bg-slate-200/60">5</KeypadButton>
-              <KeypadButton onClick={() => handleKeyPress('6')} className="text-slate-900 active:bg-slate-200/60">6</KeypadButton>
-              <KeypadButton onClick={() => handleKeyPress('1')} className="text-slate-900 active:bg-slate-200/60">1</KeypadButton>
-              <KeypadButton onClick={() => handleKeyPress('2')} className="text-slate-900 active:bg-slate-200/60">2</KeypadButton>
-              <KeypadButton onClick={() => handleKeyPress('3')} className="text-slate-900 active:bg-slate-200/60">3</KeypadButton>
-              <KeypadButton onClick={() => handleKeyPress(',')} className="text-slate-900 active:bg-slate-200/60">,</KeypadButton>
-              <KeypadButton onClick={() => handleKeyPress('0')} className="text-slate-900 active:bg-slate-200/60">0</KeypadButton>
-              <KeypadButton
-                className="text-slate-900 active:bg-slate-200/60"
-                title="Tocca: cancella una cifra — Tieni premuto: cancella tutto"
-                aria-label="Cancella"
-                onPointerDownCapture={onDelPointerDownCapture}
-                onPointerMoveCapture={onDelPointerMoveCapture}
-                onPointerUpCapture={onDelPointerUpCapture}
-                onPointerCancel={onDelPointerCancelCapture}
-                onContextMenu={onDelContextMenu}
-                onSelectStart={onDelSelectStart}
-              >
-                <BackspaceIcon className="w-8 h-8" />
-              </KeypadButton>
-            </div>
-
-            <div 
-                className="h-full w-1/5 flex flex-col gap-2 bg-slate-200 rounded-2xl p-1"
-                style={{ touchAction: 'pan-y' }}
-            >
-              <OperatorButton onClick={() => handleKeyPress('÷')}>÷</OperatorButton>
-              <OperatorButton onClick={() => handleKeyPress('×')}>×</OperatorButton>
-              <OperatorButton onClick={() => handleKeyPress('-')}>-</OperatorButton>
-              <OperatorButton onClick={() => handleKeyPress('+')}>+</OperatorButton>
-              <OperatorButton onClick={() => handleKeyPress('=')}>=</OperatorButton>
-            </div>
+          <div
+            className="h-full w-1/5 flex flex-col gap-2 bg-slate-200 rounded-2xl p-1"
+            style={{ touchAction: 'pan-y' }}
+          >
+            <OperatorButton onClick={() => handleKeyPress('÷')}>÷</OperatorButton>
+            <OperatorButton onClick={() => handleKeyPress('×')}>×</OperatorButton>
+            <OperatorButton onClick={() => handleKeyPress('-')}>-</OperatorButton>
+            <OperatorButton onClick={() => handleKeyPress('+')}>+</OperatorButton>
+            <OperatorButton onClick={() => handleKeyPress('=')}>=</OperatorButton>
           </div>
         </div>
+      </div>
 
       <SelectionMenu
         isOpen={activeMenu === 'account'} onClose={() => setActiveMenu(null)}
