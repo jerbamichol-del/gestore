@@ -27,7 +27,8 @@ const useMediaQuery = (query: string) => {
   return matches;
 };
 
-const getCurrentTime = () => new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+const getCurrentTime = () =>
+  new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
 
 const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   isOpen,
@@ -39,21 +40,24 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   const [view, setView] = useState<'calculator' | 'details'>('calculator');
   const [isTransitioning, setIsTransitioning] = useState(false);
 
-  const resetFormData = useCallback((): Partial<Omit<Expense, 'id'>> => ({
-    amount: 0,
-    description: '',
-    date: new Date().toISOString().split('T')[0],
-    time: getCurrentTime(),
-    accountId: accounts.length > 0 ? accounts[0].id : '',
-    category: '',
-    subcategory: undefined,
-    frequency: 'single',
-    recurrence: 'monthly',
-    recurrenceInterval: 1,
-    recurrenceEndType: 'forever',
-    recurrenceEndDate: undefined,
-    recurrenceCount: undefined,
-  }), [accounts]);
+  const resetFormData = useCallback(
+    (): Partial<Omit<Expense, 'id'>> => ({
+      amount: 0,
+      description: '',
+      date: new Date().toISOString().split('T')[0],
+      time: getCurrentTime(),
+      accountId: accounts.length > 0 ? accounts[0].id : '',
+      category: '',
+      subcategory: undefined,
+      frequency: 'single',
+      recurrence: 'monthly',
+      recurrenceInterval: 1,
+      recurrenceEndType: 'forever',
+      recurrenceEndDate: undefined,
+      recurrenceCount: undefined,
+    }),
+    [accounts]
+  );
 
   const [formData, setFormData] = useState<Partial<Omit<Expense, 'id'>>>(resetFormData);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -94,23 +98,12 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   };
 
   const handleFormChange = (newData: Partial<Omit<Expense, 'id'>>) => {
-    setFormData(prev => ({ ...prev, ...newData }));
+    setFormData((prev) => ({ ...prev, ...newData }));
   };
 
-  // 🔒 cancella qualsiasi long-press/capture residuo appena tocchi l’overlay
+  // cancella qualsiasi long-press/capture residuo appena tocchi l’overlay
   const handleRootPointerDownCapture: React.PointerEventHandler<HTMLDivElement> = () => {
     window.dispatchEvent(new Event('numPad:cancelLongPress'));
-  };
-
-  const focusDetailsAmount = () => {
-    // micro-ritardo post-transizione per essere sicuri che la pagina sia attiva
-    setTimeout(() => {
-      const root = detailsPageRef.current;
-      const target =
-        root?.querySelector<HTMLInputElement>('#amount') ||
-        root?.querySelector<HTMLInputElement>('input[type="text"], input, textarea');
-      target?.focus({ preventScroll: true } as any);
-    }, 0);
   };
 
   const navigateTo = (targetView: 'calculator' | 'details') => {
@@ -124,17 +117,12 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
 
   const handleTransitionEnd = () => {
     setIsTransitioning(false);
-    // quando apro "Dettagli" metto subito focus all'importo, così il primo tap non va perso
-    if (view === 'details') {
-      focusDetailsAmount();
-    }
+    // nessun focus automatico qui
   };
 
-  if (!isOpen) {
-    return null;
-  }
+  if (!isOpen) return null;
 
-  const translateX = (view === 'calculator' ? 0 : -50) + (progress * 50);
+  const translateX = (view === 'calculator' ? 0 : -50) + progress * 50;
   const isCalculatorActive = view === 'calculator';
   const isDetailsActive = view === 'details';
 
@@ -149,7 +137,9 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
     >
       <div
         ref={containerRef}
-        className={`relative h-full w-full overflow-hidden ${isTransitioning ? 'pointer-events-none' : ''}`}
+        className={`relative h-full w-full overflow-hidden ${
+          isTransitioning ? 'pointer-events-none' : ''
+        }`}
       >
         <div
           ref={swipeableDivRef}
@@ -162,7 +152,9 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
           }}
         >
           <div
-            className={`w-1/2 md:w-auto h-full relative ${isCalculatorActive ? 'z-10' : 'z-0'} ${!isCalculatorActive ? 'pointer-events-none' : ''}`}
+            className={`w-1/2 md:w-auto h-full relative ${
+              isCalculatorActive ? 'z-10' : 'z-0'
+            } ${!isCalculatorActive ? 'pointer-events-none' : ''}`}
             aria-hidden={!isCalculatorActive}
           >
             <CalculatorInputScreen
@@ -179,7 +171,9 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
           </div>
 
           <div
-            className={`w-1/2 md:w-auto h-full relative ${isDetailsActive ? 'z-10' : 'z-0'} ${!isDetailsActive ? 'pointer-events-none' : ''}`}
+            className={`w-1/2 md:w-auto h-full relative ${
+              isDetailsActive ? 'z-10' : 'z-0'
+            } ${!isDetailsActive ? 'pointer-events-none' : ''}`}
             aria-hidden={!isDetailsActive}
           >
             <TransactionDetailPage
