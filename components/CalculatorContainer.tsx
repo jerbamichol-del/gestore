@@ -111,6 +111,9 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   }
   
   const translateX = (view === 'calculator' ? 0 : -50) + (progress * 50);
+  
+  const isCalculatorActive = view === 'calculator';
+  const isDetailsActive = view === 'details';
 
   return (
     <div
@@ -133,7 +136,10 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
             willChange: 'transform',
           }}
         >
-          <div className="w-1/2 md:w-auto h-full relative">
+          <div
+            className={`w-1/2 md:w-auto h-full relative ${!isCalculatorActive ? 'pointer-events-none' : ''}`}
+            aria-hidden={!isCalculatorActive}
+          >
             <CalculatorInputScreen
               formData={formData}
               onFormChange={handleFormChange}
@@ -143,9 +149,13 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
               onNavigateToDetails={() => navigateTo('details')}
               onMenuStateChange={setIsMenuOpen}
               isDesktop={isDesktop}
+              isActive={isCalculatorActive}
             />
           </div>
-          <div className="w-1/2 md:w-auto h-full relative">
+          <div
+            className={`w-1/2 md:w-auto h-full relative ${!isDetailsActive ? 'pointer-events-none' : ''}`}
+            aria-hidden={!isDetailsActive}
+          >
               <TransactionDetailPage
                 formData={formData}
                 onFormChange={handleFormChange}
@@ -155,7 +165,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
                 isDesktop={isDesktop}
                 onMenuStateChange={setIsMenuOpen}
                 isParentSwiping={isSwiping}
-                isActive={view === 'details'}
+                isActive={isDetailsActive}
               />
           </div>
         </div>
