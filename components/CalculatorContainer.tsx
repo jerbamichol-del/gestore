@@ -39,6 +39,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
 }) => {
   const [isAnimating, setIsAnimating] = useState(false);
   const [view, setView] = useState<'calculator' | 'details'>('calculator');
+  const [isTransitioning, setIsTransitioning] = useState(false);
   
   const resetFormData = useCallback(() => ({
     amount: 0,
@@ -82,11 +83,9 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
       return () => clearTimeout(timer);
     } else {
       setIsAnimating(false);
-      // BUG FIX: Reset the form state reliably *after* the closing animation completes.
-      // This prevents flickering by ensuring the component is pristine before it's shown again.
       const resetTimer = setTimeout(() => {
         setFormData(resetFormData());
-      }, 300); // Matches the transition duration
+      }, 300);
       return () => clearTimeout(resetTimer);
     }
   }, [isOpen, resetFormData]);
@@ -105,12 +104,15 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   };
 
   const navigateTo = (targetView: 'calculator' | 'details') => {
-      setView(targetView);
+      if (view !== targetView) {
+        setIsTransitioning(true);
+        setView(targetView);
+      }
   };
 
   const handleTransitionEnd = (e: React.TransitionEvent<HTMLDivElement>) => {
-    // Assicurati che l'evento sia per la trasformazione e che l'elemento sia quello giusto
     if (e.target === swipeableDivRef.current && e.propertyName === 'transform') {
+        setIsTransitioning(false);
         if (view === 'calculator') {
             calculatorPageRef.current?.focus({ preventScroll: true });
         } else {
@@ -138,7 +140,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
     >
       <div
         ref={containerRef}
-        className="relative h-full w-full overflow-hidden"
+        className={`relative h-full w-full overflow-hidden ${isTransitioning ? 'pointer-events-none' : ''}`}
       >
         <div
           ref={swipeableDivRef}
@@ -179,7 +181,6 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
                 onSubmit={handleFinalSubmit}
                 isDesktop={isDesktop}
                 onMenuStateChange={setIsMenuOpen}
-                isParentSwiping={isSwiping}
               />
           </div>
         </div>

@@ -19,7 +19,6 @@ interface TransactionDetailPageProps {
   onSubmit: (data: Omit<Expense, 'id'>) => void;
   isDesktop: boolean;
   onMenuStateChange: (isOpen: boolean) => void;
-  isParentSwiping: boolean;
 }
 
 const toYYYYMMDD = (date: Date) => {
@@ -54,7 +53,6 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
     onSubmit,
     isDesktop,
     onMenuStateChange,
-    isParentSwiping,
 }, ref) => {
     const [activeMenu, setActiveMenu] = useState<'account' | null>(null);
     const [amountStr, setAmountStr] = useState('');
@@ -77,24 +75,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
 
     const amountInputRef = useRef<HTMLInputElement>(null);
     const descriptionInputRef = useRef<HTMLInputElement>(null);
-    const blurTriggeredForSwipe = useRef(false);
     
-    useEffect(() => {
-        if (isParentSwiping) {
-            if (!blurTriggeredForSwipe.current) {
-                if (document.activeElement === amountInputRef.current) {
-                    amountInputRef.current?.blur();
-                }
-                if (document.activeElement === descriptionInputRef.current) {
-                    descriptionInputRef.current?.blur();
-                }
-                blurTriggeredForSwipe.current = true;
-            }
-        } else {
-            blurTriggeredForSwipe.current = false;
-        }
-    }, [isParentSwiping]);
-
     useEffect(() => {
         const isAnyMenuOpen = activeMenu !== null || isFrequencyModalOpen || isRecurrenceModalOpen || isRecurrenceEndModalOpen;
         onMenuStateChange(isAnyMenuOpen);
