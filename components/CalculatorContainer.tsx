@@ -39,6 +39,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
 }) => {
   const [isAnimating, setIsAnimating] = useState(false);
   const [view, setView] = useState<'calculator' | 'details'>('calculator');
+  const [isTransitioning, setIsTransitioning] = useState(false);
   
   const resetFormData = useCallback(() => ({
     amount: 0,
@@ -104,8 +105,13 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
 
   const navigateTo = (targetView: 'calculator' | 'details') => {
       if (view !== targetView) {
+        setIsTransitioning(true);
         setView(targetView);
       }
+  };
+
+  const handleTransitionEnd = () => {
+    setIsTransitioning(false);
   };
 
   if (!isOpen) {
@@ -127,10 +133,11 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
     >
       <div
         ref={containerRef}
-        className="relative h-full w-full overflow-hidden"
+        className={`relative h-full w-full overflow-hidden ${isTransitioning ? 'pointer-events-none' : ''}`}
       >
         <div
           ref={swipeableDivRef}
+          onTransitionEnd={handleTransitionEnd}
           className="absolute inset-0 flex w-[200%] md:w-full md:grid md:grid-cols-2"
           style={{
             transform: isDesktop ? 'none' : `translateX(${translateX}%)`,
