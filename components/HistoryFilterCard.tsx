@@ -112,7 +112,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = ({
     const el = swipeContainerRef.current;
     if (!el) return;
 
-    const ANG = 30; 
+    const ANG = 30;
     const TAN = Math.tan((ANG * Math.PI) / 180);
     const SLOP = 10;
     const TRIGGER_RATIO = 0.10;
@@ -126,67 +126,81 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = ({
     const basePct = () => (activeView === 'quick' ? 0 : -50);
 
     const onDown = (e: PointerEvent) => {
-      hasDown = true; lock = null;
-      sx = e.clientX; sy = e.clientY;
-      width = el.getBoundingClientRect().width || 1;
-      pid = e.pointerId ?? 1;
-      try { el.setPointerCapture?.(pid as any); } catch {}
-      // e.stopPropagation(); // REMOVED: Allows button clicks to register.
+        if (e.button !== 0) return;
+        hasDown = true;
+        lock = null;
+        sx = e.clientX;
+        sy = e.clientY;
+        width = el.getBoundingClientRect().width || 1;
+        pid = e.pointerId;
     };
 
     const onMove = (e: PointerEvent) => {
-      if (!hasDown || (pid !== null && e.pointerId !== pid)) return;
-      const dx = e.clientX - sx;
-      const dy = e.clientY - sy;
+        if (!hasDown || e.pointerId !== pid) return;
+        const dx = e.clientX - sx;
+        const dy = e.clientY - sy;
 
-      if (!lock) {
-        const mostlyH = Math.abs(dx) > Math.abs(dy) * TAN;
-        if (Math.max(Math.abs(dx), Math.abs(dy)) > SLOP) lock = mostlyH ? 'h' : 'v';
-      }
-      if (lock !== 'h') return;
+        if (!lock) {
+            if (Math.max(Math.abs(dx), Math.abs(dy)) > SLOP) {
+                lock = Math.abs(dx) > Math.abs(dy) * TAN ? 'h' : 'v';
+                if (lock === 'h') {
+                    try { el.setPointerCapture?.(pid); } catch {}
+                }
+            }
+        }
 
-      // Prevent default only on significant movement to avoid killing taps.
-      if (Math.abs(dx) > SLOP && e.cancelable) {
-        e.preventDefault();
-      }
-      e.stopPropagation();
-      setDragging(true);
-
-      const deltaPct = (dx / width) * 50; 
-      let t = basePct() + deltaPct;
-      if (t > 0) t = 0;
-      if (t < -50) t = -50;
-      setDragPct(t);
+        if (lock !== 'h') return;
+        
+        // Don't stop propagation here to allow clicks to pass through if it's not a real swipe.
+        // The decision to stop the event is made in onEnd.
+        setDragging(true);
+        const deltaPct = (dx / width) * 50;
+        let t = basePct() + deltaPct;
+        if (t > 0) t = 0;
+        if (t < -50) t = -50;
+        setDragPct(t);
     };
 
     const onEnd = (e: PointerEvent) => {
-      if (!hasDown || (pid !== null && e.pointerId !== pid)) return;
-      const dx = e.clientX - sx;
-      const triggerPx = (el.getBoundingClientRect().width || 1) * TRIGGER_RATIO;
+        if (!hasDown || e.pointerId !== pid) return;
 
-      if (lock === 'h') {
-        if (activeView === 'quick' && dx <= -triggerPx) setActiveView('custom');
-        else if (activeView === 'custom' && dx >= triggerPx) setActiveView('quick');
-        e.stopPropagation(); // MOVED HERE: Stop propagation only if it was a swipe.
-      }
+        const wasLocked = lock === 'h';
+        
+        if (wasLocked) {
+            try { el.releasePointerCapture?.(pid); } catch {}
+            // This was a real swipe, so we stop the event to prevent an accidental click.
+            e.stopPropagation();
 
-      setDragging(false);
-      setDragPct(null); 
-      hasDown = false; pid = null; lock = null;
+            const dx = e.clientX - sx;
+            const triggerPx = width * TRIGGER_RATIO;
+            
+            if (activeView === 'quick' && dx <= -triggerPx) {
+                setActiveView('custom');
+            } else if (activeView === 'custom' && dx >= triggerPx) {
+                setActiveView('quick');
+            }
+        }
+
+        setDragging(false);
+        setDragPct(null);
+        hasDown = false;
+        pid = null;
+        lock = null;
     };
 
-    el.addEventListener('pointerdown', onDown as any, { capture: true, passive: true });
-    el.addEventListener('pointermove', onMove as any,  { capture: true, passive: false });
-    el.addEventListener('pointerup', onEnd as any,     { capture: true, passive: true });
-    el.addEventListener('pointercancel', onEnd as any, { capture: true });
+    el.addEventListener('pointerdown', onDown);
+    el.addEventListener('pointermove', onMove);
+    el.addEventListener('pointerup', onEnd);
+    el.addEventListener('pointercancel', onEnd);
 
     return () => {
-      el.removeEventListener('pointerdown', onDown as any, { capture: true } as any);
-      el.removeEventListener('pointermove', onMove as any,  { capture: true } as any);
-      el.removeEventListener('pointerup', onEnd as any,     { capture: true } as any);
-      el.removeEventListener('pointercancel', onEnd as any, { capture: true } as any);
+        el.removeEventListener('pointerdown', onDown);
+        el.removeEventListener('pointermove', onMove);
+        el.removeEventListener('pointerup', onEnd);
+        el.removeEventListener('pointercancel', onEnd);
     };
-  }, [activeView]);
+}, [activeView]);
+
 
   const baseTranslate = activeView === 'quick' ? 0 : -50;
   const translateX = dragPct !== null ? dragPct : baseTranslate;
