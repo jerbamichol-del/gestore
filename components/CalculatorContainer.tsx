@@ -147,7 +147,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
           }}
         >
           <div
-            className={`w-1/2 md:w-auto h-full relative ${!isCalculatorActive ? 'pointer-events-none' : ''}`}
+            className={`w-1/2 md:w-auto h-full relative ${isCalculatorActive ? 'z-10' : 'z-0'} ${!isCalculatorActive ? 'pointer-events-none' : ''}`}
             aria-hidden={!isCalculatorActive}
           >
             <CalculatorInputScreen
@@ -163,7 +163,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
             />
           </div>
           <div
-            className={`w-1/2 md:w-auto h-full relative ${!isDetailsActive ? 'pointer-events-none' : ''}`}
+            className={`w-1/2 md:w-auto h-full relative ${isDetailsActive ? 'z-10' : 'z-0'} ${!isDetailsActive ? 'pointer-events-none' : ''}`}
             aria-hidden={!isDetailsActive}
           >
               <TransactionDetailPage

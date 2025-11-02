@@ -242,7 +242,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
 
   if (typeof formData.amount !== 'number') {
     return (
-      <div className="flex flex-col h-full bg-slate-100 items-center justify-center p-4 relative z-20" ref={ref}>
+      <div className="flex flex-col h-full bg-slate-100 items-center justify-center p-4 relative" ref={ref}>
         <header className={`p-4 flex items-center gap-4 text-slate-800 bg-white shadow-sm absolute top-0 left-0 right-0 z-10`}>
           {!isDesktop && (
             <button onClick={onClose} className="p-2 rounded-full hover:bg-slate-200" aria-label="Torna alla calcolatrice">
@@ -257,7 +257,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
   }
 
   return (
-    <div ref={ref} className="flex flex-col h-full bg-slate-100 focus:outline-none relative z-20">
+    <div ref={ref} className="flex flex-col h-full bg-slate-100 focus:outline-none relative">
       <header className={`p-4 flex items-center justify-between gap-4 text-slate-800 bg-white shadow-sm sticky top-0 z-10`}>
         <div className="flex items-center gap-4">
           {!isDesktop && (

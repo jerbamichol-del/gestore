@@ -285,7 +285,7 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
   );
 
   return (
-    <div ref={ref} className="bg-slate-100 w-full h-full flex flex-col focus:outline-none z-0">
+    <div ref={ref} className="bg-slate-100 w-full h-full flex flex-col focus:outline-none">
       <div className="flex-1 flex flex-col">
         <header className={`flex items-center justify-between p-4 flex-shrink-0`}>
           <button
