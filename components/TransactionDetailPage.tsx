@@ -22,16 +22,16 @@ interface TransactionDetailPageProps {
 }
 
 const toYYYYMMDD = (date: Date) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 };
 
 const parseLocalYYYYMMDD = (dateString: string | null): Date | null => {
   if (!dateString) return null;
-  const parts = dateString.split('-').map(Number);
-  return new Date(parts[0], parts[1] - 1, parts[2]);
+  const p = dateString.split('-').map(Number);
+  return new Date(p[0], p[1] - 1, p[2]);
 };
 
 const recurrenceLabels = {
@@ -74,15 +74,64 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
   const amountInputRef = useRef<HTMLInputElement>(null);
   const descriptionInputRef = useRef<HTMLInputElement>(null);
 
+  // —— FIX “primo tap” dopo lo switch dalla calcolatrice ——
+  const needsFirstTapFixRef = useRef(false);
+
   useEffect(() => {
-    const isAnyMenuOpen = activeMenu !== null || isFrequencyModalOpen || isRecurrenceModalOpen || isRecurrenceEndModalOpen;
+    const onActivated = (e: Event) => {
+      const ce = e as CustomEvent;
+      if (ce.detail === 'details') {
+        // armiamo la correzione solo quando questa pagina diventa attiva
+        needsFirstTapFixRef.current = true;
+      }
+    };
+    window.addEventListener('page-activated', onActivated as EventListener);
+    return () => window.removeEventListener('page-activated', onActivated as EventListener);
+  }, []);
+
+  const handleFirstTapFix: React.PointerEventHandler<HTMLDivElement> = (e) => {
+    if (!needsFirstTapFixRef.current) return;
+    needsFirstTapFixRef.current = false;
+
+    const raw = e.target as HTMLElement;
+    // cerca il vero elemento interattivo più vicino
+    const focusable = (raw.closest('input,button,select,[role="button"],label') as HTMLElement) || raw;
+
+    // mettiamo a fuoco senza scroll (NON un campo specifico in automatico: solo se il tap l'ha chiesto)
+    try {
+      if (focusable instanceof HTMLLabelElement) {
+        const forId = (focusable as HTMLLabelElement).htmlFor;
+        if (forId) {
+          const labelled = document.getElementById(forId) as HTMLElement | null;
+          labelled?.focus?.({ preventScroll: true } as any);
+          setTimeout(() => labelled?.click?.(), 0);
+        } else {
+          // label senza htmlFor: deleghiamo al click sintetico
+          setTimeout(() => (focusable as any).click?.(), 0);
+        }
+      } else {
+        (focusable as any).focus?.({ preventScroll: true });
+        // click sintetico per evitare il “tap a vuoto”
+        setTimeout(() => (focusable as any).click?.(), 0);
+      }
+    } catch {}
+
+    // blocchiamo la sequenza “morta” e lasciamo agire il click sintetico
+    e.preventDefault();
+    e.stopPropagation();
+  };
+  // —— fine FIX “primo tap” ——
+
+  useEffect(() => {
+    const isAnyMenuOpen =
+      activeMenu !== null || isFrequencyModalOpen || isRecurrenceModalOpen || isRecurrenceEndModalOpen;
     onMenuStateChange(isAnyMenuOpen);
   }, [activeMenu, isFrequencyModalOpen, isRecurrenceModalOpen, isRecurrenceEndModalOpen, onMenuStateChange]);
 
   useEffect(() => {
     if (isFrequencyModalOpen) {
-      const timer = setTimeout(() => setIsFrequencyModalAnimating(true), 10);
-      return () => clearTimeout(timer);
+      const t = setTimeout(() => setIsFrequencyModalAnimating(true), 10);
+      return () => clearTimeout(t);
     } else {
       setIsFrequencyModalAnimating(false);
     }
@@ -93,8 +142,8 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
       setTempRecurrence(formData.recurrence || 'monthly');
       setTempRecurrenceInterval(formData.recurrenceInterval || 1);
       setIsRecurrenceOptionsOpen(false);
-      const timer = setTimeout(() => setIsRecurrenceModalAnimating(true), 10);
-      return () => clearTimeout(timer);
+      const t = setTimeout(() => setIsRecurrenceModalAnimating(true), 10);
+      return () => clearTimeout(t);
     } else {
       setIsRecurrenceModalAnimating(false);
     }
@@ -102,14 +151,14 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
 
   useEffect(() => {
     if (isRecurrenceEndModalOpen) {
-      const timer = setTimeout(() => setIsRecurrenceEndModalAnimating(true), 10);
-      return () => clearTimeout(timer);
+      const t = setTimeout(() => setIsRecurrenceEndModalAnimating(true), 10);
+      return () => clearTimeout(t);
     } else {
       setIsRecurrenceEndModalAnimating(false);
     }
   }, [isRecurrenceEndModalOpen]);
 
-  // parent -> string locale
+  // parent -> stringa locale
   useEffect(() => {
     if (!isAmountFocused) {
       const parentAmount = formData.amount || 0;
@@ -121,7 +170,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
     }
   }, [formData.amount, isAmountFocused, amountStr]);
 
-  // string -> parent
+  // stringa -> parent
   useEffect(() => {
     if (isSyncingAmountFromParent.current) {
       isSyncingAmountFromParent.current = false;
@@ -220,7 +269,11 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
 
   if (typeof formData.amount !== 'number') {
     return (
-      <div ref={ref} className="flex flex-col h-full bg-slate-100 items-center justify-center p-4">
+      <div
+        ref={ref}
+        tabIndex={-1}
+        className="flex flex-col h-full bg-slate-100 items-center justify-center p-4"
+      >
         <header className="p-4 flex items-center gap-4 text-slate-800 bg-white shadow-sm absolute top-0 left-0 right-0 z-10">
           {!isDesktop && (
             <button onClick={onClose} className="p-2 rounded-full hover:bg-slate-200" aria-label="Torna alla calcolatrice">
@@ -235,7 +288,12 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
   }
 
   return (
-    <div ref={ref} className="flex flex-col h-full bg-slate-100 focus:outline-none">
+    <div
+      ref={ref}
+      tabIndex={-1}
+      className="flex flex-col h-full bg-slate-100 focus:outline-none"
+      onPointerDownCapture={handleFirstTapFix}
+    >
       <header className="p-4 flex items-center justify-between gap-4 text-slate-800 bg-white shadow-sm sticky top-0 z-10">
         <div className="flex items-center gap-4">
           {!isDesktop && (
@@ -434,6 +492,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
             )}
           </div>
         </div>
+
         <div className="mt-auto pt-6">
           <button
             type="button"
@@ -446,7 +505,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
         </div>
       </main>
 
-      <SelectionMenu 
+      <SelectionMenu
         isOpen={activeMenu === 'account'}
         onClose={() => setActiveMenu(null)}
         title="Seleziona un Conto"
@@ -478,7 +537,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
           </div>
         </div>
       )}
-      
+
       {isRecurrenceModalOpen && (
         <div
           className={`absolute inset-0 z-[60] flex justify-center items-center p-4 transition-opacity duration-300 ease-in-out ${isRecurrenceModalAnimating ? 'opacity-100' : 'opacity-0'} bg-slate-900/60 backdrop-blur-sm`}
@@ -496,7 +555,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
                 <XMarkIcon className="w-6 h-6" />
               </button>
             </header>
-            
+
             <main className="p-4 space-y-4">
               <div className="relative">
                 <button
@@ -528,7 +587,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
               </div>
 
               {tempRecurrence === 'monthly' && (
-                <div className="animate-fade-in-up pt-2" style={{animationDuration: '200ms'}}>
+                <div className="animate-fade-in-up pt-2" style={{ animationDuration: '200ms' }}>
                   <div className="flex items-center justify-center gap-2 bg-slate-100 p-3 rounded-lg">
                     <span className="text-base text-slate-700">Ogni</span>
                     <input

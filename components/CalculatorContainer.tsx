@@ -101,9 +101,19 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
 
   const navigateTo = (targetView: 'calculator' | 'details') => {
     if (view !== targetView) {
-      // cancella eventuali long-press del tastierino durante lo switch
+      // cancella eventuali long-press/timer del tastierino
       window.dispatchEvent(new Event('numPad:cancelLongPress'));
+      // segnala la pagina attivata (serve alla fix del primo tap)
+      window.dispatchEvent(new CustomEvent('page-activated', { detail: targetView }));
       setView(targetView);
+      // sposta il focus sul container della pagina attiva (non su un campo)
+      requestAnimationFrame(() => {
+        const node =
+          targetView === 'details' ? detailsPageRef.current : calculatorPageRef.current;
+        try {
+          (node as any)?.focus?.({ preventScroll: true });
+        } catch {}
+      });
     }
   };
 
@@ -121,10 +131,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
       aria-modal="true"
       role="dialog"
     >
-      <div
-        ref={containerRef}
-        className="relative h-full w-full overflow-hidden"
-      >
+      <div ref={containerRef} className="relative h-full w-full overflow-hidden">
         <div
           ref={swipeableDivRef}
           className="absolute inset-0 flex w-[200%] md:w-full md:grid md:grid-cols-2"
