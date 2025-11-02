@@ -101,35 +101,30 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
 
   const navigateTo = (targetView: 'calculator' | 'details') => {
     if (view !== targetView) {
-      const ae = document.activeElement as HTMLElement | null;
-      const isInputFocused = ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || (ae as any).isContentEditable);
-  
-      const startTransition = () => {
-        // Start the page transition
-        setView(targetView);
-  
-        // Common logic
-        window.dispatchEvent(new Event('numPad:cancelLongPress'));
-        window.dispatchEvent(new CustomEvent('page-activated', { detail: targetView }));
-        
-        // Focus container
-        requestAnimationFrame(() => {
-          const node = targetView === 'details' ? detailsPageRef.current : calculatorPageRef.current;
-          try { (node as any)?.focus?.({ preventScroll: true }); } catch {}
-        });
-      };
-  
-      if (isInputFocused) {
-        // If the keyboard is open, close it by blurring the active element.
-        try { ae?.blur(); } catch {}
-        
-        // Wait for the keyboard to animate out and the viewport to resize before starting the page transition.
-        // 300ms is a generally safe delay for this on most mobile devices.
-        setTimeout(startTransition, 300);
-      } else {
-        // No keyboard, start the transition immediately.
-        startTransition();
+      // Always blur the active element to close virtual keyboards.
+      // This is fast and synchronous.
+      const activeElement = document.activeElement as HTMLElement | null;
+      if (activeElement?.blur) {
+        activeElement.blur();
       }
+  
+      // Clean up any ongoing long-press timers from the numpad.
+      window.dispatchEvent(new Event('numPad:cancelLongPress'));
+  
+      // Notify child components that the view is changing.
+      window.dispatchEvent(new CustomEvent('page-activated', { detail: targetView }));
+  
+      // Update the state to trigger the view transition.
+      setView(targetView);
+  
+      // After the transition begins, focus the container of the new page.
+      // This prevents the keyboard from reappearing automatically.
+      requestAnimationFrame(() => {
+        const node = targetView === 'details' ? detailsPageRef.current : calculatorPageRef.current;
+        if (node?.focus) {
+          node.focus({ preventScroll: true });
+        }
+      });
     }
   };
 

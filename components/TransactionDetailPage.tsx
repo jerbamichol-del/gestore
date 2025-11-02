@@ -257,16 +257,12 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
 
   const handleCloseFrequencyModal = () => {
     setIsFrequencyModalAnimating(false);
-    setTimeout(() => {
-      setIsFrequencyModalOpen(false);
-    }, 300);
+    setIsFrequencyModalOpen(false);
   };
 
   const handleCloseRecurrenceModal = () => {
     setIsRecurrenceModalAnimating(false);
-    setTimeout(() => {
-      setIsRecurrenceModalOpen(false);
-    }, 300);
+    setIsRecurrenceModalOpen(false);
   };
 
   const handleApplyRecurrence = () => {
@@ -278,10 +274,8 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
   };
 
   const handleCloseRecurrenceEndModal = () => {
-    setIsRecurrenceEndModalAnimating(false);
-    setTimeout(() => {
-      setIsRecurrenceEndModalOpen(false);
-    }, 300);
+    setIsRecurrenceModalAnimating(false);
+    setIsRecurrenceEndModalOpen(false);
   };
 
   const handleRecurrenceEndTypeSelect = (type: 'forever' | 'date' | 'count') => {
