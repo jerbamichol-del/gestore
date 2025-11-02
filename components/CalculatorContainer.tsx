@@ -30,6 +30,16 @@ const useMediaQuery = (query: string) => {
 const getCurrentTime = () =>
   new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
 
+// --- TAP SHIELD (anti "primo tap a vuoto") ---
+const TAP_SHIELD_MS = 250;
+const armTapShield = () => {
+  (window as any).__tapShieldUntil = Date.now() + TAP_SHIELD_MS;
+};
+const isTapShieldActive = () => {
+  const t = (window as any).__tapShieldUntil || 0;
+  return Date.now() < t;
+};
+
 const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   isOpen,
   onClose,
@@ -101,23 +111,23 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
     setFormData((prev) => ({ ...prev, ...newData }));
   };
 
-  // cancella qualsiasi long-press/capture residuo appena tocchi l’overlay
+  // Annulla long-press del tastierino se tocchi l'overlay
   const handleRootPointerDownCapture: React.PointerEventHandler<HTMLDivElement> = () => {
     window.dispatchEvent(new Event('numPad:cancelLongPress'));
   };
 
   const navigateTo = (targetView: 'calculator' | 'details') => {
     if (view !== targetView) {
-      // annulla catture attive prima del cambio
       window.dispatchEvent(new Event('numPad:cancelLongPress'));
       setIsTransitioning(true);
+      // Attiva lo shield per il click sintetico post-navigazione
+      armTapShield();
       setView(targetView);
     }
   };
 
   const handleTransitionEnd = () => {
     setIsTransitioning(false);
-    // nessun focus automatico qui
   };
 
   if (!isOpen) return null;
@@ -125,6 +135,14 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   const translateX = (view === 'calculator' ? 0 : -50) + progress * 50;
   const isCalculatorActive = view === 'calculator';
   const isDetailsActive = view === 'details';
+
+  // Blocca SOLO i click sintetici nei 200–250ms dopo il cambio pagina
+  const swallowGhostClicks: React.MouseEventHandler<HTMLDivElement> = (e) => {
+    if (isTapShieldActive()) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  };
 
   return (
     <div
@@ -134,6 +152,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
       aria-modal="true"
       role="dialog"
       onPointerDownCapture={handleRootPointerDownCapture}
+      onClickCapture={swallowGhostClicks}
     >
       <div
         ref={containerRef}
