@@ -113,21 +113,35 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
   const delDidLongRef = useRef(false);
   const delStartXRef = useRef(0);
   const delStartYRef = useRef(0);
+  const delButtonRef = useRef<HTMLDivElement>(null);
+  const delPointerIdRef = useRef<number | null>(null);
   const DEL_HOLD_MS = 450;
   const DEL_SLOP_PX = 8;
 
-  function clearDelTimer() {
+  const releaseDelCapture = useCallback(() => {
+    if (delButtonRef.current && delPointerIdRef.current !== null) {
+      try {
+        delButtonRef.current.releasePointerCapture(delPointerIdRef.current);
+      } catch (err) {
+        // Ignora errori se la cattura era già stata rilasciata
+      }
+    }
+    delPointerIdRef.current = null;
+  }, []);
+
+  const clearDelTimer = useCallback(() => {
     if (delTimerRef.current !== null) {
       window.clearTimeout(delTimerRef.current);
       delTimerRef.current = null;
     }
-  }
+  }, []);
 
   const onDelPointerDownCapture: React.PointerEventHandler<HTMLDivElement> = (e) => {
     delDidLongRef.current = false;
     delStartXRef.current = e.clientX ?? 0;
     delStartYRef.current = e.clientY ?? 0;
-    try { (e.currentTarget as any).setPointerCapture?.((e as any).pointerId ?? 1); } catch {}
+    delPointerIdRef.current = e.pointerId;
+    try { (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId); } catch {}
     clearDelTimer();
     delTimerRef.current = window.setTimeout(() => {
       delDidLongRef.current = true;
@@ -145,20 +159,25 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
   const onDelPointerUpCapture: React.PointerEventHandler<HTMLDivElement> = () => {
     const didLong = delDidLongRef.current;
     clearDelTimer();
+    releaseDelCapture();
     if (didLong) { delDidLongRef.current = false; return; }
     handleSingleBackspace();
   };
   const onDelPointerCancelCapture: React.PointerEventHandler<HTMLDivElement> = () => {
     clearDelTimer();
+    releaseDelCapture();
   };
   const onDelContextMenu: React.MouseEventHandler<HTMLDivElement> = (e) => e.preventDefault();
   const onDelSelectStart: React.ReactEventHandler<HTMLDivElement> = (e) => e.preventDefault();
 
   useEffect(() => {
-    const cancel = () => clearDelTimer();
+    const cancel = () => {
+        clearDelTimer();
+        releaseDelCapture();
+    };
     window.addEventListener('numPad:cancelLongPress', cancel);
     return () => window.removeEventListener('numPad:cancelLongPress', cancel);
-  }, []);
+  }, [clearDelTimer, releaseDelCapture]);
 
   const calculate = (): string => {
     const prev = parseFloat((previousValue || '0').replace(/\./g, '').replace(',', '.'));
@@ -245,8 +264,9 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
     onSelectStart?: React.ReactEventHandler<HTMLDivElement>;
   } & React.HTMLAttributes<HTMLDivElement>;
 
-  const KeypadButton: React.FC<KeypadButtonProps> = ({ children, onClick, className = '', ...props }) => (
+  const KeypadButton = React.forwardRef<HTMLDivElement, KeypadButtonProps>(({ children, onClick, className = '', ...props }, ref) => (
     <div
+      ref={ref}
       role="button" tabIndex={0}
       onClick={onClick}
       onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && onClick) { e.preventDefault(); onClick(); } }}
@@ -256,7 +276,8 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
     >
       <span className="pointer-events-none">{children}</span>
     </div>
-  );
+  ));
+  KeypadButton.displayName = 'KeypadButton';
 
   const OperatorButton: React.FC<{ children: React.ReactNode; onClick: () => void }> = ({ children, onClick }) => (
     <div
@@ -363,6 +384,7 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
               <KeypadButton onClick={() => handleKeyPress(',')} className="text-slate-900 active:bg-slate-200/60">,</KeypadButton>
               <KeypadButton onClick={() => handleKeyPress('0')} className="text-slate-900 active:bg-slate-200/60">0</KeypadButton>
               <KeypadButton
+                ref={delButtonRef}
                 className="text-slate-900 active:bg-slate-200/60"
                 title="Tocca: cancella una cifra — Tieni premuto: cancella tutto"
                 aria-label="Cancella"

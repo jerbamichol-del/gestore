@@ -68,22 +68,6 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   const calculatorPageRef = useRef<HTMLDivElement>(null);
   const detailsPageRef = useRef<HTMLDivElement>(null);
 
-  // Logica anti “ghost click”: blocca i click per un breve periodo dopo la navigazione.
-  const isClickShieldedRef = useRef(false);
-
-  useEffect(() => {
-    const onClickCapture = (ev: MouseEvent) => {
-      if (!isClickShieldedRef.current) return;
-      const root = containerRef.current;
-      if (root && root.contains(ev.target as Node)) {
-        ev.preventDefault();
-        ev.stopPropagation();
-      }
-    };
-    window.addEventListener('click', onClickCapture, true); // Usa capture phase
-    return () => window.removeEventListener('click', onClickCapture, true);
-  }, []);
-
   const { progress, isSwiping } = useSwipe(
     containerRef,
     {
@@ -125,15 +109,6 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
     if (view !== targetView) {
       window.dispatchEvent(new Event('numPad:cancelLongPress'));
       setIsTransitioning(true);
-      
-      // Attiva lo "scudo" anti-click.
-      isClickShieldedRef.current = true;
-      // Disattiva lo scudo dopo un ritardo per ignorare il click sintetico
-      // ma permettere il primo tocco reale dell'utente.
-      setTimeout(() => {
-        isClickShieldedRef.current = false;
-      }, 300); // 300ms è un ritardo standard per i click sintetici.
-
       setView(targetView);
     }
   };
