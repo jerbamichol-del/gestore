@@ -68,24 +68,19 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   const calculatorPageRef = useRef<HTMLDivElement>(null);
   const detailsPageRef = useRef<HTMLDivElement>(null);
 
-  // 👇 Nuova logica anti “primo tap a vuoto”
-  // Blocca solo il click sintetico post-navigazione, finché non avviene il primo pointerdown reale nella nuova vista.
-  const awaitingFirstPointerDownRef = useRef(false);
+  // Logica anti “ghost click”: blocca i click per un breve periodo dopo la navigazione.
+  const isClickShieldedRef = useRef(false);
 
   useEffect(() => {
     const onClickCapture = (ev: MouseEvent) => {
-      if (!awaitingFirstPointerDownRef.current) return;
+      if (!isClickShieldedRef.current) return;
       const root = containerRef.current;
-      if (!root) return;
-      // Consuma SOLO il prossimo click (sintetico) dentro il container,
-      // prima che l'utente tocchi la nuova pagina.
-      if (root.contains(ev.target as Node)) {
+      if (root && root.contains(ev.target as Node)) {
         ev.preventDefault();
         ev.stopPropagation();
-        // Non azzero il flag qui: lo farà il primo pointerdown reale.
       }
     };
-    window.addEventListener('click', onClickCapture, true); // capture
+    window.addEventListener('click', onClickCapture, true); // Usa capture phase
     return () => window.removeEventListener('click', onClickCapture, true);
   }, []);
 
@@ -121,18 +116,24 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
     setFormData(prev => ({ ...prev, ...newData }));
   };
 
-  // Appena l’utente tocca la vista attiva, sblocca il primo tap
   const handleRootPointerDownCapture: React.PointerEventHandler<HTMLDivElement> = () => {
+    // Annulla un eventuale long-press sul tastierino numerico se si tocca altrove.
     window.dispatchEvent(new Event('numPad:cancelLongPress'));
-    awaitingFirstPointerDownRef.current = false;
   };
 
   const navigateTo = (targetView: 'calculator' | 'details') => {
     if (view !== targetView) {
       window.dispatchEvent(new Event('numPad:cancelLongPress'));
       setIsTransitioning(true);
-      // attiva il blocco per il click sintetico post-animazione
-      awaitingFirstPointerDownRef.current = true;
+      
+      // Attiva lo "scudo" anti-click.
+      isClickShieldedRef.current = true;
+      // Disattiva lo scudo dopo un ritardo per ignorare il click sintetico
+      // ma permettere il primo tocco reale dell'utente.
+      setTimeout(() => {
+        isClickShieldedRef.current = false;
+      }, 300); // 300ms è un ritardo standard per i click sintetici.
+
       setView(targetView);
     }
   };
