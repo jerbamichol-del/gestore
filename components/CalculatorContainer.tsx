@@ -101,24 +101,24 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
 
   const navigateTo = (targetView: 'calculator' | 'details') => {
     if (view !== targetView) {
-      // Always blur the active element to close virtual keyboards.
-      // This is fast and synchronous.
-      const activeElement = document.activeElement as HTMLElement | null;
-      if (activeElement?.blur) {
-        activeElement.blur();
-      }
-  
-      // Clean up any ongoing long-press timers from the numpad.
-      window.dispatchEvent(new Event('numPad:cancelLongPress'));
-  
-      // Notify child components that the view is changing.
-      window.dispatchEvent(new CustomEvent('page-activated', { detail: targetView }));
-  
-      // Update the state to trigger the view transition.
+      // 1. Start the visual transition immediately
       setView(targetView);
-  
-      // After the transition begins, focus the container of the new page.
-      // This prevents the keyboard from reappearing automatically.
+      
+      // 2. Dispatch cleanup and notification events
+      window.dispatchEvent(new Event('numPad:cancelLongPress'));
+      window.dispatchEvent(new CustomEvent('page-activated', { detail: targetView }));
+
+      // 3. After a very short delay, blur the active element.
+      // This gives the CSS transition a head start before the viewport resizes,
+      // preventing the animation from stalling.
+      setTimeout(() => {
+        const activeElement = document.activeElement as HTMLElement | null;
+        if (activeElement?.blur) {
+          activeElement.blur();
+        }
+      }, 50);
+
+      // 4. Focus the new container to prevent the keyboard from popping back up.
       requestAnimationFrame(() => {
         const node = targetView === 'details' ? detailsPageRef.current : calculatorPageRef.current;
         if (node?.focus) {
