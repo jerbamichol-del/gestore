@@ -122,7 +122,6 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
     }
   }
 
-  // Changed handler generics to HTMLDivElement (il tasto è un <div/>)
   const onDelPointerDownCapture: React.PointerEventHandler<HTMLDivElement> = (e) => {
     delDidLongRef.current = false;
     delStartXRef.current = e.clientX ?? 0;
@@ -250,8 +249,8 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
   const fontSizeClass = getAmountFontSize(displayValue);
 
   type KeypadButtonProps = {
-    children: React.ReactNode;
-    onClick?: () => void;
+    children: React.ReactNode; 
+    onClick?: () => void; 
     className?: string;
     onSelectStart?: React.ReactEventHandler<HTMLDivElement>;
   } & React.HTMLAttributes<HTMLDivElement>;
@@ -286,7 +285,7 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
   );
 
   return (
-    <div ref={ref} tabIndex={-1} className="bg-slate-100 w-full h-full flex flex-col focus:outline-none z-0">
+    <div ref={ref} className="bg-slate-100 w-full h-full flex flex-col focus:outline-none z-0">
       <div className="flex-1 flex flex-col">
         <header className={`flex items-center justify-between p-4 flex-shrink-0`}>
           <button
@@ -321,7 +320,7 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
               </div>
             </div>
           </div>
-
+          
           <div
             role="button"
             tabIndex={0}
@@ -344,7 +343,7 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
           </div>
         </main>
       </div>
-
+      
       <div className="flex-shrink-0 flex flex-col" style={{ height: '52vh' }}>
         <div className="flex justify-between items-center my-2 w-full px-4" style={{ touchAction: 'pan-y' }}>
           <button
@@ -393,7 +392,7 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
             </KeypadButton>
           </div>
 
-          <div
+          <div 
             className="h-full w-1/5 flex flex-col gap-2 bg-slate-200 rounded-2xl p-1"
             style={{ touchAction: 'pan-y' }}
           >
