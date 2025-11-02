@@ -101,18 +101,23 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
 
   const navigateTo = (targetView: 'calculator' | 'details') => {
     if (view !== targetView) {
-      // cancella eventuali long-press/timer del tastierino
+      // 1) chiudi qualsiasi tastiera virtuale aperta (blur sull’elemento focussato)
+      const ae = document.activeElement as HTMLElement | null;
+      try { ae?.blur?.(); } catch {}
+  
+      // 2) cancella eventuali long-press del tastierino
       window.dispatchEvent(new Event('numPad:cancelLongPress'));
-      // segnala la pagina attivata (serve alla fix del primo tap)
+  
+      // 3) segnala la pagina attivata (usato dalle fix lato schermate)
       window.dispatchEvent(new CustomEvent('page-activated', { detail: targetView }));
+  
+      // 4) cambia vista
       setView(targetView);
-      // sposta il focus sul container della pagina attiva (non su un campo)
+  
+      // 5) focus al container della pagina attiva (mai un input) per evitare riaperture tastiera
       requestAnimationFrame(() => {
-        const node =
-          targetView === 'details' ? detailsPageRef.current : calculatorPageRef.current;
-        try {
-          (node as any)?.focus?.({ preventScroll: true });
-        } catch {}
+        const node = targetView === 'details' ? detailsPageRef.current : calculatorPageRef.current;
+        try { (node as any)?.focus?.({ preventScroll: true }); } catch {}
       });
     }
   };

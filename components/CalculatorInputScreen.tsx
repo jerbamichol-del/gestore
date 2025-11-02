@@ -47,20 +47,40 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
   const [shouldResetCurrentValue, setShouldResetCurrentValue] = useState(false);
   const [justCalculated, setJustCalculated] = useState(false);
   const [activeMenu, setActiveMenu] = useState<'account' | 'category' | 'subcategory' | null>(null);
+
   const isSyncingFromParent = useRef(false);
+
+  // 🔸 NEW: flag per non far sovrascrivere il primo numero digitato quando rientri dai Dettagli
+  const typingSinceActivationRef = useRef(false);
 
   useEffect(() => {
     onMenuStateChange(activeMenu !== null);
   }, [activeMenu, onMenuStateChange]);
 
-  // parent -> keypad
+  // 🔸 NEW: quando entri nella vista "calcolatrice", resetta i flag che potrebbero causare "blink"
+  useEffect(() => {
+    const onActivated = (e: Event) => {
+      const ce = e as CustomEvent;
+      if (ce.detail === 'calculator') {
+        typingSinceActivationRef.current = false;
+        setShouldResetCurrentValue(false);
+        setJustCalculated(false);
+      }
+    };
+    window.addEventListener('page-activated', onActivated as EventListener);
+    return () => window.removeEventListener('page-activated', onActivated as EventListener);
+  }, []);
+
+  // Parent -> display: aggiorna solo se non stai digitando dopo il rientro
   useEffect(() => {
     const parentAmount = formData.amount || 0;
     const currentDisplayAmount = parseFloat(currentValue.replace(/\./g, '').replace(',', '.')) || 0;
 
     if (Math.abs(parentAmount - currentDisplayAmount) > 1e-9) {
-      isSyncingFromParent.current = true;
-      setCurrentValue(String(parentAmount).replace('.', ','));
+      if (!typingSinceActivationRef.current) {
+        isSyncingFromParent.current = true;
+        setCurrentValue(String(parentAmount).replace('.', ','));
+      }
     }
 
     if (formData.amount === 0 || !formData.amount) {
@@ -69,10 +89,9 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
       setShouldResetCurrentValue(false);
       setJustCalculated(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formData.amount]);
+  }, [formData.amount, currentValue]);
 
-  // keypad -> parent
+  // Display -> parent
   useEffect(() => {
     if (isSyncingFromParent.current) {
       isSyncingFromParent.current = false;
@@ -108,11 +127,12 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
     });
   }, [justCalculated, shouldResetCurrentValue, handleClearAmount]);
 
-  // Long-press backspace
+  // --- Long-press solo per ⌫ ---
   const delTimerRef = useRef<number | null>(null);
   const delDidLongRef = useRef(false);
   const delStartXRef = useRef(0);
   const delStartYRef = useRef(0);
+
   const DEL_HOLD_MS = 450;
   const DEL_SLOP_PX = 8;
 
@@ -136,21 +156,30 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
       if (navigator.vibrate) navigator.vibrate(10);
     }, DEL_HOLD_MS);
   };
+
   const onDelPointerMoveCapture: React.PointerEventHandler<HTMLDivElement> = (e) => {
     if (!delTimerRef.current) return;
     const dx = Math.abs((e.clientX ?? 0) - delStartXRef.current);
     const dy = Math.abs((e.clientY ?? 0) - delStartYRef.current);
-    if (dx > DEL_SLOP_PX || dy > DEL_SLOP_PX) clearDelTimer();
+    if (dx > DEL_SLOP_PX || dy > DEL_SLOP_PX) {
+      clearDelTimer();
+    }
   };
+
   const onDelPointerUpCapture: React.PointerEventHandler<HTMLDivElement> = () => {
     const didLong = delDidLongRef.current;
     clearDelTimer();
-    if (didLong) { delDidLongRef.current = false; return; }
+    if (didLong) {
+      delDidLongRef.current = false;
+      return;
+    }
     handleSingleBackspace();
   };
+
   const onDelPointerCancelCapture: React.PointerEventHandler<HTMLDivElement> = () => {
     clearDelTimer();
   };
+
   const onDelContextMenu: React.MouseEventHandler<HTMLDivElement> = (e) => e.preventDefault();
   const onDelSelectStart: React.ReactEventHandler<HTMLDivElement> = (e) => e.preventDefault();
 
@@ -177,6 +206,9 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
   };
 
   const handleKeyPress = (key: string) => {
+    // 🔸 NEW: da ora in poi, siamo in digitazione post-rientro (evita overwrite dal parent)
+    typingSinceActivationRef.current = true;
+
     if (['÷', '×', '-', '+'].includes(key)) {
       if (operator && previousValue && !shouldResetCurrentValue) {
         const result = calculate(); setPreviousValue(result); setCurrentValue(result);
@@ -203,7 +235,7 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
   };
 
   const handleSubmit = () => {
-    if ((formData.amount ?? 0) > 0) {
+    if (canSubmit) {
       const dataToSubmit = {
         ...formData,
         category: formData.category || 'Altro',
@@ -213,8 +245,10 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
   };
 
   const handleSelectChange = (field: keyof Omit<Expense, 'id'>, value: string) => {
-    const updatedFormData: any = { [field]: value };
-    if (field === 'category') updatedFormData.subcategory = '';
+    const updatedFormData = { [field]: value };
+    if (field === 'category') {
+      (updatedFormData as any).subcategory = ''; // Reset subcategory when category changes
+    }
     onFormChange(updatedFormData);
     setActiveMenu(null);
   };
@@ -238,58 +272,34 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
   const smallDisplayValue = previousValue && operator ? `${formatAmountForDisplay(previousValue)} ${operator}` : ' ';
   const fontSizeClass = getAmountFontSize(displayValue);
 
-  // --- KeypadButton su pointer events (no onClick) ---
   type KeypadButtonProps = {
-    children: React.ReactNode;
-    onClick?: () => void;
+    children: React.ReactNode; 
+    onClick?: () => void; 
     className?: string;
     onSelectStart?: React.ReactEventHandler<HTMLDivElement>;
   } & React.HTMLAttributes<HTMLDivElement>;
 
-  const KeypadButton: React.FC<KeypadButtonProps> = ({ children, onClick, className = '', ...props }) => {
-    const start = useRef<{x:number;y:number} | null>(null);
-    const moved = useRef(false);
-    const SLOP = 8;
-
-    const onPointerDown: React.PointerEventHandler<HTMLDivElement> = (e) => {
-      start.current = { x: e.clientX ?? 0, y: e.clientY ?? 0 };
-      moved.current = false;
-      try { (e.currentTarget as any).setPointerCapture?.((e as any).pointerId ?? 1); } catch {}
-    };
-    const onPointerMove: React.PointerEventHandler<HTMLDivElement> = (e) => {
-      if (!start.current) return;
-      const dx = Math.abs((e.clientX ?? 0) - start.current.x);
-      const dy = Math.abs((e.clientY ?? 0) - start.current.y);
-      if (dx > SLOP || dy > SLOP) moved.current = true;
-    };
-    const onPointerUp: React.PointerEventHandler<HTMLDivElement> = (e) => {
-      if (!moved.current && onClick) onClick();
-      start.current = null;
-      moved.current = false;
-      e.preventDefault();
-      e.stopPropagation();
-    };
-
-    return (
-      <div
-        role="button" tabIndex={0}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && onClick) { e.preventDefault(); onClick(); } }}
-        className={`flex items-center justify-center text-5xl font-light focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 transition-colors duration-150 select-none cursor-pointer ${className}`}
-        style={{ WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation', WebkitTouchCallout: 'none' } as React.CSSProperties}
-        {...props}
-      >
-        <span className="pointer-events-none">{children}</span>
-      </div>
-    );
-  };
+  const KeypadButton: React.FC<KeypadButtonProps> = ({ children, onClick, className = '', ...props }) => (
+    <div
+      role="button" tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && onClick) { e.preventDefault(); onClick(); } }}
+      className={`flex items-center justify-center text-5xl font-light focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 transition-colors duration-150 select-none cursor-pointer ${className}`}
+      style={{
+        WebkitTapHighlightColor: 'transparent',
+        touchAction: 'manipulation',
+        WebkitTouchCallout: 'none'
+      } as React.CSSProperties}
+      {...props}
+    >
+      <span className="pointer-events-none">{children}</span>
+    </div>
+  );
 
   const OperatorButton: React.FC<{ children: React.ReactNode; onClick: () => void }> = ({ children, onClick }) => (
     <div
       role="button" tabIndex={0}
-      onPointerUp={(e) => { e.preventDefault(); onClick(); }}
+      onClick={onClick}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}
       className="flex-1 w-full text-5xl text-indigo-600 font-light active:bg-slate-300/80 transition-colors duration-150 flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 select-none cursor-pointer"
       style={{ WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' } as React.CSSProperties}
@@ -299,7 +309,7 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
   );
 
   return (
-    <div ref={ref} className="bg-slate-100 w-full h-full flex flex-col focus:outline-none z-0">
+    <div ref={ref} tabIndex={-1} className="bg-slate-100 w-full h-full flex flex-col focus:outline-none">
       <div className="flex-1 flex flex-col">
         <header className={`flex items-center justify-between p-4 flex-shrink-0`}>
           <button
@@ -327,18 +337,18 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
         <main className="flex-1 flex flex-col overflow-hidden relative" style={{ touchAction: 'pan-y' }}>
           <div className="flex-1 flex flex-col justify-center items-center p-4 pt-0">
             <div className="w-full px-4 text-center">
-              <span className="text-slate-500 text-2xl font-light h-8 block">{previousValue && operator ? `${formatAmountForDisplay(previousValue)} ${operator}` : ' '}</span>
-              <div className={`relative inline-block text-slate-800 font-light tracking-tighter whitespace-nowrap transition-all leading-none ${getAmountFontSize(formatAmountForDisplay(currentValue))}`}>
-                {formatAmountForDisplay(currentValue)}
+              <span className="text-slate-500 text-2xl font-light h-8 block">{smallDisplayValue}</span>
+              <div className={`relative inline-block text-slate-800 font-light tracking-tighter whitespace-nowrap transition-all leading-none ${fontSizeClass}`}>
+                {displayValue}
                 <span className="absolute right-full top-1/2 -translate-y-1/2 opacity-75" style={{ fontSize: '0.6em', marginRight: '0.2em' }}>€</span>
               </div>
             </div>
           </div>
-
+          
           <div
             role="button"
             tabIndex={0}
-            onPointerUp={(e) => { e.preventDefault(); onNavigateToDetails(); }}
+            onClick={onNavigateToDetails}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onNavigateToDetails(); }}
             className={`absolute top-1/2 -right-px w-8 h-[148px] flex items-center justify-center cursor-pointer ${isDesktop ? 'hidden' : ''}`}
             style={{ transform: 'translateY(calc(-50% + 2px))' }}
@@ -346,14 +356,18 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
           >
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="transform -rotate-90">
-                <SmoothPullTab width="148" height="32" fill="rgba(199, 210, 254, 0.8)" />
+                <SmoothPullTab
+                  width="148"
+                  height="32"
+                  fill="rgba(199, 210, 254, 0.8)"
+                />
               </div>
             </div>
             <ChevronLeftIcon className="relative z-10 w-6 h-6 text-indigo-600 transition-colors" />
           </div>
         </main>
       </div>
-
+      
       <div className="flex-shrink-0 flex flex-col" style={{ height: '52vh' }}>
         <div className="flex justify-between items-center my-2 w-full px-4" style={{ touchAction: 'pan-y' }}>
           <button
@@ -368,7 +382,7 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
           </button>
           <button
             onClick={() => setActiveMenu('subcategory')}
-            disabled={isSubcategoryDisabled}
+            disabled={!formData.category || (CATEGORIES[formData.category]?.length || 0) === 0}
             className="font-semibold text-lg w-1/3 truncate p-2 rounded-lg focus:outline-none focus:ring-0 disabled:cursor-not-allowed disabled:text-slate-400 text-indigo-600 hover:text-indigo-800 transition-colors text-right">
             {formData.subcategory || 'Sottocateg.'}
           </button>
@@ -402,7 +416,7 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
             </KeypadButton>
           </div>
 
-          <div
+          <div 
             className="h-full w-1/5 flex flex-col gap-2 bg-slate-200 rounded-2xl p-1"
             style={{ touchAction: 'pan-y' }}
           >
