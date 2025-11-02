@@ -17,7 +17,6 @@ interface CalculatorInputScreenProps {
   onFormChange: (newData: Partial<Omit<Expense, 'id'>>) => void;
   onMenuStateChange: (isOpen: boolean) => void;
   isDesktop: boolean;
-  isActive: boolean;
 }
 
 const formatAmountForDisplay = (numStr: string): string => {
@@ -38,10 +37,10 @@ const getAmountFontSize = (value: string): string => {
   return 'text-5xl';
 };
 
-const CalculatorInputScreen: React.FC<CalculatorInputScreenProps> = ({
+const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputScreenProps>(({
   onClose, onSubmit, accounts, onNavigateToDetails,
-  formData, onFormChange, onMenuStateChange, isDesktop, isActive
-}) => {
+  formData, onFormChange, onMenuStateChange, isDesktop
+}, ref) => {
   const [currentValue, setCurrentValue] = useState('0');
   const [previousValue, setPreviousValue] = useState<string | null>(null);
   const [operator, setOperator] = useState<string | null>(null);
@@ -49,18 +48,7 @@ const CalculatorInputScreen: React.FC<CalculatorInputScreenProps> = ({
   const [justCalculated, setJustCalculated] = useState(false);
   const [activeMenu, setActiveMenu] = useState<'account' | 'category' | 'subcategory' | null>(null);
   const isSyncingFromParent = useRef(false);
-  const pageRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (isActive) {
-        // A short delay ensures the transition animation is complete before focusing.
-        const timer = setTimeout(() => {
-            pageRef.current?.focus({ preventScroll: true });
-        }, 150); // 150ms to be safe after the swipe transition (120ms)
-        return () => clearTimeout(timer);
-    }
-  }, [isActive]);
-
+  
   useEffect(() => {
     onMenuStateChange(activeMenu !== null);
   }, [activeMenu, onMenuStateChange]);
@@ -312,7 +300,7 @@ const CalculatorInputScreen: React.FC<CalculatorInputScreenProps> = ({
   );
 
   return (
-    <div ref={pageRef} tabIndex={-1} className="bg-slate-100 w-full h-full flex flex-col focus:outline-none">
+    <div ref={ref} tabIndex={-1} className="bg-slate-100 w-full h-full flex flex-col focus:outline-none">
       <div className="flex-1 flex flex-col">
         <header className={`flex items-center justify-between p-4 flex-shrink-0`}>
           <button
@@ -455,6 +443,6 @@ const CalculatorInputScreen: React.FC<CalculatorInputScreenProps> = ({
       />
     </div>
   );
-};
+});
 
 export default CalculatorInputScreen;

@@ -20,7 +20,6 @@ interface TransactionDetailPageProps {
   isDesktop: boolean;
   onMenuStateChange: (isOpen: boolean) => void;
   isParentSwiping: boolean;
-  isActive: boolean;
 }
 
 const toYYYYMMDD = (date: Date) => {
@@ -47,7 +46,7 @@ const getRecurrenceLabel = (value?: keyof typeof recurrenceLabels) => {
     return recurrenceLabels[value];
 }
 
-const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
+const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetailPageProps>(({
     formData,
     onFormChange,
     accounts,
@@ -56,8 +55,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     isDesktop,
     onMenuStateChange,
     isParentSwiping,
-    isActive,
-}) => {
+}, ref) => {
     const [activeMenu, setActiveMenu] = useState<'account' | null>(null);
     const [amountStr, setAmountStr] = useState('');
     const [isAmountFocused, setIsAmountFocused] = useState(false);
@@ -77,21 +75,10 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     const [isRecurrenceEndModalOpen, setIsRecurrenceEndModalOpen] = useState(false);
     const [isRecurrenceEndModalAnimating, setIsRecurrenceEndModalAnimating] = useState(false);
 
-    const pageRef = useRef<HTMLDivElement>(null);
     const amountInputRef = useRef<HTMLInputElement>(null);
     const descriptionInputRef = useRef<HTMLInputElement>(null);
     const blurTriggeredForSwipe = useRef(false);
     
-    useEffect(() => {
-        if (isActive) {
-            // A short delay ensures the transition animation is complete before focusing.
-            const timer = setTimeout(() => {
-                pageRef.current?.focus({ preventScroll: true });
-            }, 150); // 150ms to be safe after the swipe transition (120ms)
-            return () => clearTimeout(timer);
-        }
-    }, [isActive]);
-
     useEffect(() => {
         if (isParentSwiping) {
             if (!blurTriggeredForSwipe.current) {
@@ -291,7 +278,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     }
 
     return (
-        <div ref={pageRef} tabIndex={-1} className="flex flex-col h-full bg-slate-100 focus:outline-none">
+        <div ref={ref} tabIndex={-1} className="flex flex-col h-full bg-slate-100 focus:outline-none">
              <header className={`p-4 flex items-center justify-between gap-4 text-slate-800 bg-white shadow-sm sticky top-0 z-10`}>
                 <div className="flex items-center gap-4">
                     {!isDesktop && (
@@ -656,6 +643,6 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
             )}
         </div>
     );
-};
+});
 
 export default TransactionDetailPage;

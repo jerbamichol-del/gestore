@@ -63,6 +63,8 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   
   const containerRef = useRef<HTMLDivElement>(null);
   const swipeableDivRef = useRef<HTMLDivElement>(null);
+  const calculatorPageRef = useRef<HTMLDivElement>(null);
+  const detailsPageRef = useRef<HTMLDivElement>(null);
 
   const { progress, isSwiping } = useSwipe(
     containerRef,
@@ -105,6 +107,17 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   const navigateTo = (targetView: 'calculator' | 'details') => {
       setView(targetView);
   };
+
+  const handleTransitionEnd = (e: React.TransitionEvent<HTMLDivElement>) => {
+    // Assicurati che l'evento sia per la trasformazione e che l'elemento sia quello giusto
+    if (e.target === swipeableDivRef.current && e.propertyName === 'transform') {
+        if (view === 'calculator') {
+            calculatorPageRef.current?.focus({ preventScroll: true });
+        } else {
+            detailsPageRef.current?.focus({ preventScroll: true });
+        }
+    }
+  };
   
   if (!isOpen) {
     return null;
@@ -135,12 +148,14 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
             transition: isSwiping ? 'none' : 'transform 0.12s ease-out',
             willChange: 'transform',
           }}
+          onTransitionEnd={handleTransitionEnd}
         >
           <div
             className={`w-1/2 md:w-auto h-full relative ${!isCalculatorActive ? 'pointer-events-none' : ''}`}
             aria-hidden={!isCalculatorActive}
           >
             <CalculatorInputScreen
+              ref={calculatorPageRef}
               formData={formData}
               onFormChange={handleFormChange}
               onClose={handleClose}
@@ -149,7 +164,6 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
               onNavigateToDetails={() => navigateTo('details')}
               onMenuStateChange={setIsMenuOpen}
               isDesktop={isDesktop}
-              isActive={isCalculatorActive}
             />
           </div>
           <div
@@ -157,6 +171,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
             aria-hidden={!isDetailsActive}
           >
               <TransactionDetailPage
+                ref={detailsPageRef}
                 formData={formData}
                 onFormChange={handleFormChange}
                 accounts={accounts}
@@ -165,7 +180,6 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
                 isDesktop={isDesktop}
                 onMenuStateChange={setIsMenuOpen}
                 isParentSwiping={isSwiping}
-                isActive={isDetailsActive}
               />
           </div>
         </div>
