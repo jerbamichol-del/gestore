@@ -20,6 +20,7 @@ interface TransactionDetailPageProps {
   onSubmit: (data: Omit<Expense, 'id'>) => void;
   isDesktop: boolean;
   onMenuStateChange: (isOpen: boolean) => void;
+  onInputFocusChange: (isFocused: boolean) => void;
 }
 
 const toYYYYMMDD = (date: Date) => {
@@ -54,6 +55,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
   onSubmit,
   isDesktop,
   onMenuStateChange,
+  onInputFocusChange,
 }, ref) => {
   const [activeMenu, setActiveMenu] = useState<'account' | null>(null);
   const [amountStr, setAmountStr] = useState('');
@@ -89,6 +91,31 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
   const TAP_MS = 300;
   const SLOP_PX = 10;
 
+  useEffect(() => {
+    const page = (ref as React.RefObject<HTMLDivElement>).current;
+    if (!page) return;
+
+    const handleFocusIn = (e: FocusEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        onInputFocusChange(true);
+      }
+    };
+
+    const handleFocusOut = (e: FocusEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        onInputFocusChange(false);
+      }
+    };
+
+    page.addEventListener('focusin', handleFocusIn);
+    page.addEventListener('focusout', handleFocusOut);
+
+    return () => {
+      page.removeEventListener('focusin', handleFocusIn);
+      page.removeEventListener('focusout', handleFocusOut);
+    };
+  }, [ref, onInputFocusChange]);
+  
   useEffect(() => {
     const onActivated = (e: Event) => {
       const ce = e as CustomEvent;

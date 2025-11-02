@@ -59,6 +59,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
 
   const [formData, setFormData] = useState<Partial<Omit<Expense, 'id'>>>(resetFormData);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isInputFocused, setIsInputFocused] = useState(false);
 
   const isDesktop = useMediaQuery('(min-width: 768px)');
 
@@ -67,13 +68,25 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   const calculatorPageRef = useRef<HTMLDivElement>(null);
   const detailsPageRef = useRef<HTMLDivElement>(null);
 
+  const handleDisableDrag = useCallback((intent: 'left' | 'right') => {
+    if (view === 'details' && intent === 'right' && isInputFocused) {
+        return true;
+    }
+    return false;
+  }, [view, isInputFocused]);
+
   const { progress, isSwiping } = useSwipe(
     containerRef,
     {
       onSwipeLeft: view === 'calculator' ? () => navigateTo('details') : undefined,
       onSwipeRight: view === 'details' ? () => navigateTo('calculator') : undefined,
     },
-    { enabled: !isDesktop && isOpen && !isMenuOpen, threshold: 32, slop: 6 }
+    { 
+        enabled: !isDesktop && isOpen && !isMenuOpen, 
+        threshold: 32, 
+        slop: 6,
+        disableDrag: handleDisableDrag,
+    }
   );
 
   useEffect(() => {
@@ -186,6 +199,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
               onSubmit={onSubmit}
               isDesktop={isDesktop}
               onMenuStateChange={setIsMenuOpen}
+              onInputFocusChange={setIsInputFocused}
             />
           </div>
         </div>
