@@ -37,6 +37,9 @@ const getAmountFontSize = (value: string): string => {
   return 'text-5xl';
 };
 
+// disarma tap-shield al primo tocco nella pagina attiva
+const disarmTapShield = () => { (window as any).__tapShieldUntil = 0; };
+
 const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputScreenProps>(({
   onClose, onSubmit, accounts, onNavigateToDetails,
   formData, onFormChange, onMenuStateChange, isDesktop
@@ -55,6 +58,7 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
     onMenuStateChange(activeMenu !== null);
   }, [activeMenu, onMenuStateChange]);
 
+  // 🔧 FIX: sincronizza SOLO quando cambia formData.amount (non a ogni digitazione)
   useEffect(() => {
     const parentAmount = formData.amount || 0;
     const currentDisplayAmount = parseFloat(currentValue.replace(/\./g, '').replace(',', '.')) || 0;
@@ -70,7 +74,8 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
       setShouldResetCurrentValue(false);
       setJustCalculated(false);
     }
-  }, [formData.amount, currentValue]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.amount]); // 👈 rimosso currentValue dalla dependency
 
   useEffect(() => {
     if (isSyncingFromParent.current) {
@@ -266,7 +271,7 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
     <div
       role="button" tabIndex={0}
       onClick={onClick}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}
+      onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && onClick) { e.preventDefault(); onClick(); } }}
       className="flex-1 w-full text-5xl text-indigo-600 font-light active:bg-slate-300/80 transition-colors duration-150 flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 select-none cursor-pointer"
       style={{ WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' } as React.CSSProperties}
     >
@@ -278,7 +283,7 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
     <div
       ref={ref}
       className="bg-slate-100 w-full h-full flex flex-col focus:outline-none z-0"
-      onPointerDownCapture={cancelForeignLongPress}
+      onPointerDownCapture={() => { cancelForeignLongPress(); disarmTapShield(); }}
     >
       <div className="flex-1 flex flex-col">
         <header className={`flex items-center justify-between p-4 flex-shrink-0`}>

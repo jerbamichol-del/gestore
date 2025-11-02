@@ -35,6 +35,9 @@ const TAP_SHIELD_MS = 250;
 const armTapShield = () => {
   (window as any).__tapShieldUntil = Date.now() + TAP_SHIELD_MS;
 };
+const disarmTapShield = () => {
+  (window as any).__tapShieldUntil = 0;
+};
 const isTapShieldActive = () => {
   const t = (window as any).__tapShieldUntil || 0;
   return Date.now() < t;
@@ -111,16 +114,17 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
     setFormData((prev) => ({ ...prev, ...newData }));
   };
 
-  // Annulla long-press del tastierino se tocchi l'overlay
+  // Annulla long-press del tastierino e DISARMA tap-shield al primo tocco nella vista attiva
   const handleRootPointerDownCapture: React.PointerEventHandler<HTMLDivElement> = () => {
     window.dispatchEvent(new Event('numPad:cancelLongPress'));
+    disarmTapShield();
   };
 
   const navigateTo = (targetView: 'calculator' | 'details') => {
     if (view !== targetView) {
       window.dispatchEvent(new Event('numPad:cancelLongPress'));
       setIsTransitioning(true);
-      // Attiva lo shield per il click sintetico post-navigazione
+      // Attiva shield per evitare il ghost-click post navigazione
       armTapShield();
       setView(targetView);
     }

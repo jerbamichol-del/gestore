@@ -45,7 +45,8 @@ const getRecurrenceLabel = (value?: keyof typeof recurrenceLabels) => {
   return recurrenceLabels[value];
 };
 
-// --- TAP SHIELD check lato pagina ---
+// TAP SHIELD utils
+const disarmTapShield = () => { (window as any).__tapShieldUntil = 0; };
 const isTapShieldActive = () => {
   const t = (window as any).__tapShieldUntil || 0;
   return Date.now() < t;
@@ -149,7 +150,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
     }
   }, [amountStr, formData.amount, onFormChange]);
 
-  // Focus solo quando tocchi l’input (nessun focus automatico globale)
+  // Focus solo all'interazione (niente auto-focus globale)
   const ensureImmediateFocus: React.PointerEventHandler<HTMLInputElement> = (e) => {
     cancelForeignLongPress();
     const input = e.currentTarget;
@@ -254,7 +255,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
       <div
         className="flex flex-col h-full bg-slate-100 items-center justify-center p-4"
         ref={ref}
-        onPointerDownCapture={cancelForeignLongPress}
+        onPointerDownCapture={() => { disarmTapShield(); cancelForeignLongPress(); }}
         onClickCapture={swallowGhostClicks}
       >
         <header className={`p-4 flex items-center gap-4 text-slate-800 bg-white shadow-sm absolute top-0 left-0 right-0 z-10`}>
@@ -274,7 +275,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
     <div
       ref={ref}
       className="flex flex-col h-full bg-slate-100 focus:outline-none"
-      onPointerDownCapture={cancelForeignLongPress}
+      onPointerDownCapture={() => { disarmTapShield(); cancelForeignLongPress(); }}
       onClickCapture={swallowGhostClicks}
     >
       <header className={`p-4 flex items-center justify-between gap-4 text-slate-800 bg-white shadow-sm sticky top-0 z-10`}>
@@ -305,7 +306,12 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
                 inputMode="decimal"
                 value={amountStr}
                 onChange={handleInputChange}
-                onPointerDownCapture={ensureImmediateFocus}
+                onPointerDownCapture={e => {
+                  const input = e.currentTarget;
+                  if (document.activeElement !== input) {
+                    input.focus({ preventScroll: true } as any);
+                  }
+                }}
                 onFocus={() => setIsAmountFocused(true)}
                 onBlur={() => setIsAmountFocused(false)}
                 className="block w-full rounded-md border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-base"
@@ -327,7 +333,12 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
                 type="text"
                 value={formData.description || ''}
                 onChange={handleInputChange}
-                onPointerDownCapture={ensureImmediateFocus}
+                onPointerDownCapture={e => {
+                  const input = e.currentTarget;
+                  if (document.activeElement !== input) {
+                    input.focus({ preventScroll: true } as any);
+                  }
+                }}
                 className="block w-full rounded-md border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-base"
                 placeholder="Es. Caffè al bar"
               />
