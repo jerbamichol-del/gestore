@@ -1,3 +1,4 @@
+// TransactionDetailPage.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import { Expense, Account } from '../types';
 import { ArrowLeftIcon } from './icons/ArrowLeftIcon';
@@ -15,23 +16,23 @@ interface TransactionDetailPageProps {
   formData: Partial<Omit<Expense, 'id'>>;
   onFormChange: (newData: Partial<Omit<Expense, 'id'>>) => void;
   accounts: Account[];
-  onClose: () => void;
+  onClose: () => void; // Per tornare alla calcolatrice
   onSubmit: (data: Omit<Expense, 'id'>) => void;
   isDesktop: boolean;
   onMenuStateChange: (isOpen: boolean) => void;
 }
 
 const toYYYYMMDD = (date: Date) => {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 };
 
 const parseLocalYYYYMMDD = (dateString: string | null): Date | null => {
   if (!dateString) return null;
-  const p = dateString.split('-').map(Number);
-  return new Date(p[0], p[1] - 1, p[2]);
+  const parts = dateString.split('-').map(Number);
+  return new Date(parts[0], parts[1] - 1, parts[2]); // locale 00:00
 };
 
 const recurrenceLabels = {
@@ -62,42 +63,81 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
   const [isFrequencyModalOpen, setIsFrequencyModalOpen] = useState(false);
   const [isFrequencyModalAnimating, setIsFrequencyModalAnimating] = useState(false);
 
+  // State for the recurrence modal
   const [isRecurrenceModalOpen, setIsRecurrenceModalOpen] = useState(false);
   const [isRecurrenceModalAnimating, setIsRecurrenceModalAnimating] = useState(false);
   const [isRecurrenceOptionsOpen, setIsRecurrenceOptionsOpen] = useState(false);
   const [tempRecurrence, setTempRecurrence] = useState(formData.recurrence);
   const [tempRecurrenceInterval, setTempRecurrenceInterval] = useState<number | undefined>(formData.recurrenceInterval);
 
+  // State for the recurrence end modal
   const [isRecurrenceEndModalOpen, setIsRecurrenceEndModalOpen] = useState(false);
   const [isRecurrenceEndModalAnimating, setIsRecurrenceEndModalAnimating] = useState(false);
 
   const amountInputRef = useRef<HTMLInputElement>(null);
   const descriptionInputRef = useRef<HTMLInputElement>(null);
 
-  // —— FIX “primo tap” dopo lo switch dalla calcolatrice ——
+  // ===== First-tap fixer: valido SOLO per TAP (non per swipe) =====
   const needsFirstTapFixRef = useRef(false);
+  const firstTapDataRef = useRef({
+    armed: false,
+    startX: 0,
+    startY: 0,
+    startTime: 0,
+    moved: false,
+  });
+  const TAP_MS = 300;
+  const SLOP_PX = 10;
 
   useEffect(() => {
     const onActivated = (e: Event) => {
       const ce = e as CustomEvent;
       if (ce.detail === 'details') {
-        // armiamo la correzione solo quando questa pagina diventa attiva
         needsFirstTapFixRef.current = true;
+        firstTapDataRef.current = { armed: false, startX: 0, startY: 0, startTime: 0, moved: false };
       }
     };
     window.addEventListener('page-activated', onActivated as EventListener);
     return () => window.removeEventListener('page-activated', onActivated as EventListener);
   }, []);
 
-  const handleFirstTapFix: React.PointerEventHandler<HTMLDivElement> = (e) => {
+  const onFirstTapPointerDownCapture: React.PointerEventHandler<HTMLDivElement> = (e) => {
     if (!needsFirstTapFixRef.current) return;
+    firstTapDataRef.current.armed = true;
+    firstTapDataRef.current.startX = e.clientX ?? 0;
+    firstTapDataRef.current.startY = e.clientY ?? 0;
+    firstTapDataRef.current.startTime = performance.now();
+    firstTapDataRef.current.moved = false;
+  };
+
+  const onFirstTapPointerMoveCapture: React.PointerEventHandler<HTMLDivElement> = (e) => {
+    const d = firstTapDataRef.current;
+    if (!d.armed || d.moved) return;
+    const dx = Math.abs((e.clientX ?? 0) - d.startX);
+    const dy = Math.abs((e.clientY ?? 0) - d.startY);
+    if (dx > SLOP_PX || dy > SLOP_PX) {
+      // è uno swipe: disarmo e lascio passare il gesto
+      d.moved = true;
+      d.armed = false;
+      needsFirstTapFixRef.current = false;
+    }
+  };
+
+  const onFirstTapPointerUpCapture: React.PointerEventHandler<HTMLDivElement> = (e) => {
+    const d = firstTapDataRef.current;
+    if (!d.armed) return;
+
+    const dt = performance.now() - d.startTime;
+    const isTap = !d.moved && dt < TAP_MS;
+
+    d.armed = false;
     needsFirstTapFixRef.current = false;
 
-    const raw = e.target as HTMLElement;
-    // cerca il vero elemento interattivo più vicino
-    const focusable = (raw.closest('input,button,select,[role="button"],label') as HTMLElement) || raw;
+    if (!isTap) return; // swipe o tap lungo: non facciamo nulla
 
-    // mettiamo a fuoco senza scroll (NON un campo specifico in automatico: solo se il tap l'ha chiesto)
+    // TAP breve: trasformiamo il “primo tap a vuoto” in tap valido
+    const raw = e.target as HTMLElement;
+    const focusable = (raw.closest('input,button,select,[role="button"],label') as HTMLElement) || raw;
     try {
       if (focusable instanceof HTMLLabelElement) {
         const forId = (focusable as HTMLLabelElement).htmlFor;
@@ -106,21 +146,22 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
           labelled?.focus?.({ preventScroll: true } as any);
           setTimeout(() => labelled?.click?.(), 0);
         } else {
-          // label senza htmlFor: deleghiamo al click sintetico
           setTimeout(() => (focusable as any).click?.(), 0);
         }
       } else {
         (focusable as any).focus?.({ preventScroll: true });
-        // click sintetico per evitare il “tap a vuoto”
         setTimeout(() => (focusable as any).click?.(), 0);
       }
     } catch {}
 
-    // blocchiamo la sequenza “morta” e lasciamo agire il click sintetico
     e.preventDefault();
     e.stopPropagation();
   };
-  // —— fine FIX “primo tap” ——
+
+  const onFirstTapPointerCancelCapture: React.PointerEventHandler<HTMLDivElement> = () => {
+    firstTapDataRef.current.armed = false;
+  };
+  // ===== fine first-tap fixer =====
 
   useEffect(() => {
     const isAnyMenuOpen =
@@ -130,8 +171,8 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
 
   useEffect(() => {
     if (isFrequencyModalOpen) {
-      const t = setTimeout(() => setIsFrequencyModalAnimating(true), 10);
-      return () => clearTimeout(t);
+      const timer = setTimeout(() => setIsFrequencyModalAnimating(true), 10);
+      return () => clearTimeout(timer);
     } else {
       setIsFrequencyModalAnimating(false);
     }
@@ -139,11 +180,12 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
 
   useEffect(() => {
     if (isRecurrenceModalOpen) {
+      // Initialize temp state when modal opens
       setTempRecurrence(formData.recurrence || 'monthly');
       setTempRecurrenceInterval(formData.recurrenceInterval || 1);
       setIsRecurrenceOptionsOpen(false);
-      const t = setTimeout(() => setIsRecurrenceModalAnimating(true), 10);
-      return () => clearTimeout(t);
+      const timer = setTimeout(() => setIsRecurrenceModalAnimating(true), 10);
+      return () => clearTimeout(timer);
     } else {
       setIsRecurrenceModalAnimating(false);
     }
@@ -151,14 +193,14 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
 
   useEffect(() => {
     if (isRecurrenceEndModalOpen) {
-      const t = setTimeout(() => setIsRecurrenceEndModalAnimating(true), 10);
-      return () => clearTimeout(t);
+      const timer = setTimeout(() => setIsRecurrenceEndModalAnimating(true), 10);
+      return () => clearTimeout(timer);
     } else {
       setIsRecurrenceEndModalAnimating(false);
     }
   }, [isRecurrenceEndModalOpen]);
 
-  // parent -> stringa locale
+  // Sync from parent state to local amount string
   useEffect(() => {
     if (!isAmountFocused) {
       const parentAmount = formData.amount || 0;
@@ -170,7 +212,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
     }
   }, [formData.amount, isAmountFocused, amountStr]);
 
-  // stringa -> parent
+  // Sync from local amount string to parent state
   useEffect(() => {
     if (isSyncingAmountFromParent.current) {
       isSyncingAmountFromParent.current = false;
@@ -191,8 +233,12 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
     } else if (name === 'amount') {
       let sanitized = value.replace(/[^0-9,]/g, '');
       const parts = sanitized.split(',');
-      if (parts.length > 2) sanitized = parts[0] + ',' + parts.slice(1).join('');
-      if (parts[1] && parts[1].length > 2) sanitized = parts[0] + ',' + parts[1].substring(0, 2);
+      if (parts.length > 2) {
+        sanitized = parts[0] + ',' + parts.slice(1).join('');
+      }
+      if (parts[1] && parts[1].length > 2) {
+        sanitized = parts[0] + ',' + parts[1].substring(0, 2);
+      }
       setAmountStr(sanitized);
     } else {
       onFormChange({ [name]: value });
@@ -211,12 +257,16 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
 
   const handleCloseFrequencyModal = () => {
     setIsFrequencyModalAnimating(false);
-    setTimeout(() => setIsFrequencyModalOpen(false), 300);
+    setTimeout(() => {
+      setIsFrequencyModalOpen(false);
+    }, 300);
   };
 
   const handleCloseRecurrenceModal = () => {
     setIsRecurrenceModalAnimating(false);
-    setTimeout(() => setIsRecurrenceModalOpen(false), 300);
+    setTimeout(() => {
+      setIsRecurrenceModalOpen(false);
+    }, 300);
   };
 
   const handleApplyRecurrence = () => {
@@ -229,7 +279,9 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
 
   const handleCloseRecurrenceEndModal = () => {
     setIsRecurrenceEndModalAnimating(false);
-    setTimeout(() => setIsRecurrenceEndModalOpen(false), 300);
+    setTimeout(() => {
+      setIsRecurrenceEndModalOpen(false);
+    }, 300);
   };
 
   const handleRecurrenceEndTypeSelect = (type: 'forever' | 'date' | 'count') => {
@@ -258,12 +310,19 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
 
   const selectedAccountLabel = accounts.find(a => a.id === formData.accountId)?.name;
   const accountOptions = accounts.map(acc => ({ value: acc.id, label: acc.name }));
+  const today = toYYYYMMDD(new Date());
 
   const getRecurrenceEndLabel = () => {
     const { recurrenceEndType } = formData;
-    if (!recurrenceEndType || recurrenceEndType === 'forever') return 'Per sempre';
-    if (recurrenceEndType === 'date') return 'Fino a';
-    if (recurrenceEndType === 'count') return 'Numero di volte';
+    if (!recurrenceEndType || recurrenceEndType === 'forever') {
+      return 'Per sempre';
+    }
+    if (recurrenceEndType === 'date') {
+      return 'Fino a';
+    }
+    if (recurrenceEndType === 'count') {
+      return 'Numero di volte';
+    }
     return 'Per sempre';
   };
 
@@ -274,7 +333,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
         tabIndex={-1}
         className="flex flex-col h-full bg-slate-100 items-center justify-center p-4"
       >
-        <header className="p-4 flex items-center gap-4 text-slate-800 bg-white shadow-sm absolute top-0 left-0 right-0 z-10">
+        <header className={`p-4 flex items-center gap-4 text-slate-800 bg-white shadow-sm absolute top-0 left-0 right-0 z-10`}>
           {!isDesktop && (
             <button onClick={onClose} className="p-2 rounded-full hover:bg-slate-200" aria-label="Torna alla calcolatrice">
               <ArrowLeftIcon className="w-6 h-6" />
@@ -292,9 +351,12 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
       ref={ref}
       tabIndex={-1}
       className="flex flex-col h-full bg-slate-100 focus:outline-none"
-      onPointerDownCapture={handleFirstTapFix}
+      onPointerDownCapture={onFirstTapPointerDownCapture}
+      onPointerMoveCapture={onFirstTapPointerMoveCapture}
+      onPointerUpCapture={onFirstTapPointerUpCapture}
+      onPointerCancelCapture={onFirstTapPointerCancelCapture}
     >
-      <header className="p-4 flex items-center justify-between gap-4 text-slate-800 bg-white shadow-sm sticky top-0 z-10">
+      <header className={`p-4 flex items-center justify-between gap-4 text-slate-800 bg-white shadow-sm sticky top-0 z-10`}>
         <div className="flex items-center gap-4">
           {!isDesktop && (
             <button onClick={onClose} className="p-2 rounded-full hover:bg-slate-200" aria-label="Torna alla calcolatrice">
@@ -393,7 +455,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
                     type="date"
                     value={formData.date || ''}
                     onChange={handleInputChange}
-                    max={toYYYYMMDD(new Date())}
+                    max={today}
                     className="block w-full rounded-md border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-base"
                   />
                 </div>
@@ -505,7 +567,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
         </div>
       </main>
 
-      <SelectionMenu
+      <SelectionMenu 
         isOpen={activeMenu === 'account'}
         onClose={() => setActiveMenu(null)}
         title="Seleziona un Conto"
@@ -537,7 +599,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
           </div>
         </div>
       )}
-
+      
       {isRecurrenceModalOpen && (
         <div
           className={`absolute inset-0 z-[60] flex justify-center items-center p-4 transition-opacity duration-300 ease-in-out ${isRecurrenceModalAnimating ? 'opacity-100' : 'opacity-0'} bg-slate-900/60 backdrop-blur-sm`}
@@ -555,7 +617,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
                 <XMarkIcon className="w-6 h-6" />
               </button>
             </header>
-
+            
             <main className="p-4 space-y-4">
               <div className="relative">
                 <button
@@ -587,7 +649,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
               </div>
 
               {tempRecurrence === 'monthly' && (
-                <div className="animate-fade-in-up pt-2" style={{ animationDuration: '200ms' }}>
+                <div className="animate-fade-in-up pt-2" style={{animationDuration: '200ms'}}>
                   <div className="flex items-center justify-center gap-2 bg-slate-100 p-3 rounded-lg">
                     <span className="text-base text-slate-700">Ogni</span>
                     <input
@@ -604,7 +666,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
                           }
                         }
                       }}
-                      onFocus={(e) => (e.currentTarget as HTMLInputElement).select()}
+                      onFocus={(e) => e.currentTarget.select()}
                       className="w-12 text-center text-lg font-bold text-slate-800 bg-transparent border-0 border-b-2 border-slate-400 focus:ring-0 focus:outline-none focus:border-indigo-600 p-0"
                       min="1"
                     />
