@@ -213,6 +213,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = ({
             <div
               className="overflow-hidden"
               ref={swipeContainerRef}
+              data-no-page-swipe="true"
               style={{ touchAction: 'pan-y', overscrollBehaviorX: 'contain' }}
             >
               <div

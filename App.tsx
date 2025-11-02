@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Expense, Account } from './types';
 import { useLocalStorage } from './hooks/useLocalStorage';
@@ -254,7 +255,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       enabled: !isCalculatorContainerOpen && !isHistoryItemInteracting && !isDateModalOpen,
       threshold: 32,
       slop: 6,
-      ignoreSelector: '[data-swipeable-item="true"]',
+      ignoreSelector: '[data-swipeable-item="true"], [data-no-page-swipe="true"]',
     }
   );
   
