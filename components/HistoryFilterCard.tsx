@@ -65,28 +65,25 @@ const CustomDateRangeInputs: React.FC<{
   onClick: () => void;
   range: { start: string | null; end: string | null };
 }> = ({ onClick, range }) => {
+  const hasRange = range.start && range.end;
+  const buttonText = hasRange
+    ? `${formatDateForButton(range.start!)} - ${formatDateForButton(range.end!)}`
+    : "Imposta periodo";
+  const ariaLabelText = hasRange
+    ? `Attualmente: ${buttonText}`
+    : 'Nessun intervallo impostato';
+
   return (
-    <div className="grid grid-cols-2 border border-slate-400 h-11">
+    <div className="border border-slate-400 h-11">
       <button
         onPointerUp={(e) => { e.preventDefault(); onClick(); }}
         onClick={(e) => e.preventDefault()}
         style={{ touchAction: 'manipulation' }}
-        aria-label={`Seleziona intervallo di date. Inizio: ${range.start ? formatDateForButton(range.start) : 'non impostato'}.`}
-        className="flex items-center justify-center gap-2 px-2 bg-slate-100 hover:bg-slate-200 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 border-r border-slate-400"
+        aria-label={`Seleziona intervallo di date. ${ariaLabelText}`}
+        className="w-full h-full flex items-center justify-center gap-2 px-2 bg-slate-100 hover:bg-slate-200 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500"
       >
         <span className="text-sm font-semibold text-slate-700">
-          {range.start ? formatDateForButton(range.start) : 'Da...'}
-        </span>
-      </button>
-      <button
-        onPointerUp={(e) => { e.preventDefault(); onClick(); }}
-        onClick={(e) => e.preventDefault()}
-        style={{ touchAction: 'manipulation' }}
-        aria-label={`Seleziona intervallo di date. Fine: ${range.end ? formatDateForButton(range.end) : 'non impostato'}.`}
-        className="flex items-center justify-center gap-2 px-2 bg-slate-100 hover:bg-slate-200 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500"
-      >
-        <span className="text-sm font-semibold text-slate-700">
-          {range.end ? formatDateForButton(range.end) : '...A'}
+          {buttonText}
         </span>
       </button>
     </div>
