@@ -108,16 +108,6 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
       }
   };
 
-  const handleTransitionEnd = (e: React.TransitionEvent<HTMLDivElement>) => {
-    if (e.target === swipeableDivRef.current && e.propertyName === 'transform') {
-        if (view === 'calculator') {
-            calculatorPageRef.current?.focus({ preventScroll: true });
-        } else {
-            detailsPageRef.current?.focus({ preventScroll: true });
-        }
-    }
-  };
-  
   if (!isOpen) {
     return null;
   }
@@ -147,7 +137,6 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
             transition: isSwiping ? 'none' : 'transform 0.12s ease-out',
             willChange: 'transform',
           }}
-          onTransitionEnd={handleTransitionEnd}
         >
           <div
             className={`w-1/2 md:w-auto h-full relative ${!isCalculatorActive ? 'pointer-events-none' : ''}`}
