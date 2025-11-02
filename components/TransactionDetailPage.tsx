@@ -15,7 +15,7 @@ interface TransactionDetailPageProps {
   formData: Partial<Omit<Expense, 'id'>>;
   onFormChange: (newData: Partial<Omit<Expense, 'id'>>) => void;
   accounts: Account[];
-  onClose: () => void; // Per tornare alla calcolatrice
+  onClose: () => void;
   onSubmit: (data: Omit<Expense, 'id'>) => void;
   isDesktop: boolean;
   onMenuStateChange: (isOpen: boolean) => void;
@@ -31,7 +31,7 @@ const toYYYYMMDD = (date: Date) => {
 const parseLocalYYYYMMDD = (dateString: string | null): Date | null => {
   if (!dateString) return null;
   const parts = dateString.split('-').map(Number);
-  return new Date(parts[0], parts[1] - 1, parts[2]); // locale 00:00
+  return new Date(parts[0], parts[1] - 1, parts[2]);
 };
 
 const recurrenceLabels = {
@@ -121,7 +121,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
     }
   }, [formData.amount, isAmountFocused, amountStr]);
 
-  // stringa -> parent
+  // string -> parent
   useEffect(() => {
     if (isSyncingAmountFromParent.current) {
       isSyncingAmountFromParent.current = false;
@@ -221,7 +221,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
   if (typeof formData.amount !== 'number') {
     return (
       <div ref={ref} className="flex flex-col h-full bg-slate-100 items-center justify-center p-4">
-        <header className={'p-4 flex items-center gap-4 text-slate-800 bg-white shadow-sm absolute top-0 left-0 right-0 z-10'}>
+        <header className="p-4 flex items-center gap-4 text-slate-800 bg-white shadow-sm absolute top-0 left-0 right-0 z-10">
           {!isDesktop && (
             <button onClick={onClose} className="p-2 rounded-full hover:bg-slate-200" aria-label="Torna alla calcolatrice">
               <ArrowLeftIcon className="w-6 h-6" />
@@ -236,7 +236,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
 
   return (
     <div ref={ref} className="flex flex-col h-full bg-slate-100 focus:outline-none">
-      <header className={'p-4 flex items-center justify-between gap-4 text-slate-800 bg-white shadow-sm sticky top-0 z-10'}>
+      <header className="p-4 flex items-center justify-between gap-4 text-slate-800 bg-white shadow-sm sticky top-0 z-10">
         <div className="flex items-center gap-4">
           {!isDesktop && (
             <button onClick={onClose} className="p-2 rounded-full hover:bg-slate-200" aria-label="Torna alla calcolatrice">
@@ -457,13 +457,11 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
 
       {isFrequencyModalOpen && (
         <div
-          // FIX: Use backticks for template literal
           className={`absolute inset-0 z-[60] flex justify-center items-center p-4 transition-opacity duration-300 ease-in-out ${isFrequencyModalAnimating ? 'opacity-100' : 'opacity-0'} bg-slate-900/60 backdrop-blur-sm`}
           onClick={handleCloseFrequencyModal}
           aria-modal="true" role="dialog"
         >
           <div
-            // FIX: Use backticks for template literal
             className={`bg-white rounded-lg shadow-xl w-full max-w-xs transform transition-all duration-300 ease-in-out ${isFrequencyModalAnimating ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`}
             onClick={(e) => e.stopPropagation()}
           >
@@ -483,14 +481,12 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
       
       {isRecurrenceModalOpen && (
         <div
-          // FIX: Use backticks for template literal
           className={`absolute inset-0 z-[60] flex justify-center items-center p-4 transition-opacity duration-300 ease-in-out ${isRecurrenceModalAnimating ? 'opacity-100' : 'opacity-0'} bg-slate-900/60 backdrop-blur-sm`}
           onClick={handleCloseRecurrenceModal}
           aria-modal="true"
           role="dialog"
         >
           <div
-            // FIX: Use backticks for template literal
             className={`bg-white rounded-lg shadow-xl w-full max-w-sm transform transition-all duration-300 ease-in-out ${isRecurrenceModalAnimating ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`}
             onClick={(e) => e.stopPropagation()}
           >
@@ -510,7 +506,6 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
                   <span className="truncate flex-1 capitalize">
                     {getRecurrenceLabel(tempRecurrence as any) || 'Seleziona'}
                   </span>
-                  {/* FIX: Use backticks for template literal */}
                   <ChevronDownIcon className={`w-5 h-5 text-slate-500 transition-transform ${isRecurrenceOptionsOpen ? 'rotate-180' : ''}`} />
                 </button>
 
@@ -584,14 +579,12 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
 
       {isRecurrenceEndModalOpen && (
         <div
-          // FIX: Use backticks for template literal
           className={`absolute inset-0 z-[60] flex justify-center items-center p-4 transition-opacity duration-300 ease-in-out ${isRecurrenceEndModalAnimating ? 'opacity-100' : 'opacity-0'} bg-slate-900/60 backdrop-blur-sm`}
           onClick={handleCloseRecurrenceEndModal}
           aria-modal="true"
           role="dialog"
         >
           <div
-            // FIX: Use backticks for template literal
             className={`bg-white rounded-lg shadow-xl w-full max-w-xs transform transition-all duration-300 ease-in-out ${isRecurrenceEndModalAnimating ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`}
             onClick={(e) => e.stopPropagation()}
           >

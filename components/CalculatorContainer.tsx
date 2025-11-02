@@ -37,7 +37,6 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
 }) => {
   const [isAnimating, setIsAnimating] = useState(false);
   const [view, setView] = useState<'calculator' | 'details'>('calculator');
-  const [isTransitioning, setIsTransitioning] = useState(false);
 
   const resetFormData = useCallback(
     (): Partial<Omit<Expense, 'id'>> => ({
@@ -100,21 +99,12 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
     setFormData(prev => ({ ...prev, ...newData }));
   };
 
-  const handleRootPointerDownCapture: React.PointerEventHandler<HTMLDivElement> = () => {
-    // Annulla un eventuale long-press sul tastierino numerico se si tocca altrove.
-    window.dispatchEvent(new Event('numPad:cancelLongPress'));
-  };
-
   const navigateTo = (targetView: 'calculator' | 'details') => {
     if (view !== targetView) {
+      // cancella eventuali long-press del tastierino durante lo switch
       window.dispatchEvent(new Event('numPad:cancelLongPress'));
-      setIsTransitioning(true);
       setView(targetView);
     }
-  };
-
-  const handleTransitionEnd = () => {
-    setIsTransitioning(false);
   };
 
   if (!isOpen) return null;
@@ -130,15 +120,13 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
       }`}
       aria-modal="true"
       role="dialog"
-      onPointerDownCapture={handleRootPointerDownCapture}
-      ref={containerRef}
     >
       <div
-        className={`relative h-full w-full overflow-hidden ${isTransitioning ? 'pointer-events-none' : ''}`}
+        ref={containerRef}
+        className="relative h-full w-full overflow-hidden"
       >
         <div
           ref={swipeableDivRef}
-          onTransitionEnd={handleTransitionEnd}
           className="absolute inset-0 flex w-[200%] md:w-full md:grid md:grid-cols-2"
           style={{
             transform: isDesktop ? 'none' : `translateX(${translateX}%)`,
@@ -147,7 +135,9 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
           }}
         >
           <div
-            className={`w-1/2 md:w-auto h-full relative ${isCalculatorActive ? 'z-10' : 'z-0'} ${!isCalculatorActive ? 'pointer-events-none' : ''}`}
+            className={`w-1/2 md:w-auto h-full relative ${
+              isCalculatorActive ? 'z-10' : 'z-0'
+            } ${!isCalculatorActive ? 'pointer-events-none' : ''}`}
             aria-hidden={!isCalculatorActive}
           >
             <CalculatorInputScreen
@@ -164,7 +154,9 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
           </div>
 
           <div
-            className={`w-1/2 md:w-auto h-full relative ${isDetailsActive ? 'z-10' : 'z-0'} ${!isDetailsActive ? 'pointer-events-none' : ''}`}
+            className={`w-1/2 md:w-auto h-full relative ${
+              isDetailsActive ? 'z-10' : 'z-0'
+            } ${!isDetailsActive ? 'pointer-events-none' : ''}`}
             aria-hidden={!isDetailsActive}
           >
             <TransactionDetailPage
