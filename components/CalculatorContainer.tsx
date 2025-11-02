@@ -103,28 +103,33 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
     if (view !== targetView) {
       const ae = document.activeElement as HTMLElement | null;
       const isInputFocused = ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || (ae as any).isContentEditable);
-      
-      // 4) cambia vista (immediatamente per avviare la transizione)
-      setView(targetView);
-
-      // 1) se la tastiera era aperta, la chiudiamo *dopo* l'inizio della transizione per evitare conflitti
+  
+      const startTransition = () => {
+        // Start the page transition
+        setView(targetView);
+  
+        // Common logic
+        window.dispatchEvent(new Event('numPad:cancelLongPress'));
+        window.dispatchEvent(new CustomEvent('page-activated', { detail: targetView }));
+        
+        // Focus container
+        requestAnimationFrame(() => {
+          const node = targetView === 'details' ? detailsPageRef.current : calculatorPageRef.current;
+          try { (node as any)?.focus?.({ preventScroll: true }); } catch {}
+        });
+      };
+  
       if (isInputFocused) {
-        setTimeout(() => {
-          try { ae?.blur?.(); } catch {}
-        }, 150); // Durata leggermente superiore alla transizione CSS (120ms)
+        // If the keyboard is open, close it by blurring the active element.
+        try { ae?.blur(); } catch {}
+        
+        // Wait for the keyboard to animate out and the viewport to resize before starting the page transition.
+        // 300ms is a generally safe delay for this on most mobile devices.
+        setTimeout(startTransition, 300);
+      } else {
+        // No keyboard, start the transition immediately.
+        startTransition();
       }
-  
-      // 2) cancella eventuali long-press del tastierino
-      window.dispatchEvent(new Event('numPad:cancelLongPress'));
-  
-      // 3) segnala la pagina attivata (usato dalle fix lato schermate)
-      window.dispatchEvent(new CustomEvent('page-activated', { detail: targetView }));
-  
-      // 5) focus al container della pagina attiva (mai un input) per evitare riaperture tastiera
-      requestAnimationFrame(() => {
-        const node = targetView === 'details' ? detailsPageRef.current : calculatorPageRef.current;
-        try { (node as any)?.focus?.({ preventScroll: true }); } catch {}
-      });
     }
   };
 
