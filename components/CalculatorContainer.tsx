@@ -19,9 +19,7 @@ const useMediaQuery = (query: string) => {
   const [matches, setMatches] = useState(false);
   useEffect(() => {
     const media = window.matchMedia(query);
-    if (media.matches !== matches) {
-      setMatches(media.matches);
-    }
+    if (media.matches !== matches) setMatches(media.matches);
     const listener = () => setMatches(media.matches);
     window.addEventListener('resize', listener);
     return () => window.removeEventListener('resize', listener);
@@ -40,8 +38,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   const [isAnimating, setIsAnimating] = useState(false);
   const [view, setView] = useState<'calculator' | 'details'>('calculator');
   const [isTransitioning, setIsTransitioning] = useState(false);
-  
-  // fix: Explicitly define the return type for resetFormData to ensure type safety.
+
   const resetFormData = useCallback((): Partial<Omit<Expense, 'id'>> => ({
     amount: 0,
     description: '',
@@ -62,7 +59,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const isDesktop = useMediaQuery('(min-width: 768px)');
-  
+
   const containerRef = useRef<HTMLDivElement>(null);
   const swipeableDivRef = useRef<HTMLDivElement>(null);
   const calculatorPageRef = useRef<HTMLDivElement>(null);
@@ -76,7 +73,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
     },
     { enabled: !isDesktop && isOpen && !isMenuOpen, threshold: 32, slop: 6 }
   );
-  
+
   useEffect(() => {
     if (isOpen) {
       setView('calculator');
@@ -90,37 +87,54 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
       return () => clearTimeout(resetTimer);
     }
   }, [isOpen, resetFormData]);
-  
+
   const handleClose = () => {
     setIsAnimating(false);
     setTimeout(onClose, 300);
   };
 
   const handleFormChange = (newData: Partial<Omit<Expense, 'id'>>) => {
-    setFormData(prev => ({...prev, ...newData}));
+    setFormData(prev => ({ ...prev, ...newData }));
   };
-  
-  const handleFinalSubmit = (data: Omit<Expense, 'id'>) => {
-    onSubmit(data);
+
+  // 🔒 cancella qualsiasi long-press/capture residuo appena tocchi l’overlay
+  const handleRootPointerDownCapture: React.PointerEventHandler<HTMLDivElement> = () => {
+    window.dispatchEvent(new Event('numPad:cancelLongPress'));
+  };
+
+  const focusDetailsAmount = () => {
+    // micro-ritardo post-transizione per essere sicuri che la pagina sia attiva
+    setTimeout(() => {
+      const root = detailsPageRef.current;
+      const target =
+        root?.querySelector<HTMLInputElement>('#amount') ||
+        root?.querySelector<HTMLInputElement>('input[type="text"], input, textarea');
+      target?.focus({ preventScroll: true } as any);
+    }, 0);
   };
 
   const navigateTo = (targetView: 'calculator' | 'details') => {
-      if (view !== targetView) {
-        setIsTransitioning(true);
-        setView(targetView);
-      }
+    if (view !== targetView) {
+      // annulla catture attive prima del cambio
+      window.dispatchEvent(new Event('numPad:cancelLongPress'));
+      setIsTransitioning(true);
+      setView(targetView);
+    }
   };
 
   const handleTransitionEnd = () => {
     setIsTransitioning(false);
+    // quando apro "Dettagli" metto subito focus all'importo, così il primo tap non va perso
+    if (view === 'details') {
+      focusDetailsAmount();
+    }
   };
 
   if (!isOpen) {
     return null;
   }
-  
+
   const translateX = (view === 'calculator' ? 0 : -50) + (progress * 50);
-  
   const isCalculatorActive = view === 'calculator';
   const isDetailsActive = view === 'details';
 
@@ -131,6 +145,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
       }`}
       aria-modal="true"
       role="dialog"
+      onPointerDownCapture={handleRootPointerDownCapture}
     >
       <div
         ref={containerRef}
@@ -155,27 +170,28 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
               formData={formData}
               onFormChange={handleFormChange}
               onClose={handleClose}
-              onSubmit={handleFinalSubmit}
+              onSubmit={onSubmit}
               accounts={accounts}
               onNavigateToDetails={() => navigateTo('details')}
               onMenuStateChange={setIsMenuOpen}
               isDesktop={isDesktop}
             />
           </div>
+
           <div
             className={`w-1/2 md:w-auto h-full relative ${isDetailsActive ? 'z-10' : 'z-0'} ${!isDetailsActive ? 'pointer-events-none' : ''}`}
             aria-hidden={!isDetailsActive}
           >
-              <TransactionDetailPage
-                ref={detailsPageRef}
-                formData={formData}
-                onFormChange={handleFormChange}
-                accounts={accounts}
-                onClose={() => navigateTo('calculator')}
-                onSubmit={handleFinalSubmit}
-                isDesktop={isDesktop}
-                onMenuStateChange={setIsMenuOpen}
-              />
+            <TransactionDetailPage
+              ref={detailsPageRef}
+              formData={formData}
+              onFormChange={handleFormChange}
+              accounts={accounts}
+              onClose={() => navigateTo('calculator')}
+              onSubmit={onSubmit}
+              isDesktop={isDesktop}
+              onMenuStateChange={setIsMenuOpen}
+            />
           </div>
         </div>
       </div>

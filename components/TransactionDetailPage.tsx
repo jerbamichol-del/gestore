@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Expense, Account } from '../types';
 import { ArrowLeftIcon } from './icons/ArrowLeftIcon';
 import { formatDate } from './icons/formatters';
@@ -15,23 +15,23 @@ interface TransactionDetailPageProps {
   formData: Partial<Omit<Expense, 'id'>>;
   onFormChange: (newData: Partial<Omit<Expense, 'id'>>) => void;
   accounts: Account[];
-  onClose: () => void; // Per tornare alla calcolatrice
+  onClose: () => void;
   onSubmit: (data: Omit<Expense, 'id'>) => void;
   isDesktop: boolean;
   onMenuStateChange: (isOpen: boolean) => void;
 }
 
 const toYYYYMMDD = (date: Date) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 };
 
 const parseLocalYYYYMMDD = (dateString: string | null): Date | null => {
   if (!dateString) return null;
-  const parts = dateString.split('-').map(Number);
-  return new Date(parts[0], parts[1] - 1, parts[2]); // locale 00:00
+  const [y, m, d] = dateString.split('-').map(Number);
+  return new Date(y, m - 1, d);
 };
 
 const recurrenceLabels = {
@@ -40,19 +40,10 @@ const recurrenceLabels = {
   monthly: 'Mensile',
   yearly: 'Annuale',
 };
-const getRecurrenceLabel = (value?: keyof typeof recurrenceLabels) => {
-  if (!value) return null;
-  return recurrenceLabels[value];
-}
+const getRecurrenceLabel = (v?: keyof typeof recurrenceLabels) => (v ? recurrenceLabels[v] : null);
 
 const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetailPageProps>(({
-  formData,
-  onFormChange,
-  accounts,
-  onClose,
-  onSubmit,
-  isDesktop,
-  onMenuStateChange,
+  formData, onFormChange, accounts, onClose, onSubmit, isDesktop, onMenuStateChange,
 }, ref) => {
   const [activeMenu, setActiveMenu] = useState<'account' | null>(null);
   const [amountStr, setAmountStr] = useState('');
@@ -62,62 +53,53 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
   const [isFrequencyModalOpen, setIsFrequencyModalOpen] = useState(false);
   const [isFrequencyModalAnimating, setIsFrequencyModalAnimating] = useState(false);
 
-  // State for the recurrence modal
   const [isRecurrenceModalOpen, setIsRecurrenceModalOpen] = useState(false);
   const [isRecurrenceModalAnimating, setIsRecurrenceModalAnimating] = useState(false);
   const [isRecurrenceOptionsOpen, setIsRecurrenceOptionsOpen] = useState(false);
   const [tempRecurrence, setTempRecurrence] = useState(formData.recurrence);
   const [tempRecurrenceInterval, setTempRecurrenceInterval] = useState<number | undefined>(formData.recurrenceInterval);
 
-  // State for the recurrence end modal
   const [isRecurrenceEndModalOpen, setIsRecurrenceEndModalOpen] = useState(false);
   const [isRecurrenceEndModalAnimating, setIsRecurrenceEndModalAnimating] = useState(false);
 
   const amountInputRef = useRef<HTMLInputElement>(null);
   const descriptionInputRef = useRef<HTMLInputElement>(null);
 
+  const cancelForeignLongPress = () => window.dispatchEvent(new Event('numPad:cancelLongPress'));
+
   useEffect(() => {
-    const isAnyMenuOpen = activeMenu !== null || isFrequencyModalOpen || isRecurrenceModalOpen || isRecurrenceEndModalOpen;
-    onMenuStateChange(isAnyMenuOpen);
+    const anyOpen = activeMenu !== null || isFrequencyModalOpen || isRecurrenceModalOpen || isRecurrenceEndModalOpen;
+    onMenuStateChange(anyOpen);
   }, [activeMenu, isFrequencyModalOpen, isRecurrenceModalOpen, isRecurrenceEndModalOpen, onMenuStateChange]);
 
   useEffect(() => {
     if (isFrequencyModalOpen) {
-      const timer = setTimeout(() => setIsFrequencyModalAnimating(true), 10);
-      return () => clearTimeout(timer);
-    } else {
-      setIsFrequencyModalAnimating(false);
-    }
+      const t = setTimeout(() => setIsFrequencyModalAnimating(true), 10);
+      return () => clearTimeout(t);
+    } else setIsFrequencyModalAnimating(false);
   }, [isFrequencyModalOpen]);
 
   useEffect(() => {
     if (isRecurrenceModalOpen) {
-      // Initialize temp state when modal opens
       setTempRecurrence(formData.recurrence || 'monthly');
       setTempRecurrenceInterval(formData.recurrenceInterval || 1);
       setIsRecurrenceOptionsOpen(false);
-      const timer = setTimeout(() => setIsRecurrenceModalAnimating(true), 10);
-      return () => clearTimeout(timer);
-    } else {
-      setIsRecurrenceModalAnimating(false);
-    }
+      const t = setTimeout(() => setIsRecurrenceModalAnimating(true), 10);
+      return () => clearTimeout(t);
+    } else setIsRecurrenceModalAnimating(false);
   }, [isRecurrenceModalOpen, formData.recurrence, formData.recurrenceInterval]);
 
   useEffect(() => {
     if (isRecurrenceEndModalOpen) {
-      const timer = setTimeout(() => setIsRecurrenceEndModalAnimating(true), 10);
-      return () => clearTimeout(timer);
-    } else {
-      setIsRecurrenceEndModalAnimating(false);
-    }
+      const t = setTimeout(() => setIsRecurrenceEndModalAnimating(true), 10);
+      return () => clearTimeout(t);
+    } else setIsRecurrenceEndModalAnimating(false);
   }, [isRecurrenceEndModalOpen]);
 
-  // Sync from parent state to local amount string
   useEffect(() => {
     if (!isAmountFocused) {
       const parentAmount = formData.amount || 0;
       const localAmount = parseFloat(String(amountStr).replace(',', '.')) || 0;
-
       if (Math.abs(parentAmount - localAmount) > 1e-9) {
         isSyncingAmountFromParent.current = true;
         setAmountStr(parentAmount === 0 ? '' : String(parentAmount).replace('.', ','));
@@ -125,19 +107,20 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
     }
   }, [formData.amount, isAmountFocused]);
 
-  // Sync from local amount string to parent state
   useEffect(() => {
-    if (isSyncingAmountFromParent.current) {
-      isSyncingAmountFromParent.current = false;
-      return;
-    }
-
+    if (isSyncingAmountFromParent.current) { isSyncingAmountFromParent.current = false; return; }
     const num = parseFloat(amountStr.replace(',', '.'));
     const newAmount = isNaN(num) ? 0 : num;
-    if (newAmount !== formData.amount) {
-      onFormChange({ amount: newAmount });
-    }
+    if (newAmount !== formData.amount) onFormChange({ amount: newAmount });
   }, [amountStr, formData.amount, onFormChange]);
+
+  const ensureImmediateFocus: React.PointerEventHandler<HTMLInputElement> = (e) => {
+    cancelForeignLongPress();
+    const input = e.currentTarget;
+    if (document.activeElement !== input) {
+      input.focus({ preventScroll: true } as any);
+    }
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -147,12 +130,8 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
     } else if (name === 'amount') {
       let sanitized = value.replace(/[^0-9,]/g, '');
       const parts = sanitized.split(',');
-      if (parts.length > 2) {
-        sanitized = parts[0] + ',' + parts.slice(1).join('');
-      }
-      if (parts[1] && parts[1].length > 2) {
-        sanitized = parts[0] + ',' + parts[1].substring(0, 2);
-      }
+      if (parts.length > 2) sanitized = parts[0] + ',' + parts.slice(1).join('');
+      if (parts[1] && parts[1].length > 2) sanitized = parts[0] + ',' + parts[1].substring(0, 2);
       setAmountStr(sanitized);
     } else {
       onFormChange({ [name]: value });
@@ -171,16 +150,12 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
 
   const handleCloseFrequencyModal = () => {
     setIsFrequencyModalAnimating(false);
-    setTimeout(() => {
-      setIsFrequencyModalOpen(false);
-    }, 300);
+    setTimeout(() => setIsFrequencyModalOpen(false), 300);
   };
 
   const handleCloseRecurrenceModal = () => {
     setIsRecurrenceModalAnimating(false);
-    setTimeout(() => {
-      setIsRecurrenceModalOpen(false);
-    }, 300);
+    setTimeout(() => setIsRecurrenceModalOpen(false), 300);
   };
 
   const handleApplyRecurrence = () => {
@@ -193,9 +168,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
 
   const handleCloseRecurrenceEndModal = () => {
     setIsRecurrenceEndModalAnimating(false);
-    setTimeout(() => {
-      setIsRecurrenceEndModalOpen(false);
-    }, 300);
+    setTimeout(() => setIsRecurrenceEndModalOpen(false), 300);
   };
 
   const handleRecurrenceEndTypeSelect = (type: 'forever' | 'date' | 'count') => {
@@ -215,10 +188,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
   };
 
   const handleSubmit = () => {
-    const dataToSubmit = {
-      ...formData,
-      category: formData.category || 'Altro',
-    };
+    const dataToSubmit = { ...formData, category: formData.category || 'Altro' };
     onSubmit(dataToSubmit as Omit<Expense, 'id'>);
   };
 
@@ -227,23 +197,21 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
   const today = toYYYYMMDD(new Date());
 
   const getRecurrenceEndLabel = () => {
-    const { recurrenceEndType } = formData;
-    if (!recurrenceEndType || recurrenceEndType === 'forever') {
-      return 'Per sempre';
-    }
-    if (recurrenceEndType === 'date') {
-      return 'Fino a';
-    }
-    if (recurrenceEndType === 'count') {
-      return 'Numero di volte';
-    }
+    const t = formData.recurrenceEndType;
+    if (!t || t === 'forever') return 'Per sempre';
+    if (t === 'date') return 'Fino a';
+    if (t === 'count') return 'Numero di volte';
     return 'Per sempre';
   };
 
   if (typeof formData.amount !== 'number') {
     return (
-      <div className="flex flex-col h-full bg-slate-100 items-center justify-center p-4 relative" ref={ref}>
-        <header className={`p-4 flex items-center gap-4 text-slate-800 bg-white shadow-sm absolute top-0 left-0 right-0 z-10`}>
+      <div
+        className="flex flex-col h-full bg-slate-100 items-center justify-center p-4 relative z-20"
+        ref={ref}
+        onPointerDownCapture={cancelForeignLongPress}
+      >
+        <header className="p-4 flex items-center gap-4 text-slate-800 bg-white shadow-sm absolute top-0 left-0 right-0 z-10">
           {!isDesktop && (
             <button onClick={onClose} className="p-2 rounded-full hover:bg-slate-200" aria-label="Torna alla calcolatrice">
               <ArrowLeftIcon className="w-6 h-6" />
@@ -257,8 +225,12 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
   }
 
   return (
-    <div ref={ref} className="flex flex-col h-full bg-slate-100 focus:outline-none relative">
-      <header className={`p-4 flex items-center justify-between gap-4 text-slate-800 bg-white shadow-sm sticky top-0 z-10`}>
+    <div
+      ref={ref}
+      className="flex flex-col h-full bg-slate-100 focus:outline-none relative z-20"
+      onPointerDownCapture={cancelForeignLongPress}
+    >
+      <header className="p-4 flex items-center justify-between gap-4 text-slate-800 bg-white shadow-sm sticky top-0 z-10">
         <div className="flex items-center gap-4">
           {!isDesktop && (
             <button onClick={onClose} className="p-2 rounded-full hover:bg-slate-200" aria-label="Torna alla calcolatrice">
@@ -269,6 +241,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
         </div>
         <div className="w-11 h-11 flex items-center justify-center" />
       </header>
+
       <main className="flex-1 p-4 flex flex-col overflow-y-auto" style={{ touchAction: 'pan-y' }}>
         <div className="space-y-4">
           <div>
@@ -285,6 +258,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
                 inputMode="decimal"
                 value={amountStr}
                 onChange={handleInputChange}
+                onPointerDownCapture={ensureImmediateFocus}
                 onFocus={() => setIsAmountFocused(true)}
                 onBlur={() => setIsAmountFocused(false)}
                 className="block w-full rounded-md border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-base"
@@ -292,6 +266,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
               />
             </div>
           </div>
+
           <div>
             <label htmlFor="description" className="block text-base font-medium text-slate-700 mb-1">Descrizione</label>
             <div className="relative">
@@ -305,6 +280,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
                 type="text"
                 value={formData.description || ''}
                 onChange={handleInputChange}
+                onPointerDownCapture={ensureImmediateFocus}
                 className="block w-full rounded-md border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-base"
                 placeholder="Es. Caffè al bar"
               />
@@ -319,9 +295,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
               className="w-full flex items-center text-left gap-2 px-3 py-2.5 text-base rounded-lg border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors bg-white border-slate-300 text-slate-800 hover:bg-slate-50"
             >
               <CreditCardIcon className="h-5 w-5 text-slate-400" />
-              <span className="truncate flex-1">
-                {selectedAccountLabel || 'Seleziona'}
-              </span>
+              <span className="truncate flex-1">{selectedAccountLabel || 'Seleziona'}</span>
             </button>
           </div>
 
@@ -339,6 +313,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
                 <ChevronDownIcon className="w-5 h-5 text-slate-500" />
               </button>
             </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label htmlFor="date" className="block text-base font-medium text-slate-700 mb-1">
@@ -354,11 +329,13 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
                     type="date"
                     value={formData.date || ''}
                     onChange={handleInputChange}
+                    onPointerDownCapture={ensureImmediateFocus}
                     max={today}
                     className="block w-full rounded-md border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-base"
                   />
                 </div>
               </div>
+
               <div>
                 <label htmlFor="time" className="block text-base font-medium text-slate-700 mb-1">Ora</label>
                 <div className="relative">
@@ -371,11 +348,13 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
                     type="time"
                     value={formData.time || ''}
                     onChange={handleInputChange}
+                    onPointerDownCapture={ensureImmediateFocus}
                     className="block w-full rounded-md border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-base"
                   />
                 </div>
               </div>
             </div>
+
             {formData.frequency === 'recurring' && (
               <>
                 <div>
@@ -391,6 +370,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
                     <ChevronDownIcon className="w-5 h-5 text-slate-500" />
                   </button>
                 </div>
+
                 <div className="grid grid-cols-2 gap-4 items-end">
                   <div>
                     <label className="block text-base font-medium text-slate-700 mb-1">Termina</label>
@@ -399,9 +379,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
                       onClick={() => setIsRecurrenceEndModalOpen(true)}
                       className="w-full flex items-center justify-between text-left gap-2 px-3 py-2.5 text-base rounded-lg border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors bg-white border-slate-300 text-slate-800 hover:bg-slate-50"
                     >
-                      <span className="truncate flex-1">
-                        {getRecurrenceEndLabel()}
-                      </span>
+                      <span className="truncate flex-1">{getRecurrenceEndLabel()}</span>
                       <ChevronDownIcon className="w-5 h-5 text-slate-500" />
                     </button>
                   </div>
@@ -432,6 +410,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
                       </label>
                     </div>
                   )}
+
                   {formData.recurrenceEndType === 'count' && (
                     <div className="animate-fade-in-up">
                       <label htmlFor="recurrence-count" className="block text-base font-medium text-slate-700 mb-1">N. di volte</label>
@@ -441,6 +420,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
                         name="recurrenceCount"
                         value={formData.recurrenceCount || ''}
                         onChange={handleInputChange}
+                        onPointerDownCapture={ensureImmediateFocus}
                         min="1"
                         placeholder="Es. 12"
                         className="block w-full rounded-md border border-slate-300 bg-white py-2.5 px-3 text-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-base"
@@ -452,6 +432,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
             )}
           </div>
         </div>
+
         <div className="mt-auto pt-6">
           <button
             type="button"
@@ -501,8 +482,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
         <div
           className={`absolute inset-0 z-[60] flex justify-center items-center p-4 transition-opacity duration-300 ease-in-out ${isRecurrenceModalAnimating ? 'opacity-100' : 'opacity-0'} bg-slate-900/60 backdrop-blur-sm`}
           onClick={handleCloseRecurrenceModal}
-          aria-modal="true"
-          role="dialog"
+          aria-modal="true" role="dialog"
         >
           <div
             className={`bg-white rounded-lg shadow-xl w-full max-w-sm transform transition-all duration-300 ease-in-out ${isRecurrenceModalAnimating ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`}
@@ -532,10 +512,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
                     {(Object.keys(recurrenceLabels) as Array<keyof typeof recurrenceLabels>).map((key) => (
                       <button
                         key={key}
-                        onClick={() => {
-                          setTempRecurrence(key);
-                          setIsRecurrenceOptionsOpen(false);
-                        }}
+                        onClick={() => { setTempRecurrence(key); setIsRecurrenceOptionsOpen(false); }}
                         className="w-full text-left px-4 py-3 text-base font-semibold rounded-lg transition-colors bg-slate-50 text-slate-800 hover:bg-indigo-100 hover:text-indigo-800"
                       >
                         {recurrenceLabels[key]}
@@ -554,16 +531,14 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
                       value={tempRecurrenceInterval || ''}
                       onChange={(e) => {
                         const val = e.target.value;
-                        if (val === '') {
-                          setTempRecurrenceInterval(undefined);
-                        } else {
+                        if (val === '') setTempRecurrenceInterval(undefined);
+                        else {
                           const num = parseInt(val, 10);
-                          if (!isNaN(num) && num > 0) {
-                            setTempRecurrenceInterval(num);
-                          }
+                          if (!isNaN(num) && num > 0) setTempRecurrenceInterval(num);
                         }
                       }}
-                      onFocus={(e) => e.target.select()}
+                      onPointerDownCapture={ensureImmediateFocus}
+                      onFocus={(e) => (e.currentTarget as HTMLInputElement).select()}
                       className="w-12 text-center text-lg font-bold text-slate-800 bg-transparent border-0 border-b-2 border-slate-400 focus:ring-0 focus:outline-none focus:border-indigo-600 p-0"
                       min="1"
                     />
