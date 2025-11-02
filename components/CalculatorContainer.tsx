@@ -41,7 +41,8 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   const [view, setView] = useState<'calculator' | 'details'>('calculator');
   const [isTransitioning, setIsTransitioning] = useState(false);
   
-  const resetFormData = useCallback(() => ({
+  // fix: Explicitly define the return type for resetFormData to ensure type safety.
+  const resetFormData = useCallback((): Partial<Omit<Expense, 'id'>> => ({
     amount: 0,
     description: '',
     date: new Date().toISOString().split('T')[0],

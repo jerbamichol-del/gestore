@@ -259,7 +259,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
     }
 
     return (
-        <div ref={ref} tabIndex={-1} className="flex flex-col h-full bg-slate-100 focus:outline-none">
+        <div ref={ref} tabIndex={-1} className="flex flex-col h-full bg-slate-100 focus:outline-none relative z-20">
              <header className={`p-4 flex items-center justify-between gap-4 text-slate-800 bg-white shadow-sm sticky top-0 z-10`}>
                 <div className="flex items-center gap-4">
                     {!isDesktop && (
