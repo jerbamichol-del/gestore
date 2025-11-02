@@ -50,14 +50,24 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
 
   const isSyncingFromParent = useRef(false);
 
-  // 🔸 NEW: flag per non far sovrascrivere il primo numero digitato quando rientri dai Dettagli
+  // ===== First-tap fixer: valido SOLO per TAP (non per swipe) =====
+  const needsFirstTapFixRef = useRef(false);
+  const firstTapDataRef = useRef({
+    armed: false,
+    startX: 0,
+    startY: 0,
+    startTime: 0,
+    moved: false,
+  });
+  const TAP_MS = 300;
+  const SLOP_PX = 10;
+
   const typingSinceActivationRef = useRef(false);
 
   useEffect(() => {
     onMenuStateChange(activeMenu !== null);
   }, [activeMenu, onMenuStateChange]);
 
-  // 🔸 NEW: quando entri nella vista "calcolatrice", resetta i flag che potrebbero causare "blink"
   useEffect(() => {
     const onActivated = (e: Event) => {
       const ce = e as CustomEvent;
@@ -65,11 +75,74 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
         typingSinceActivationRef.current = false;
         setShouldResetCurrentValue(false);
         setJustCalculated(false);
+        
+        needsFirstTapFixRef.current = true;
+        firstTapDataRef.current = { armed: false, startX: 0, startY: 0, startTime: 0, moved: false };
       }
     };
     window.addEventListener('page-activated', onActivated as EventListener);
     return () => window.removeEventListener('page-activated', onActivated as EventListener);
   }, []);
+  
+  const onFirstTapPointerDownCapture: React.PointerEventHandler<HTMLDivElement> = (e) => {
+    if (!needsFirstTapFixRef.current) return;
+    firstTapDataRef.current.armed = true;
+    firstTapDataRef.current.startX = e.clientX ?? 0;
+    firstTapDataRef.current.startY = e.clientY ?? 0;
+    firstTapDataRef.current.startTime = performance.now();
+    firstTapDataRef.current.moved = false;
+  };
+
+  const onFirstTapPointerMoveCapture: React.PointerEventHandler<HTMLDivElement> = (e) => {
+    const d = firstTapDataRef.current;
+    if (!d.armed || d.moved) return;
+    const dx = Math.abs((e.clientX ?? 0) - d.startX);
+    const dy = Math.abs((e.clientY ?? 0) - d.startY);
+    if (dx > SLOP_PX || dy > SLOP_PX) {
+      d.moved = true;
+      d.armed = false;
+      needsFirstTapFixRef.current = false;
+    }
+  };
+
+  const onFirstTapPointerUpCapture: React.PointerEventHandler<HTMLDivElement> = (e) => {
+    const d = firstTapDataRef.current;
+    if (!d.armed) return;
+
+    const dt = performance.now() - d.startTime;
+    const isTap = !d.moved && dt < TAP_MS;
+
+    d.armed = false;
+    needsFirstTapFixRef.current = false;
+
+    if (!isTap) return;
+
+    const raw = e.target as HTMLElement;
+    const focusable = (raw.closest('input,button,select,[role="button"],label') as HTMLElement) || raw;
+    try {
+      if (focusable instanceof HTMLLabelElement) {
+        const forId = (focusable as HTMLLabelElement).htmlFor;
+        if (forId) {
+          const labelled = document.getElementById(forId) as HTMLElement | null;
+          labelled?.focus?.({ preventScroll: true } as any);
+          setTimeout(() => labelled?.click?.(), 0);
+        } else {
+          setTimeout(() => (focusable as any).click?.(), 0);
+        }
+      } else {
+        (focusable as any).focus?.({ preventScroll: true });
+        setTimeout(() => (focusable as any).click?.(), 0);
+      }
+    } catch {}
+
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const onFirstTapPointerCancelCapture: React.PointerEventHandler<HTMLDivElement> = () => {
+    firstTapDataRef.current.armed = false;
+  };
+
 
   // Parent -> display: aggiorna solo se non stai digitando dopo il rientro
   useEffect(() => {
@@ -206,7 +279,6 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
   };
 
   const handleKeyPress = (key: string) => {
-    // 🔸 NEW: da ora in poi, siamo in digitazione post-rientro (evita overwrite dal parent)
     typingSinceActivationRef.current = true;
 
     if (['÷', '×', '-', '+'].includes(key)) {
@@ -309,7 +381,12 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
   );
 
   return (
-    <div ref={ref} tabIndex={-1} className="bg-slate-100 w-full h-full flex flex-col focus:outline-none">
+    <div ref={ref} tabIndex={-1} className="bg-slate-100 w-full h-full flex flex-col focus:outline-none"
+      onPointerDownCapture={onFirstTapPointerDownCapture}
+      onPointerMoveCapture={onFirstTapPointerMoveCapture}
+      onPointerUpCapture={onFirstTapPointerUpCapture}
+      onPointerCancelCapture={onFirstTapPointerCancelCapture}
+    >
       <div className="flex-1 flex flex-col">
         <header className={`flex items-center justify-between p-4 flex-shrink-0`}>
           <button

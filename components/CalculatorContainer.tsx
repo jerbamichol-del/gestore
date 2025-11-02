@@ -101,18 +101,24 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
 
   const navigateTo = (targetView: 'calculator' | 'details') => {
     if (view !== targetView) {
-      // 1) chiudi qualsiasi tastiera virtuale aperta (blur sull’elemento focussato)
       const ae = document.activeElement as HTMLElement | null;
-      try { ae?.blur?.(); } catch {}
+      const isInputFocused = ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || (ae as any).isContentEditable);
+      
+      // 4) cambia vista (immediatamente per avviare la transizione)
+      setView(targetView);
+
+      // 1) se la tastiera era aperta, la chiudiamo *dopo* l'inizio della transizione per evitare conflitti
+      if (isInputFocused) {
+        setTimeout(() => {
+          try { ae?.blur?.(); } catch {}
+        }, 150); // Durata leggermente superiore alla transizione CSS (120ms)
+      }
   
       // 2) cancella eventuali long-press del tastierino
       window.dispatchEvent(new Event('numPad:cancelLongPress'));
   
       // 3) segnala la pagina attivata (usato dalle fix lato schermate)
       window.dispatchEvent(new CustomEvent('page-activated', { detail: targetView }));
-  
-      // 4) cambia vista
-      setView(targetView);
   
       // 5) focus al container della pagina attiva (mai un input) per evitare riaperture tastiera
       requestAnimationFrame(() => {
