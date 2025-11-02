@@ -45,13 +45,6 @@ const getRecurrenceLabel = (value?: keyof typeof recurrenceLabels) => {
   return recurrenceLabels[value];
 };
 
-// TAP SHIELD utils
-const disarmTapShield = () => { (window as any).__tapShieldUntil = 0; };
-const isTapShieldActive = () => {
-  const t = (window as any).__tapShieldUntil || 0;
-  return Date.now() < t;
-};
-
 const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetailPageProps>(({
   formData,
   onFormChange,
@@ -81,17 +74,8 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
   const amountInputRef = useRef<HTMLInputElement>(null);
   const descriptionInputRef = useRef<HTMLInputElement>(null);
 
-  const cancelForeignLongPress = () => window.dispatchEvent(new Event('numPad:cancelLongPress'));
-  const swallowGhostClicks: React.MouseEventHandler<HTMLDivElement> = (e) => {
-    if (isTapShieldActive()) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
-  };
-
   useEffect(() => {
-    const isAnyMenuOpen =
-      activeMenu !== null || isFrequencyModalOpen || isRecurrenceModalOpen || isRecurrenceEndModalOpen;
+    const isAnyMenuOpen = activeMenu !== null || isFrequencyModalOpen || isRecurrenceModalOpen || isRecurrenceEndModalOpen;
     onMenuStateChange(isAnyMenuOpen);
   }, [activeMenu, isFrequencyModalOpen, isRecurrenceModalOpen, isRecurrenceEndModalOpen, onMenuStateChange]);
 
@@ -125,7 +109,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
     }
   }, [isRecurrenceEndModalOpen]);
 
-  // Sync parent -> string locale
+  // parent -> string locale
   useEffect(() => {
     if (!isAmountFocused) {
       const parentAmount = formData.amount || 0;
@@ -137,7 +121,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
     }
   }, [formData.amount, isAmountFocused, amountStr]);
 
-  // Sync stringa -> parent
+  // stringa -> parent
   useEffect(() => {
     if (isSyncingAmountFromParent.current) {
       isSyncingAmountFromParent.current = false;
@@ -149,15 +133,6 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
       onFormChange({ amount: newAmount });
     }
   }, [amountStr, formData.amount, onFormChange]);
-
-  // Focus solo all'interazione (niente auto-focus globale)
-  const ensureImmediateFocus: React.PointerEventHandler<HTMLInputElement> = (e) => {
-    cancelForeignLongPress();
-    const input = e.currentTarget;
-    if (document.activeElement !== input) {
-      input.focus({ preventScroll: true } as any);
-    }
-  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -187,16 +162,12 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
 
   const handleCloseFrequencyModal = () => {
     setIsFrequencyModalAnimating(false);
-    setTimeout(() => {
-      setIsFrequencyModalOpen(false);
-    }, 300);
+    setTimeout(() => setIsFrequencyModalOpen(false), 300);
   };
 
   const handleCloseRecurrenceModal = () => {
     setIsRecurrenceModalAnimating(false);
-    setTimeout(() => {
-      setIsRecurrenceModalOpen(false);
-    }, 300);
+    setTimeout(() => setIsRecurrenceModalOpen(false), 300);
   };
 
   const handleApplyRecurrence = () => {
@@ -209,9 +180,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
 
   const handleCloseRecurrenceEndModal = () => {
     setIsRecurrenceEndModalAnimating(false);
-    setTimeout(() => {
-      setIsRecurrenceEndModalOpen(false);
-    }, 300);
+    setTimeout(() => setIsRecurrenceEndModalOpen(false), 300);
   };
 
   const handleRecurrenceEndTypeSelect = (type: 'forever' | 'date' | 'count') => {
@@ -240,7 +209,6 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
 
   const selectedAccountLabel = accounts.find(a => a.id === formData.accountId)?.name;
   const accountOptions = accounts.map(acc => ({ value: acc.id, label: acc.name }));
-  const today = toYYYYMMDD(new Date());
 
   const getRecurrenceEndLabel = () => {
     const { recurrenceEndType } = formData;
@@ -252,13 +220,8 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
 
   if (typeof formData.amount !== 'number') {
     return (
-      <div
-        className="flex flex-col h-full bg-slate-100 items-center justify-center p-4"
-        ref={ref}
-        onPointerDownCapture={() => { disarmTapShield(); cancelForeignLongPress(); }}
-        onClickCapture={swallowGhostClicks}
-      >
-        <header className={`p-4 flex items-center gap-4 text-slate-800 bg-white shadow-sm absolute top-0 left-0 right-0 z-10`}>
+      <div ref={ref} className="flex flex-col h-full bg-slate-100 items-center justify-center p-4">
+        <header className={'p-4 flex items-center gap-4 text-slate-800 bg-white shadow-sm absolute top-0 left-0 right-0 z-10'}>
           {!isDesktop && (
             <button onClick={onClose} className="p-2 rounded-full hover:bg-slate-200" aria-label="Torna alla calcolatrice">
               <ArrowLeftIcon className="w-6 h-6" />
@@ -272,13 +235,8 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
   }
 
   return (
-    <div
-      ref={ref}
-      className="flex flex-col h-full bg-slate-100 focus:outline-none"
-      onPointerDownCapture={() => { disarmTapShield(); cancelForeignLongPress(); }}
-      onClickCapture={swallowGhostClicks}
-    >
-      <header className={`p-4 flex items-center justify-between gap-4 text-slate-800 bg-white shadow-sm sticky top-0 z-10`}>
+    <div ref={ref} className="flex flex-col h-full bg-slate-100 focus:outline-none">
+      <header className={'p-4 flex items-center justify-between gap-4 text-slate-800 bg-white shadow-sm sticky top-0 z-10'}>
         <div className="flex items-center gap-4">
           {!isDesktop && (
             <button onClick={onClose} className="p-2 rounded-full hover:bg-slate-200" aria-label="Torna alla calcolatrice">
@@ -306,12 +264,6 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
                 inputMode="decimal"
                 value={amountStr}
                 onChange={handleInputChange}
-                onPointerDownCapture={e => {
-                  const input = e.currentTarget;
-                  if (document.activeElement !== input) {
-                    input.focus({ preventScroll: true } as any);
-                  }
-                }}
                 onFocus={() => setIsAmountFocused(true)}
                 onBlur={() => setIsAmountFocused(false)}
                 className="block w-full rounded-md border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-base"
@@ -333,12 +285,6 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
                 type="text"
                 value={formData.description || ''}
                 onChange={handleInputChange}
-                onPointerDownCapture={e => {
-                  const input = e.currentTarget;
-                  if (document.activeElement !== input) {
-                    input.focus({ preventScroll: true } as any);
-                  }
-                }}
                 className="block w-full rounded-md border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-base"
                 placeholder="Es. Caffè al bar"
               />
@@ -389,7 +335,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
                     type="date"
                     value={formData.date || ''}
                     onChange={handleInputChange}
-                    max={today}
+                    max={toYYYYMMDD(new Date())}
                     className="block w-full rounded-md border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-base"
                   />
                 </div>
@@ -511,11 +457,13 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
 
       {isFrequencyModalOpen && (
         <div
+          // FIX: Use backticks for template literal
           className={`absolute inset-0 z-[60] flex justify-center items-center p-4 transition-opacity duration-300 ease-in-out ${isFrequencyModalAnimating ? 'opacity-100' : 'opacity-0'} bg-slate-900/60 backdrop-blur-sm`}
           onClick={handleCloseFrequencyModal}
           aria-modal="true" role="dialog"
         >
           <div
+            // FIX: Use backticks for template literal
             className={`bg-white rounded-lg shadow-xl w-full max-w-xs transform transition-all duration-300 ease-in-out ${isFrequencyModalAnimating ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`}
             onClick={(e) => e.stopPropagation()}
           >
@@ -535,12 +483,14 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
       
       {isRecurrenceModalOpen && (
         <div
+          // FIX: Use backticks for template literal
           className={`absolute inset-0 z-[60] flex justify-center items-center p-4 transition-opacity duration-300 ease-in-out ${isRecurrenceModalAnimating ? 'opacity-100' : 'opacity-0'} bg-slate-900/60 backdrop-blur-sm`}
           onClick={handleCloseRecurrenceModal}
           aria-modal="true"
           role="dialog"
         >
           <div
+            // FIX: Use backticks for template literal
             className={`bg-white rounded-lg shadow-xl w-full max-w-sm transform transition-all duration-300 ease-in-out ${isRecurrenceModalAnimating ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`}
             onClick={(e) => e.stopPropagation()}
           >
@@ -560,6 +510,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
                   <span className="truncate flex-1 capitalize">
                     {getRecurrenceLabel(tempRecurrence as any) || 'Seleziona'}
                   </span>
+                  {/* FIX: Use backticks for template literal */}
                   <ChevronDownIcon className={`w-5 h-5 text-slate-500 transition-transform ${isRecurrenceOptionsOpen ? 'rotate-180' : ''}`} />
                 </button>
 
@@ -633,12 +584,14 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
 
       {isRecurrenceEndModalOpen && (
         <div
+          // FIX: Use backticks for template literal
           className={`absolute inset-0 z-[60] flex justify-center items-center p-4 transition-opacity duration-300 ease-in-out ${isRecurrenceEndModalAnimating ? 'opacity-100' : 'opacity-0'} bg-slate-900/60 backdrop-blur-sm`}
           onClick={handleCloseRecurrenceEndModal}
           aria-modal="true"
           role="dialog"
         >
           <div
+            // FIX: Use backticks for template literal
             className={`bg-white rounded-lg shadow-xl w-full max-w-xs transform transition-all duration-300 ease-in-out ${isRecurrenceEndModalAnimating ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`}
             onClick={(e) => e.stopPropagation()}
           >

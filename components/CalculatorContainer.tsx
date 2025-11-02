@@ -14,7 +14,6 @@ interface CalculatorContainerProps {
   onDeleteExpense: (id: string) => void;
 }
 
-// Hook per media query
 const useMediaQuery = (query: string) => {
   const [matches, setMatches] = useState(false);
   useEffect(() => {
@@ -29,19 +28,6 @@ const useMediaQuery = (query: string) => {
 
 const getCurrentTime = () =>
   new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
-
-// --- TAP SHIELD (anti "primo tap a vuoto") ---
-const TAP_SHIELD_MS = 250;
-const armTapShield = () => {
-  (window as any).__tapShieldUntil = Date.now() + TAP_SHIELD_MS;
-};
-const disarmTapShield = () => {
-  (window as any).__tapShieldUntil = 0;
-};
-const isTapShieldActive = () => {
-  const t = (window as any).__tapShieldUntil || 0;
-  return Date.now() < t;
-};
 
 const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   isOpen,
@@ -82,6 +68,27 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   const calculatorPageRef = useRef<HTMLDivElement>(null);
   const detailsPageRef = useRef<HTMLDivElement>(null);
 
+  // 👇 Nuova logica anti “primo tap a vuoto”
+  // Blocca solo il click sintetico post-navigazione, finché non avviene il primo pointerdown reale nella nuova vista.
+  const awaitingFirstPointerDownRef = useRef(false);
+
+  useEffect(() => {
+    const onClickCapture = (ev: MouseEvent) => {
+      if (!awaitingFirstPointerDownRef.current) return;
+      const root = containerRef.current;
+      if (!root) return;
+      // Consuma SOLO il prossimo click (sintetico) dentro il container,
+      // prima che l'utente tocchi la nuova pagina.
+      if (root.contains(ev.target as Node)) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        // Non azzero il flag qui: lo farà il primo pointerdown reale.
+      }
+    };
+    window.addEventListener('click', onClickCapture, true); // capture
+    return () => window.removeEventListener('click', onClickCapture, true);
+  }, []);
+
   const { progress, isSwiping } = useSwipe(
     containerRef,
     {
@@ -111,21 +118,21 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   };
 
   const handleFormChange = (newData: Partial<Omit<Expense, 'id'>>) => {
-    setFormData((prev) => ({ ...prev, ...newData }));
+    setFormData(prev => ({ ...prev, ...newData }));
   };
 
-  // Annulla long-press del tastierino e DISARMA tap-shield al primo tocco nella vista attiva
+  // Appena l’utente tocca la vista attiva, sblocca il primo tap
   const handleRootPointerDownCapture: React.PointerEventHandler<HTMLDivElement> = () => {
     window.dispatchEvent(new Event('numPad:cancelLongPress'));
-    disarmTapShield();
+    awaitingFirstPointerDownRef.current = false;
   };
 
   const navigateTo = (targetView: 'calculator' | 'details') => {
     if (view !== targetView) {
       window.dispatchEvent(new Event('numPad:cancelLongPress'));
       setIsTransitioning(true);
-      // Attiva shield per evitare il ghost-click post navigazione
-      armTapShield();
+      // attiva il blocco per il click sintetico post-animazione
+      awaitingFirstPointerDownRef.current = true;
       setView(targetView);
     }
   };
@@ -136,17 +143,9 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
 
   if (!isOpen) return null;
 
-  const translateX = (view === 'calculator' ? 0 : -50) + progress * 50;
+  const translateX = (view === 'calculator' ? 0 : -50) + (progress * 50);
   const isCalculatorActive = view === 'calculator';
   const isDetailsActive = view === 'details';
-
-  // Blocca SOLO i click sintetici nei 200–250ms dopo il cambio pagina
-  const swallowGhostClicks: React.MouseEventHandler<HTMLDivElement> = (e) => {
-    if (isTapShieldActive()) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
-  };
 
   return (
     <div
@@ -156,13 +155,10 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
       aria-modal="true"
       role="dialog"
       onPointerDownCapture={handleRootPointerDownCapture}
-      onClickCapture={swallowGhostClicks}
+      ref={containerRef}
     >
       <div
-        ref={containerRef}
-        className={`relative h-full w-full overflow-hidden ${
-          isTransitioning ? 'pointer-events-none' : ''
-        }`}
+        className={`relative h-full w-full overflow-hidden ${isTransitioning ? 'pointer-events-none' : ''}`}
       >
         <div
           ref={swipeableDivRef}
@@ -175,9 +171,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
           }}
         >
           <div
-            className={`w-1/2 md:w-auto h-full relative ${
-              isCalculatorActive ? 'z-10' : 'z-0'
-            } ${!isCalculatorActive ? 'pointer-events-none' : ''}`}
+            className={`w-1/2 md:w-auto h-full relative ${isCalculatorActive ? 'z-10' : 'z-0'} ${!isCalculatorActive ? 'pointer-events-none' : ''}`}
             aria-hidden={!isCalculatorActive}
           >
             <CalculatorInputScreen
@@ -194,9 +188,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
           </div>
 
           <div
-            className={`w-1/2 md:w-auto h-full relative ${
-              isDetailsActive ? 'z-10' : 'z-0'
-            } ${!isDetailsActive ? 'pointer-events-none' : ''}`}
+            className={`w-1/2 md:w-auto h-full relative ${isDetailsActive ? 'z-10' : 'z-0'} ${!isDetailsActive ? 'pointer-events-none' : ''}`}
             aria-hidden={!isDetailsActive}
           >
             <TransactionDetailPage
