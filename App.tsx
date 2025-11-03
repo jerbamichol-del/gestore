@@ -321,19 +321,42 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   };
 
   const handleFormSubmit = (data: Omit<Expense, 'id'> | Expense) => {
-      if (data.frequency === 'recurring') {
+      // Logic to convert a recurring expense to a single one
+      if (editingRecurringExpense && 'id' in data && data.id === editingRecurringExpense.id && data.frequency !== 'recurring') {
+          // 1. Remove from recurring expenses
+          setRecurringExpenses(prev => prev.filter(e => e.id !== editingRecurringExpense.id));
+          
+          // 2. Add as a new single expense
+          const newSingleExpenseData: Omit<Expense, 'id'> = {
+              ...data,
+              frequency: 'single',
+              recurrence: undefined,
+              monthlyRecurrenceType: undefined,
+              recurrenceInterval: undefined,
+              recurrenceDays: undefined,
+              recurrenceEndType: undefined,
+              recurrenceEndDate: undefined,
+              recurrenceCount: undefined,
+              recurringExpenseId: undefined,
+              lastGeneratedDate: undefined,
+          };
+          const { id, ...rest } = newSingleExpenseData as Expense;
+          addExpense(rest);
+          showToast({ message: 'Spesa convertita in singola.', type: 'success' });
+      } else if (data.frequency === 'recurring') {
           if ('id' in data) {
               updateRecurringExpense(data);
           } else {
               addRecurringExpense(data);
           }
-      } else {
+      } else { // single expense
           if ('id' in data) {
               updateExpense(data);
           } else {
-              addExpense(data);
+              addExpense(data as Omit<Expense, 'id'>);
           }
       }
+      
       setIsFormOpen(false);
       setIsCalculatorContainerOpen(false);
       setEditingExpense(undefined);

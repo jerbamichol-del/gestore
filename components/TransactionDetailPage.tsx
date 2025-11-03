@@ -1,4 +1,3 @@
-
 // TransactionDetailPage.tsx
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Expense, Account } from '../types';
@@ -174,6 +173,8 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
 
   const amountInputRef = useRef<HTMLInputElement>(null);
   const descriptionInputRef = useRef<HTMLInputElement>(null);
+
+  const isSingleRecurring = formData.frequency === 'recurring' && formData.recurrenceEndType === 'count' && formData.recurrenceCount === 1;
 
   // ===== First-tap fixer: valido SOLO per TAP (non per swipe) =====
   const needsFirstTapFixRef = useRef(false);
@@ -524,7 +525,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
     <div className={`grid ${!formData.frequency ? 'grid-cols-2' : 'grid-cols-1'} gap-4`}>
       <div>
         <label htmlFor="date" className={`block text-base font-medium mb-1 transition-colors ${dateError ? 'text-red-600' : 'text-slate-700'}`}>
-          {formData.frequency === 'recurring' ? 'Data di inizio' : 'Data'}
+          {isSingleRecurring ? 'Data del Pagamento' : formData.frequency === 'recurring' ? 'Data di inizio' : 'Data'}
         </label>
         <div className="relative">
           <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
@@ -657,7 +658,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
                 }`}
               >
                 <span className="truncate flex-1 capitalize">
-                  {formData.frequency === 'recurring' ? 'Ricorrente' : formData.frequency === 'single' ? 'Singolo' : 'Nessuna'}
+                  {isSingleRecurring ? 'Singolo' : formData.frequency === 'recurring' ? 'Ricorrente' : 'Nessuna'}
                 </span>
                 <ChevronDownIcon className="w-5 h-5 text-slate-500" />
               </button>
@@ -665,7 +666,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
 
             {isFrequencySet && DateTimeInputs}
 
-            {formData.frequency === 'recurring' && (
+            {formData.frequency === 'recurring' && !isSingleRecurring && (
               <div>
                 <label className="block text-base font-medium text-slate-700 mb-1">Ricorrenza</label>
                 <button

@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Expense, Account, CATEGORIES } from '../types';
 import { XMarkIcon } from './icons/XMarkIcon';
@@ -91,7 +92,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
   const [formData, setFormData] = useState<Partial<Omit<Expense, 'id' | 'amount'>> & { amount?: number | string }>({});
   const [error, setError] = useState<string | null>(null);
   
-  const [activeMenu, setActiveMenu] = useState<'category' | 'subcategory' | 'account' | 'recurrence' | null>(null);
+  const [activeMenu, setActiveMenu] = useState<'category' | 'subcategory' | 'account' | 'recurrence' | 'frequency' | null>(null);
 
   const [originalExpenseState, setOriginalExpenseState] = useState<Partial<Expense> | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
@@ -134,7 +135,8 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
       if (initialData) {
         const dataWithTime = {
             ...initialData,
-            time: initialData.time || getCurrentTime()
+            time: initialData.time || getCurrentTime(),
+            frequency: isForRecurringTemplate ? 'recurring' : (initialData.frequency || 'single')
         };
         setFormData(dataWithTime);
         setOriginalExpenseState(dataWithTime);
@@ -148,6 +150,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
           category: prefilledData.category || '',
           subcategory: prefilledData.subcategory || '',
           accountId: prefilledData.accountId || defaultAccountId,
+          frequency: 'single',
         });
         setOriginalExpenseState(null);
       } else {
@@ -173,7 +176,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
       setIsAnimating(false);
       setIsClosableByBackdrop(false);
     }
-  }, [isOpen, initialData, prefilledData, resetForm, accounts]);
+  }, [isOpen, initialData, prefilledData, resetForm, accounts, isForRecurringTemplate]);
   
   useEffect(() => {
     if (!isEditing || !originalExpenseState) {
@@ -186,17 +189,18 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
     const amountChanged = Math.abs(currentAmount - originalAmount) > 0.001;
     const descriptionChanged = (formData.description || '') !== (originalExpenseState.description || '');
     const dateChanged = formData.date !== originalExpenseState.date;
-    const timeChanged = (formData.time || '') !== (originalExpenseState.time || '');
+    const timeChanged = !isForRecurringTemplate && ((formData.time || '') !== (originalExpenseState.time || ''));
     const categoryChanged = (formData.category || '') !== (originalExpenseState.category || '');
     const subcategoryChanged = (formData.subcategory || '') !== (originalExpenseState.subcategory || '');
     const accountIdChanged = formData.accountId !== originalExpenseState.accountId;
+    const frequencyChanged = formData.frequency !== originalExpenseState.frequency;
     const recurrenceChanged = formData.recurrence !== originalExpenseState.recurrence || formData.recurrenceInterval !== originalExpenseState.recurrenceInterval;
 
-    const changed = amountChanged || descriptionChanged || dateChanged || timeChanged || categoryChanged || subcategoryChanged || accountIdChanged || recurrenceChanged;
+    const changed = amountChanged || descriptionChanged || dateChanged || timeChanged || categoryChanged || subcategoryChanged || accountIdChanged || frequencyChanged || recurrenceChanged;
     
     setHasChanges(changed);
 
-  }, [formData, originalExpenseState, isEditing]);
+  }, [formData, originalExpenseState, isEditing, isForRecurringTemplate]);
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -212,6 +216,34 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
       return newData;
     });
     setActiveMenu(null);
+  };
+
+  const handleFrequencyOptionSelect = (value: 'none' | 'single' | 'recurring') => {
+      const updates: Partial<Omit<Expense, 'id'>> = {};
+      if (value === 'none') {
+          updates.frequency = 'single';
+          updates.recurrence = undefined;
+          updates.recurrenceInterval = undefined;
+          updates.recurrenceDays = undefined;
+          updates.recurrenceEndType = undefined;
+          updates.recurrenceEndDate = undefined;
+          updates.recurrenceCount = undefined;
+          updates.monthlyRecurrenceType = undefined;
+      } else {
+          updates.frequency = 'recurring';
+          updates.recurrence = formData.recurrence || 'monthly';
+          if (value === 'single') {
+              updates.recurrenceEndType = 'count';
+              updates.recurrenceCount = 1;
+              updates.recurrenceEndDate = undefined;
+          } else { // recurring
+              updates.recurrenceEndType = 'forever';
+              updates.recurrenceCount = undefined;
+              updates.recurrenceEndDate = undefined;
+          }
+      }
+      setFormData(prev => ({ ...prev, ...updates }));
+      setActiveMenu(null);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -243,10 +275,8 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
       subcategory: formData.subcategory || undefined,
     };
     
-    if (isForRecurringTemplate) {
-        dataToSubmit.frequency = 'recurring';
-    } else {
-        dataToSubmit.frequency = 'single';
+    if (dataToSubmit.frequency === 'recurring') {
+        delete dataToSubmit.time;
     }
     
     if (isEditing) {
@@ -291,6 +321,12 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
       label: label,
   }));
 
+  const frequencyOptions = [
+    { value: 'none', label: 'Nessuna (spesa singola)' },
+    { value: 'single', label: 'Singolo (una tantum)' },
+    { value: 'recurring', label: 'Ricorrente' },
+  ];
+
   const isSubcategoryDisabled = !formData.category || formData.category === 'Altro' || subcategoryOptions.length === 0;
 
   const SelectionButton = ({ label, value, onClick, placeholder, ariaLabel, disabled, icon }: { label: string, value?: string, onClick: () => void, placeholder: string, ariaLabel: string, disabled?: boolean, icon: React.ReactNode }) => {
@@ -322,7 +358,8 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
 
   const selectedAccountLabel = accounts.find(a => a.id === formData.accountId)?.name;
   const selectedCategoryLabel = formData.category ? getCategoryStyle(formData.category).label : undefined;
-  
+  const isSingleRecurring = formData.frequency === 'recurring' && formData.recurrenceEndType === 'count' && formData.recurrenceCount === 1;
+
   return (
     <div
       className={`fixed inset-0 z-[51] transition-opacity duration-300 ease-in-out ${isAnimating ? 'opacity-100' : 'opacity-0'} bg-slate-900/60 backdrop-blur-sm`}
@@ -376,9 +413,9 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                      required
                      autoComplete="off"
                   />
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className={`grid ${formData.frequency === 'recurring' ? 'grid-cols-1' : 'grid-cols-2'} gap-2`}>
                       <div>
-                          <label htmlFor="date" className="block text-base font-medium text-slate-700 mb-1">{isForRecurringTemplate ? 'Data di Inizio' : 'Data'}</label>
+                          <label htmlFor="date" className="block text-base font-medium text-slate-700 mb-1">{formData.frequency === 'recurring' ? 'Data di Inizio' : 'Data'}</label>
                           <div className="relative">
                               <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
                                   <CalendarIcon className="h-5 w-5 text-slate-400" />
@@ -393,22 +430,24 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                               />
                           </div>
                       </div>
-                      <div>
-                          <label htmlFor="time" className="block text-base font-medium text-slate-700 mb-1">Ora (opz.)</label>
-                          <div className="relative">
-                              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                                  <ClockIcon className="h-5 w-5 text-slate-400" />
-                              </div>
-                              <input
-                                  id="time"
-                                  name="time"
-                                  value={formData.time || ''}
-                                  onChange={handleInputChange}
-                                  className="block w-full rounded-md border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-base"
-                                  type="time"
-                              />
-                          </div>
-                      </div>
+                      {formData.frequency !== 'recurring' && (
+                        <div>
+                            <label htmlFor="time" className="block text-base font-medium text-slate-700 mb-1">Ora (opz.)</label>
+                            <div className="relative">
+                                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                                    <ClockIcon className="h-5 w-5 text-slate-400" />
+                                </div>
+                                <input
+                                    id="time"
+                                    name="time"
+                                    value={formData.time || ''}
+                                    onChange={handleInputChange}
+                                    className="block w-full rounded-md border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-base"
+                                    type="time"
+                                />
+                            </div>
+                        </div>
+                      )}
                   </div>
                </div>
               
@@ -441,23 +480,43 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
               </div>
               
               {isForRecurringTemplate && (
-                 <div className="p-4 bg-slate-200/50 rounded-lg border border-slate-200">
-                    <label className="block text-base font-medium text-slate-700 mb-2">Frequenza</label>
-                     <div className="relative">
-                        <button
-                            type="button"
-                            onClick={() => setActiveMenu('recurrence')}
-                            className="w-full flex items-center justify-between text-left gap-2 px-3 py-2.5 text-base rounded-lg border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors bg-white border-slate-300 text-slate-800 hover:bg-slate-50"
-                        >
-                          <span className="flex items-center gap-2">
-                            <CalendarDaysIcon className="h-5 w-5 text-slate-400"/>
-                            <span className="truncate flex-1 capitalize">
-                              {formData.recurrence ? recurrenceLabels[formData.recurrence] : 'Seleziona Frequenza'}
-                            </span>
-                          </span>
-                          <ChevronDownIcon className="w-5 h-5 text-slate-500" />
-                        </button>
+                 <div className="p-4 bg-slate-200/50 rounded-lg border border-slate-200 space-y-4">
+                    <div>
+                        <label className="block text-base font-medium text-slate-700 mb-2">Frequenza</label>
+                         <div className="relative">
+                            <button
+                                type="button"
+                                onClick={() => setActiveMenu('frequency')}
+                                className="w-full flex items-center justify-between text-left gap-2 px-3 py-2.5 text-base rounded-lg border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors bg-white border-slate-300 text-slate-800 hover:bg-slate-50"
+                            >
+                              <span className="flex items-center gap-2">
+                                <CalendarDaysIcon className="h-5 w-5 text-slate-400"/>
+                                <span className="truncate flex-1 capitalize">
+                                  {isSingleRecurring ? 'Singolo (una tantum)' : formData.frequency === 'recurring' ? 'Ricorrente' : 'Nessuna (spesa singola)'}
+                                </span>
+                              </span>
+                              <ChevronDownIcon className="w-5 h-5 text-slate-500" />
+                            </button>
+                        </div>
                     </div>
+
+                    {formData.frequency === 'recurring' && (
+                      <div className="animate-fade-in-up">
+                        <label className="block text-base font-medium text-slate-700 mb-2">Tipo di Ricorrenza</label>
+                         <div className="relative">
+                            <button
+                                type="button"
+                                onClick={() => setActiveMenu('recurrence')}
+                                className="w-full flex items-center justify-between text-left gap-2 px-3 py-2.5 text-base rounded-lg border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors bg-white border-slate-300 text-slate-800 hover:bg-slate-50"
+                            >
+                              <span className="truncate flex-1 capitalize">
+                                {formData.recurrence ? recurrenceLabels[formData.recurrence] : 'Seleziona'}
+                              </span>
+                              <ChevronDownIcon className="w-5 h-5 text-slate-500" />
+                            </button>
+                        </div>
+                      </div>
+                    )}
                  </div>
               )}
 
@@ -523,10 +582,19 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
       <SelectionMenu 
         isOpen={activeMenu === 'recurrence'}
         onClose={() => setActiveMenu(null)}
-        title="Imposta Frequenza"
+        title="Imposta Ricorrenza"
         options={recurrenceOptions}
         selectedValue={formData.recurrence || ''}
         onSelect={(value) => handleSelectChange('recurrence', value)}
+      />
+
+      <SelectionMenu
+          isOpen={activeMenu === 'frequency'}
+          onClose={() => setActiveMenu(null)}
+          title="Imposta Frequenza"
+          options={frequencyOptions}
+          selectedValue={isSingleRecurring ? 'single' : formData.frequency !== 'recurring' ? 'none' : 'recurring'}
+          onSelect={handleFrequencyOptionSelect as (value: string) => void}
       />
 
     </div>
