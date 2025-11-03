@@ -9,7 +9,7 @@ export interface Expense {
   id:string;
   description: string;
   amount: number;
-  date: string;
+  date: string; // For recurring templates, this is the start date
   time?: string;
   category: string;
   subcategory?: string;
@@ -22,6 +22,8 @@ export interface Expense {
   recurrenceEndType?: 'forever' | 'date' | 'count';
   recurrenceEndDate?: string;
   recurrenceCount?: number;
+  recurringExpenseId?: string; // Links an instance to its template
+  lastGeneratedDate?: string; // For templates, tracks the last generation date
 }
 
 export const CATEGORIES: Record<string, string[]> = {

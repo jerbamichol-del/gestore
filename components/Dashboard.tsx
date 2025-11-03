@@ -6,6 +6,8 @@ import { Expense } from '../types';
 import { formatCurrency } from './icons/formatters';
 import { getCategoryStyle } from '../utils/categoryStyles';
 import { LockClosedIcon } from './icons/LockClosedIcon';
+import { CalendarDaysIcon } from './icons/CalendarDaysIcon';
+import { ChevronRightIcon } from './icons/ChevronRightIcon';
 
 const categoryHexColors: Record<string, string> = {
     'Alimentari': '#16a34a', // green-600
@@ -54,9 +56,10 @@ const renderActiveShape = (props: any) => {
 interface DashboardProps {
   expenses: Expense[];
   onLogout: () => void;
+  onNavigateToRecurring: () => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ expenses, onLogout }) => {
+const Dashboard: React.FC<DashboardProps> = ({ expenses, onLogout, onNavigateToRecurring }) => {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const activeIndex = selectedIndex;
 
@@ -117,7 +120,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, onLogout }) => {
                     </div>
                     <p className="text-4xl font-extrabold text-indigo-600">{formatCurrency(totalExpenses)}</p>
                 </div>
-                <div className="mt-6 pt-4 border-t border-slate-200">
+                <div className="mt-4 pt-4 border-t border-slate-200">
                     <div>
                         <h4 className="text-sm font-medium text-slate-500">Oggi</h4>
                         <p className="text-xl font-bold text-slate-800">{formatCurrency(dailyTotal)}</p>
@@ -153,6 +156,23 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, onLogout }) => {
                 ) : <p className="text-center text-slate-500 flex-grow flex items-center justify-center">Nessuna spesa registrata.</p>}
             </div>
         </div>
+        
+        <button
+            onClick={onNavigateToRecurring}
+            className="w-full flex items-center justify-between gap-4 px-6 py-4 text-left font-semibold text-slate-800 bg-white rounded-2xl shadow-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all"
+        >
+            <div className="flex items-center gap-4">
+                <span className="w-10 h-10 rounded-xl flex items-center justify-center bg-indigo-100">
+                    <CalendarDaysIcon className="w-6 h-6 text-indigo-600" />
+                </span>
+                <div>
+                    <span className="text-base">Spese Ricorrenti</span>
+                    <p className="text-sm font-normal text-slate-500">Gestisci abbonamenti e pagamenti fissi</p>
+                </div>
+            </div>
+            <ChevronRightIcon className="w-6 h-6 text-slate-400" />
+        </button>
+
         <div className="bg-white p-6 rounded-2xl shadow-lg">
             <h3 className="text-xl font-bold text-slate-700 mb-2 text-center">Spese per Categoria</h3>
             {categoryData.length > 0 ? (

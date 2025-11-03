@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Expense, Account, CATEGORIES } from '../types';
 import { XMarkIcon } from './icons/XMarkIcon';
@@ -9,6 +10,9 @@ import { CreditCardIcon } from './icons/CreditCardIcon';
 import SelectionMenu from './SelectionMenu';
 import { getCategoryStyle } from '../utils/categoryStyles';
 import { ClockIcon } from './icons/ClockIcon';
+import { CalendarDaysIcon } from './icons/CalendarDaysIcon';
+import { ChevronDownIcon } from './icons/ChevronDownIcon';
+
 
 interface ExpenseFormProps {
   isOpen: boolean;
@@ -17,6 +21,7 @@ interface ExpenseFormProps {
   initialData?: Expense;
   prefilledData?: Partial<Omit<Expense, 'id'>>;
   accounts: Account[];
+  isForRecurringTemplate?: boolean;
 }
 
 const toYYYYMMDD = (date: Date) => {
@@ -39,7 +44,6 @@ interface FormInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement
   icon: React.ReactNode;
 }
 
-// ✅ helper SOLO per la tastiera: attende la chiusura/stabilizzazione del visualViewport
 const waitKeyboardClose = (): Promise<void> =>
   new Promise((resolve) => {
     const vv = (window as any).visualViewport as VisualViewport | undefined;
@@ -51,7 +55,6 @@ const waitKeyboardClose = (): Promise<void> =>
     t = setTimeout(finish, 180); // safety
   });
 
-// A memoized and correctly ref-forwarded input component to prevent re-renders from causing focus issues.
 const FormInput = React.memo(React.forwardRef<HTMLInputElement, FormInputProps>(({ id, name, label, value, onChange, icon, ...props }, ref) => {
   return (
     <div>
@@ -75,15 +78,21 @@ const FormInput = React.memo(React.forwardRef<HTMLInputElement, FormInputProps>(
 }));
 FormInput.displayName = 'FormInput';
 
-const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, initialData, prefilledData, accounts }) => {
+const recurrenceLabels: Record<string, string> = {
+  daily: 'Giornaliera',
+  weekly: 'Settimanale',
+  monthly: 'Mensile',
+  yearly: 'Annuale',
+};
+
+const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, initialData, prefilledData, accounts, isForRecurringTemplate = false }) => {
   const [isAnimating, setIsAnimating] = useState(false);
   const [isClosableByBackdrop, setIsClosableByBackdrop] = useState(false);
   const [formData, setFormData] = useState<Partial<Omit<Expense, 'id' | 'amount'>> & { amount?: number | string }>({});
   const [error, setError] = useState<string | null>(null);
   
-  const [activeMenu, setActiveMenu] = useState<'category' | 'subcategory' | 'account' | null>(null);
+  const [activeMenu, setActiveMenu] = useState<'category' | 'subcategory' | 'account' | 'recurrence' | null>(null);
 
-  // New states for change detection
   const [originalExpenseState, setOriginalExpenseState] = useState<Partial<Expense> | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
 
@@ -103,6 +112,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
       category: '',
       subcategory: '',
       accountId: defaultAccountId,
+      frequency: 'single',
     });
     setError(null);
     setOriginalExpenseState(null);
@@ -147,7 +157,6 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
       
       const animTimer = setTimeout(() => {
         setIsAnimating(true);
-        // Set focus on the title to prevent the browser from auto-focusing an input
         titleRef.current?.focus();
       }, 50);
       
@@ -166,26 +175,24 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
     }
   }, [isOpen, initialData, prefilledData, resetForm, accounts]);
   
-    // Effect to detect changes
   useEffect(() => {
     if (!isEditing || !originalExpenseState) {
         setHasChanges(false);
         return;
     }
 
-    // Normalize amount for comparison (formData can be string with comma)
     const currentAmount = parseFloat(String(formData.amount || '0').replace(',', '.'));
     const originalAmount = originalExpenseState.amount || 0;
-    const amountChanged = Math.abs(currentAmount - originalAmount) > 0.001; // Use tolerance for float comparison
-
+    const amountChanged = Math.abs(currentAmount - originalAmount) > 0.001;
     const descriptionChanged = (formData.description || '') !== (originalExpenseState.description || '');
     const dateChanged = formData.date !== originalExpenseState.date;
     const timeChanged = (formData.time || '') !== (originalExpenseState.time || '');
     const categoryChanged = (formData.category || '') !== (originalExpenseState.category || '');
     const subcategoryChanged = (formData.subcategory || '') !== (originalExpenseState.subcategory || '');
     const accountIdChanged = formData.accountId !== originalExpenseState.accountId;
+    const recurrenceChanged = formData.recurrence !== originalExpenseState.recurrence || formData.recurrenceInterval !== originalExpenseState.recurrenceInterval;
 
-    const changed = amountChanged || descriptionChanged || dateChanged || timeChanged || categoryChanged || subcategoryChanged || accountIdChanged;
+    const changed = amountChanged || descriptionChanged || dateChanged || timeChanged || categoryChanged || subcategoryChanged || accountIdChanged || recurrenceChanged;
     
     setHasChanges(changed);
 
@@ -226,7 +233,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
     
     setError(null);
 
-    const dataToSubmit = {
+    const dataToSubmit: Partial<Expense> = {
       ...formData,
       amount: amountAsNumber,
       date: finalDate,
@@ -236,6 +243,12 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
       subcategory: formData.subcategory || undefined,
     };
     
+    if (isForRecurringTemplate) {
+        dataToSubmit.frequency = 'recurring';
+    } else {
+        dataToSubmit.frequency = 'single';
+    }
+    
     if (isEditing) {
         onSubmit({ ...initialData, ...dataToSubmit } as Expense);
     } else {
@@ -243,14 +256,12 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
     }
   };
 
-  // ⬇️ S O L O  T A S T I E R A: intercetta Enter su "Importo", chiude tastiera, niente submit
   const handleAmountEnter = useCallback(async (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== 'Enter') return;
     e.preventDefault();
     const el = e.currentTarget as HTMLInputElement;
-    el.blur();                // chiude la tastiera
-    await waitKeyboardClose(); // attende stabilizzazione viewport → evita sfarfallio
-    // resta nel form per scegliere conto/categoria/sottocategoria
+    el.blur();
+    await waitKeyboardClose();
   }, []);
 
   if (!isOpen) return null;
@@ -273,6 +284,11 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
   const accountOptions = accounts.map(acc => ({
       value: acc.id,
       label: acc.name,
+  }));
+  
+  const recurrenceOptions = Object.entries(recurrenceLabels).map(([key, label]) => ({
+      value: key,
+      label: label,
   }));
 
   const isSubcategoryDisabled = !formData.category || formData.category === 'Altro' || subcategoryOptions.length === 0;
@@ -309,7 +325,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
   
   return (
     <div
-      className={`fixed inset-0 z-50 transition-opacity duration-300 ease-in-out ${isAnimating ? 'opacity-100' : 'opacity-0'} bg-slate-900/60 backdrop-blur-sm`}
+      className={`fixed inset-0 z-[51] transition-opacity duration-300 ease-in-out ${isAnimating ? 'opacity-100' : 'opacity-0'} bg-slate-900/60 backdrop-blur-sm`}
       onClick={handleBackdropClick}
       aria-modal="true"
       role="dialog"
@@ -351,9 +367,8 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                      label="Importo"
                      value={formData.amount || ''}
                      onChange={handleInputChange}
-                     onKeyDown={handleAmountEnter}  // ⬅️ Enter chiude tastiera, non invia
+                     onKeyDown={handleAmountEnter}
                      icon={<CurrencyEuroIcon className="h-5 w-5 text-slate-400" />}
-                     // ⬇️ cambiamento CHIAVE per tastiera
                      type="text"
                      inputMode="decimal"
                      pattern="[0-9]*[.,]?[0-9]*"
@@ -361,37 +376,39 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                      required
                      autoComplete="off"
                   />
-                  <div>
-                    <label htmlFor="date" className="block text-base font-medium text-slate-700 mb-1">Data e Ora (opzionali)</label>
-                    <div className="grid grid-cols-2 gap-2">
-                        <div className="relative">
-                            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                                <CalendarIcon className="h-5 w-5 text-slate-400" />
-                            </div>
-                            <input
-                                id="date"
-                                name="date"
-                                value={formData.date || ''}
-                                onChange={handleInputChange}
-                                className="block w-full rounded-md border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-base"
-                                type="date"
-                                max={getTodayString()}
-                            />
-                        </div>
-                        <div className="relative">
-                           <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                               <ClockIcon className="h-5 w-5 text-slate-400" />
-                           </div>
-                           <input
-                               id="time"
-                               name="time"
-                               value={formData.time || ''}
-                               onChange={handleInputChange}
-                               className="block w-full rounded-md border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-base"
-                               type="time"
-                           />
-                        </div>
-                    </div>
+                  <div className="grid grid-cols-2 gap-2">
+                      <div>
+                          <label htmlFor="date" className="block text-base font-medium text-slate-700 mb-1">{isForRecurringTemplate ? 'Data di Inizio' : 'Data'}</label>
+                          <div className="relative">
+                              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                                  <CalendarIcon className="h-5 w-5 text-slate-400" />
+                              </div>
+                              <input
+                                  id="date"
+                                  name="date"
+                                  value={formData.date || ''}
+                                  onChange={handleInputChange}
+                                  className="block w-full rounded-md border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-base"
+                                  type="date"
+                              />
+                          </div>
+                      </div>
+                      <div>
+                          <label htmlFor="time" className="block text-base font-medium text-slate-700 mb-1">Ora (opz.)</label>
+                          <div className="relative">
+                              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                                  <ClockIcon className="h-5 w-5 text-slate-400" />
+                              </div>
+                              <input
+                                  id="time"
+                                  name="time"
+                                  value={formData.time || ''}
+                                  onChange={handleInputChange}
+                                  className="block w-full rounded-md border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-base"
+                                  type="time"
+                              />
+                          </div>
+                      </div>
                   </div>
                </div>
               
@@ -422,6 +439,27 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                     icon={<TagIcon className="h-5 w-5" />}
                 />
               </div>
+              
+              {isForRecurringTemplate && (
+                 <div className="p-4 bg-slate-200/50 rounded-lg border border-slate-200">
+                    <label className="block text-base font-medium text-slate-700 mb-2">Frequenza</label>
+                     <div className="relative">
+                        <button
+                            type="button"
+                            onClick={() => setActiveMenu('recurrence')}
+                            className="w-full flex items-center justify-between text-left gap-2 px-3 py-2.5 text-base rounded-lg border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors bg-white border-slate-300 text-slate-800 hover:bg-slate-50"
+                        >
+                          <span className="flex items-center gap-2">
+                            <CalendarDaysIcon className="h-5 w-5 text-slate-400"/>
+                            <span className="truncate flex-1 capitalize">
+                              {formData.recurrence ? recurrenceLabels[formData.recurrence] : 'Seleziona Frequenza'}
+                            </span>
+                          </span>
+                          <ChevronDownIcon className="w-5 h-5 text-slate-500" />
+                        </button>
+                    </div>
+                 </div>
+              )}
 
                {error && <p className="text-base text-red-600 bg-red-100 p-3 rounded-md">{error}</p>}
           </div>
@@ -480,6 +518,15 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
         options={subcategoryOptions}
         selectedValue={formData.subcategory || ''}
         onSelect={(value) => handleSelectChange('subcategory', value)}
+      />
+      
+      <SelectionMenu 
+        isOpen={activeMenu === 'recurrence'}
+        onClose={() => setActiveMenu(null)}
+        title="Imposta Frequenza"
+        options={recurrenceOptions}
+        selectedValue={formData.recurrence || ''}
+        onSelect={(value) => handleSelectChange('recurrence', value)}
       />
 
     </div>

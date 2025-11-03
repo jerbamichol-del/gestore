@@ -1,3 +1,4 @@
+
 // TransactionDetailPage.tsx
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Expense, Account } from '../types';
@@ -370,16 +371,38 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
   };
 
   const handleFrequencySelect = (frequency: 'none' | 'single' | 'recurring') => {
-    const newFrequency = frequency === 'none' ? undefined : (frequency as 'single' | 'recurring');
-    const updates: Partial<Omit<Expense, 'id'>> = { frequency: newFrequency };
+    const updates: Partial<Omit<Expense, 'id'>> = {};
 
     if (frequency === 'none') {
+        updates.frequency = undefined;
         updates.date = toYYYYMMDD(new Date());
         updates.time = getCurrentTime();
-    } else { // single or recurring
+        // Clear all recurrence fields
+        updates.recurrence = undefined;
+        updates.monthlyRecurrenceType = undefined;
+        updates.recurrenceInterval = undefined;
+        updates.recurrenceDays = undefined;
+        updates.recurrenceEndType = 'forever';
+        updates.recurrenceEndDate = undefined;
+        updates.recurrenceCount = undefined;
+    } else { // 'single' or 'recurring'
+        updates.frequency = 'recurring'; // Both are recurring templates now
         updates.time = undefined;
-    }
+        // set default recurrence if not set
+        if (!formData.recurrence) {
+            updates.recurrence = 'monthly';
+        }
 
+        if (frequency === 'single') {
+            updates.recurrenceEndType = 'count';
+            updates.recurrenceCount = 1;
+            updates.recurrenceEndDate = undefined; // clear other end types
+        } else { // 'recurring'
+            updates.recurrenceEndType = 'forever';
+            updates.recurrenceCount = undefined;
+            updates.recurrenceEndDate = undefined;
+        }
+    }
     onFormChange(updates);
     handleCloseFrequencyModal();
   };
