@@ -76,8 +76,10 @@ const CustomDateRangeInputs: React.FC<{
   return (
     <div className="border border-slate-400 h-11">
       <button
-        onPointerUp={(e) => { e.preventDefault(); onClick(); }}
-        onClick={(e) => e.preventDefault()}
+        onClick={(e) => {
+          e.stopPropagation(); // Ferma la propagazione ma non previene il default
+          onClick();
+        }}
         style={{ touchAction: 'manipulation' }}
         aria-label={`Seleziona intervallo di date. ${ariaLabelText}`}
         className="w-full h-full flex items-center justify-center gap-2 px-2 bg-slate-100 hover:bg-slate-200 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500"
@@ -119,6 +121,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = ({
     let sx = 0, sy = 0;
     let width = 1;
     let pid: number | null = null;
+    let startTime = 0;
 
     const basePct = () => (activeView === 'quick' ? 0 : -50);
 
@@ -130,6 +133,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = ({
         sy = e.clientY;
         width = el.getBoundingClientRect().width || 1;
         pid = e.pointerId;
+        startTime = performance.now();
     };
 
     const onMove = (e: PointerEvent) => {
@@ -148,8 +152,6 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = ({
 
         if (lock !== 'h') return;
         
-        // Don't stop propagation here to allow clicks to pass through if it's not a real swipe.
-        // The decision to stop the event is made in onEnd.
         setDragging(true);
         const deltaPct = (dx / width) * 50;
         let t = basePct() + deltaPct;
@@ -162,19 +164,29 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = ({
         if (!hasDown || e.pointerId !== pid) return;
 
         const wasLocked = lock === 'h';
-        
+        const dx = e.clientX - sx;
+        const dy = e.clientY - sy;
+        const distance = Math.hypot(dx, dy);
+        const elapsed = performance.now() - startTime;
+        const isTapLike = distance < SLOP * 1.5 && elapsed < 300;
+
         if (wasLocked) {
             try { el.releasePointerCapture?.(pid); } catch {}
-            // This was a real swipe, so we stop the event to prevent an accidental click.
-            e.stopPropagation();
-
-            const dx = e.clientX - sx;
-            const triggerPx = width * TRIGGER_RATIO;
             
+            const triggerPx = width * TRIGGER_RATIO;
+            let swiped = false;
             if (activeView === 'quick' && dx <= -triggerPx) {
                 setActiveView('custom');
+                swiped = true;
             } else if (activeView === 'custom' && dx >= triggerPx) {
                 setActiveView('quick');
+                swiped = true;
+            }
+
+            // Only consume the event (stop propagation) if it was a clear swipe,
+            // not an imprecise tap.
+            if (swiped) {
+                e.stopPropagation();
             }
         }
 

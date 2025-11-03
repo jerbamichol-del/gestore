@@ -26,6 +26,13 @@ const useMediaQuery = (query: string) => {
   return matches;
 };
 
+const toYYYYMMDD = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 const getCurrentTime = () =>
   new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
 
@@ -42,14 +49,16 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
     (): Partial<Omit<Expense, 'id'>> => ({
       amount: 0,
       description: '',
-      date: new Date().toISOString().split('T')[0],
+      date: toYYYYMMDD(new Date()),
       time: getCurrentTime(),
       accountId: accounts.length > 0 ? accounts[0].id : '',
       category: '',
       subcategory: undefined,
-      frequency: 'single',
-      recurrence: 'monthly',
-      recurrenceInterval: 1,
+      frequency: undefined, // No default frequency
+      recurrence: undefined, // reset this too to be clean
+      monthlyRecurrenceType: 'dayOfMonth',
+      recurrenceInterval: undefined,
+      recurrenceDays: undefined,
       recurrenceEndType: 'forever',
       recurrenceEndDate: undefined,
       recurrenceCount: undefined,
@@ -60,6 +69,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   const [formData, setFormData] = useState<Partial<Omit<Expense, 'id'>>>(resetFormData);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isInputFocused, setIsInputFocused] = useState(false);
+  const [dateError, setDateError] = useState(false);
 
   const isDesktop = useMediaQuery('(min-width: 768px)');
 
@@ -98,6 +108,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
       setIsAnimating(false);
       const resetTimer = setTimeout(() => {
         setFormData(resetFormData());
+        setDateError(false);
       }, 300);
       return () => clearTimeout(resetTimer);
     }
@@ -109,7 +120,21 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   };
 
   const handleFormChange = (newData: Partial<Omit<Expense, 'id'>>) => {
+    if ('date' in newData && newData.date) {
+      setDateError(false);
+    }
     setFormData(prev => ({ ...prev, ...newData }));
+  };
+
+  const handleAttemptSubmit = (submittedData: Omit<Expense, 'id'>) => {
+    if (!submittedData.date) {
+      navigateTo('details');
+      setDateError(true);
+      setTimeout(() => document.getElementById('date')?.focus(), 150);
+      return;
+    }
+    setDateError(false);
+    onSubmit(submittedData);
   };
 
   const navigateTo = (targetView: 'calculator' | 'details') => {
@@ -176,7 +201,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
               formData={formData}
               onFormChange={handleFormChange}
               onClose={handleClose}
-              onSubmit={onSubmit}
+              onSubmit={handleAttemptSubmit}
               accounts={accounts}
               onNavigateToDetails={() => navigateTo('details')}
               onMenuStateChange={setIsMenuOpen}
@@ -196,10 +221,11 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
               onFormChange={handleFormChange}
               accounts={accounts}
               onClose={() => navigateTo('calculator')}
-              onSubmit={onSubmit}
+              onSubmit={handleAttemptSubmit}
               isDesktop={isDesktop}
               onMenuStateChange={setIsMenuOpen}
               onInputFocusChange={setIsInputFocused}
+              dateError={dateError}
             />
           </div>
         </div>

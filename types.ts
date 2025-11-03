@@ -16,7 +16,9 @@ export interface Expense {
   accountId: string;
   frequency?: 'single' | 'recurring';
   recurrence?: 'daily' | 'weekly' | 'monthly' | 'yearly';
+  monthlyRecurrenceType?: 'dayOfMonth' | 'dayOfWeek';
   recurrenceInterval?: number;
+  recurrenceDays?: number[]; // 0 for Sunday, 1 for Monday, etc.
   recurrenceEndType?: 'forever' | 'date' | 'count';
   recurrenceEndDate?: string;
   recurrenceCount?: number;

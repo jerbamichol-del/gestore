@@ -59,7 +59,6 @@ const CalendarView = React.memo(({
     const date = new Date(viewDate.getFullYear(), viewDate.getMonth(), day);
     const dateTime = date.getTime();
     const isToday = dateTime === today.getTime();
-    const isFuture = date > today;
 
     // Selection states
     const isSelectedStart = !!(startDate && dateTime === startDate.getTime());
@@ -120,9 +119,7 @@ const CalendarView = React.memo(({
     const baseClasses = "w-10 h-10 flex items-center justify-center text-sm transition-colors duration-150 rounded-full select-none";
     let dayClasses = "";
 
-    if (isFuture) {
-        dayClasses = "text-slate-400 cursor-not-allowed font-normal";
-    } else if (isSelectedStart || isSelectedEnd || (isHovering && !isFuture)) {
+    if (isSelectedStart || isSelectedEnd || isHovering) {
         dayClasses = "bg-indigo-600 text-white font-bold";
     } else if (inRange || inPreviewRange) {
         dayClasses = "font-bold bg-transparent text-indigo-800 hover:bg-slate-200/50";
@@ -137,9 +134,9 @@ const CalendarView = React.memo(({
         <div
             key={index}
             className={wrapperClasses}
-            onMouseEnter={() => !isFuture && !isHoverDisabled && onHoverDate(date)}
+            onMouseEnter={() => !isHoverDisabled && onHoverDate(date)}
         >
-            <button onClick={() => !isFuture && onDateClick(day)} className={`${baseClasses} ${dayClasses}`} disabled={isFuture}>
+            <button onClick={() => onDateClick(day)} className={`${baseClasses} ${dayClasses}`}>
                 {day}
             </button>
         </div>
@@ -225,24 +222,16 @@ export const DateRangePickerModal: React.FC<DateRangePickerModalProps> = ({ isOp
   }, [isOpen, initialRange.start, initialRange.end, today]);
 
   const {
-    isNextMonthDisabled,
-    isNextYearDisabled,
-    isNextYearRangeDisabled,
     prevMonthDate,
     nextMonthDate
   } = useMemo(() => {
     const d = displayDate;
     const nextMonth = new Date(d.getFullYear(), d.getMonth() + 1, 1);
-    const nextYear = new Date(d.getFullYear() + 1, 0, 1);
-    const nextRangeYear = new Date(d.getFullYear() + 12, 0, 1);
     return {
-      isNextMonthDisabled: nextMonth > today,
-      isNextYearDisabled: nextYear > today,
-      isNextYearRangeDisabled: nextRangeYear > today,
       prevMonthDate: new Date(d.getFullYear(), d.getMonth() - 1, 1),
       nextMonthDate: nextMonth,
     };
-  }, [displayDate, today]);
+  }, [displayDate]);
   
   const { yearsInView, yearRangeLabel } = useMemo(() => {
     const year = displayDate.getFullYear();
@@ -253,7 +242,6 @@ export const DateRangePickerModal: React.FC<DateRangePickerModalProps> = ({ isOp
 
   const triggerTransition = (direction: 'left' | 'right') => {
     if (transition) return;
-    if (direction === 'left' && isNextMonthDisabled) return;
     setTransition({ direction });
   };
 
@@ -268,7 +256,6 @@ export const DateRangePickerModal: React.FC<DateRangePickerModalProps> = ({ isOp
     setHoverDate(null);
     setDisplayDate(current => {
       const newYear = current.getFullYear() + delta;
-      if (delta > 0 && new Date(newYear, 0, 1) > today) return current;
       return new Date(newYear, current.getMonth(), 1);
     });
   };
@@ -440,7 +427,6 @@ export const DateRangePickerModal: React.FC<DateRangePickerModalProps> = ({ isOp
                 else if (pickerView === 'months') changeYear(1);
                 else if (pickerView === 'years') changeYearRange(1);
               }}
-              disabled={ pickerView === 'days' ? isNextMonthDisabled : pickerView === 'months' ? isNextYearDisabled : isNextYearRangeDisabled }
               className="p-2 rounded-full hover:bg-slate-200 disabled:text-slate-300 disabled:hover:bg-transparent disabled:cursor-not-allowed"
               aria-label={getNavLabel('next')}
             >
@@ -496,13 +482,11 @@ export const DateRangePickerModal: React.FC<DateRangePickerModalProps> = ({ isOp
             ) : pickerView === 'months' ? (
               <div className="grid grid-cols-3 gap-2 animate-fade-in-up">
                 {months.map((month, index) => {
-                  const isFutureMonth = displayDate.getFullYear() > today.getFullYear() || (displayDate.getFullYear() === today.getFullYear() && index > today.getMonth());
                   return (
                     <button
                       key={month}
                       onClick={() => { setDisplayDate(new Date(displayDate.getFullYear(), index, 1)); setPickerView('days'); }}
-                      disabled={isFutureMonth}
-                      className="p-3 text-sm font-semibold rounded-lg text-slate-700 hover:bg-indigo-100 hover:text-indigo-700 transition-colors capitalize disabled:text-slate-400 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+                      className="p-3 text-sm font-semibold rounded-lg text-slate-700 hover:bg-indigo-100 hover:text-indigo-700 transition-colors capitalize"
                     >
                       {month}
                     </button>
@@ -512,14 +496,12 @@ export const DateRangePickerModal: React.FC<DateRangePickerModalProps> = ({ isOp
             ) : ( // pickerView === 'years'
               <div className="grid grid-cols-3 gap-2 animate-fade-in-up">
                 {yearsInView.map((year) => {
-                  const isFutureYear = year > today.getFullYear();
                   const isCurrentYear = year === displayDate.getFullYear();
                   return (
                     <button
                       key={year}
                       onClick={() => { setDisplayDate(new Date(year, displayDate.getMonth(), 1)); setPickerView('months'); }}
-                      disabled={isFutureYear}
-                      className={`p-3 text-sm font-semibold rounded-lg transition-colors capitalize disabled:text-slate-400 disabled:hover:bg-transparent disabled:cursor-not-allowed ${isCurrentYear ? 'bg-indigo-600 text-white' : 'text-slate-700 hover:bg-indigo-100 hover:text-indigo-700'}`}
+                      className={`p-3 text-sm font-semibold rounded-lg transition-colors capitalize ${isCurrentYear ? 'bg-indigo-600 text-white' : 'text-slate-700 hover:bg-indigo-100 hover:text-indigo-700'}`}
                     >
                       {year}
                     </button>
