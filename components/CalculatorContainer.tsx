@@ -42,6 +42,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   onSubmit,
   accounts,
 }) => {
+  const [isMounted, setIsMounted] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
   const [view, setView] = useState<'calculator' | 'details'>('calculator');
 
@@ -101,22 +102,26 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
 
   useEffect(() => {
     if (isOpen) {
+      setIsMounted(true);
       setView('calculator');
       const timer = setTimeout(() => setIsAnimating(true), 10);
       return () => clearTimeout(timer);
-    } else {
+    } else if (isMounted) {
       setIsAnimating(false);
-      const resetTimer = setTimeout(() => {
+      const timers: number[] = [];
+      timers.push(window.setTimeout(() => {
         setFormData(resetFormData());
         setDateError(false);
-      }, 300);
-      return () => clearTimeout(resetTimer);
+      }, 300));
+      timers.push(window.setTimeout(() => {
+        setIsMounted(false);
+      }, 300));
+      return () => timers.forEach(clearTimeout);
     }
-  }, [isOpen, resetFormData]);
+  }, [isOpen, isMounted, resetFormData]);
 
   const handleClose = () => {
-    setIsAnimating(false);
-    setTimeout(onClose, 300);
+    onClose();
   };
 
   const handleFormChange = (newData: Partial<Omit<Expense, 'id'>>) => {
@@ -166,17 +171,18 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
     }
   };
 
-  if (!isOpen) return null;
+  if (!isMounted) return null;
 
   const translateX = (view === 'calculator' ? 0 : -50) + (progress * 50);
   const isCalculatorActive = view === 'calculator';
   const isDetailsActive = view === 'details';
+  const isClosing = isMounted && !isOpen;
 
   return (
     <div
       className={`fixed inset-0 z-50 bg-slate-100 transform transition-transform duration-300 ease-in-out ${
         isAnimating ? 'translate-y-0' : 'translate-y-full'
-      }`}
+      } ${isClosing ? 'pointer-events-none' : ''}`}
       aria-modal="true"
       role="dialog"
     >
