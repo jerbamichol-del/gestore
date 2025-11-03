@@ -159,7 +159,6 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, onLogout, onNavigateToR
         
         <button
             onClick={onNavigateToRecurring}
-            data-no-page-swipe="true"
             className="w-full flex items-center justify-between gap-4 px-6 py-4 text-left font-semibold text-slate-800 bg-white rounded-2xl shadow-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all"
         >
             <div className="flex items-center gap-4">
