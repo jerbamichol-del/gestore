@@ -42,7 +42,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   onSubmit,
   accounts,
 }) => {
-  const [isMounted, setIsMounted] = useState(false);
+  const [isMounted, setIsMounted] = useState(true);
   const [isAnimating, setIsAnimating] = useState(false);
   const [view, setView] = useState<'calculator' | 'details'>('calculator');
 
@@ -102,23 +102,19 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      setIsMounted(true);
       setView('calculator');
       const timer = setTimeout(() => setIsAnimating(true), 10);
       return () => clearTimeout(timer);
-    } else if (isMounted) {
+    } else {
       setIsAnimating(false);
       const timers: number[] = [];
       timers.push(window.setTimeout(() => {
         setFormData(resetFormData());
         setDateError(false);
       }, 300));
-      timers.push(window.setTimeout(() => {
-        setIsMounted(false);
-      }, 300));
       return () => timers.forEach(clearTimeout);
     }
-  }, [isOpen, isMounted, resetFormData]);
+  }, [isOpen, resetFormData]);
 
   const handleClose = () => {
     onClose();
@@ -171,12 +167,12 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
     }
   };
 
-  if (!isMounted) return null;
+  if (!isOpen) return null;
 
   const translateX = (view === 'calculator' ? 0 : -50) + (progress * 50);
   const isCalculatorActive = view === 'calculator';
   const isDetailsActive = view === 'details';
-  const isClosing = isMounted && !isOpen;
+  const isClosing = !isOpen;
 
   return (
     <div
