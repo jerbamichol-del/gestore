@@ -4,7 +4,10 @@
 const KEY_ENABLED = 'bio.enabled';
 const KEY_CRED_ID = 'bio.credId';       // base64url del rawId
 const KEY_USER_ID = 'bio.userId';       // id utente locale per la passkey
-const KEY_OPTOUT  = 'bio.optOut';       // 🔸 NEW: utente ha detto "non ora"
+const KEY_OPTOUT  = 'bio.optOut';       // utente ha detto "non ora"
+
+// Snooze di sessione: dopo annullo/timeout non autopromptare fino a riapertura app
+const KEY_SNOOZE  = 'bio.snooze';       // sessionStorage: '1' = non auto-promptare
 
 // RP ID (dominio)
 const RP_ID = location.hostname;
@@ -20,6 +23,22 @@ const fromB64Url = (s: string) => {
   for (let i = 0; i < b.length; i++) arr[i] = b.charCodeAt(i);
   return arr.buffer;
 };
+
+// ——— Snooze helpers ———
+export function isBiometricSnoozed(): boolean {
+  try { return sessionStorage.getItem(KEY_SNOOZE) === '1'; } catch { return false; }
+}
+export function setBiometricSnooze(): void {
+  try { sessionStorage.setItem(KEY_SNOOZE, '1'); } catch {}
+}
+export function clearBiometricSnooze(): void {
+  try { sessionStorage.removeItem(KEY_SNOOZE); } catch {}
+}
+export function canAutoPromptBiometric(): boolean {
+  try {
+    return !isBiometricSnoozed() && localStorage.getItem(KEY_ENABLED) === '1' && !!localStorage.getItem(KEY_CRED_ID);
+  } catch { return false; }
+}
 
 // Supporto dispositivo
 export async function isBiometricsAvailable(): Promise<boolean> {
@@ -38,7 +57,7 @@ export function isBiometricsEnabled(): boolean {
   return localStorage.getItem(KEY_ENABLED) === '1' && !!localStorage.getItem(KEY_CRED_ID);
 }
 
-// 🔸 NEW: opt-out prompt
+// Opt-out prompt
 export function isBiometricsOptedOut(): boolean {
   return localStorage.getItem(KEY_OPTOUT) === '1';
 }
@@ -51,6 +70,7 @@ export function setBiometricsOptOut(v: boolean) {
 export function disableBiometrics() {
   localStorage.removeItem(KEY_ENABLED);
   localStorage.removeItem(KEY_CRED_ID);
+  clearBiometricSnooze();
 }
 
 // Registra passkey (abilitazione)
@@ -94,12 +114,12 @@ export async function registerBiometric(displayName = 'Utente'): Promise<boolean
   const credIdB64 = toB64Url(cred.rawId);
   localStorage.setItem(KEY_CRED_ID, credIdB64);
   localStorage.setItem(KEY_ENABLED, '1');
-  // se abilito, rimuovo eventuale opt-out precedente
-  setBiometricsOptOut(false);
+  clearBiometricSnooze();        // nuova attivazione ⇒ togli eventuale blocco sessione
+  setBiometricsOptOut(false);    // rimuovi opt-out
   return true;
 }
 
-// Sblocco
+// Sblocco — se l’utente ANNULLA o scade: metti SNOOZE e lancia NotAllowed/Abort (verrà intercettato dallo screen)
 export async function unlockWithBiometric(reason = 'Sblocca Gestore Spese'): Promise<boolean> {
   if (!(await isBiometricsAvailable())) throw new Error('Biometria non disponibile');
   const credIdB64 = localStorage.getItem(KEY_CRED_ID);
@@ -118,12 +138,28 @@ export async function unlockWithBiometric(reason = 'Sblocca Gestore Spese'): Pro
     allowCredentials: [{ id: new Uint8Array(allowId), type: 'public-key' }],
   };
 
-  const assertion = (await navigator.credentials.get({ publicKey })) as PublicKeyCredential | null;
-  if (!assertion) throw new Error('Sblocco annullato');
-  return true;
+  try {
+    const assertion = (await navigator.credentials.get({ publicKey })) as PublicKeyCredential | null;
+    if (!assertion) {
+      // raro, ma trattalo come annullo
+      setBiometricSnooze();
+      const err = new DOMException('User cancelled', 'NotAllowedError');
+      throw err;
+    }
+    clearBiometricSnooze(); // successo ⇒ ok ai futuri auto-prompt
+    return true;
+  } catch (e: any) {
+    const name = String(e?.name || '');
+    const msg  = String(e?.message || '');
+    // Cancel/dismiss/timeout → metti in snooze e rilancia per far interrompere l’autoprompt
+    if (name === 'NotAllowedError' || name === 'AbortError' || /timeout/i.test(msg)) {
+      setBiometricSnooze();
+    }
+    throw e; // il caller decide cosa fare (noi abbiamo già messo lo snooze)
+  }
 }
 
-// 🔸 NEW: suggerire offerta attivazione?
+// Suggerire offerta attivazione?
 export async function shouldOfferBiometricEnable(): Promise<boolean> {
   const supported = await isBiometricsAvailable();
   return supported && !isBiometricsEnabled() && !isBiometricsOptedOut();
