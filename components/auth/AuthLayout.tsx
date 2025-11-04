@@ -68,7 +68,10 @@ const Header: React.FC = () => (
         height: 64,
       }}
     >
-      <AppLogoIcon style={{ width: '100%', height: '100%' }} />
+      <AppLogoIcon
+          style={{ width: '100%', height: '100%' }}
+          aria-label="Logo Gestore Spese"
+        />
     </div>
     <h1 style={{ fontSize: 28, fontWeight: 800, color: '#0f172a', margin: 0 }}>
       Gestore Spese
