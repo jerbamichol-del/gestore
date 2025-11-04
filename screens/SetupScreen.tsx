@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react'; 
 import AuthLayout from '../components/auth/AuthLayout';
 import PinInput from '../components/auth/PinInput';
 import { register, login } from '../utils/api';
@@ -12,6 +12,10 @@ import {
   registerBiometric,
   setBiometricsOptOut,
 } from '../services/biometrics';
+
+// ——— Snooze di sessione per evitare auto-prompt dopo “Annulla” ———
+const BIO_SNOOZE_KEY = 'bio.snooze';
+const clearBiometricSnooze = () => { try { sessionStorage.removeItem(BIO_SNOOZE_KEY); } catch {} };
 
 interface SetupScreenProps {
   onSetupSuccess: (token: string, email: string) => void;
@@ -211,10 +215,12 @@ const SetupScreen: React.FC<SetupScreenProps> = ({ onSetupSuccess, onGoToLogin }
                     try {
                       setBioBusy(true);
                       await registerBiometric('Profilo locale');
+                      // registrazione riuscita: eventuale auto-prompt verrà gestito dalla Login
+                      clearBiometricSnooze(); // assicura che non resti in stato “annullato”
                       setBioBusy(false);
                     } catch {
                       setBioBusy(false);
-                      // anche se annulla, proseguiamo col flusso
+                      // anche se annulla la registrazione, proseguiamo col flusso
                     } finally {
                       await doRegisterAndLogin();
                     }
