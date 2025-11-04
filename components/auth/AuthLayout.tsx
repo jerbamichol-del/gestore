@@ -97,8 +97,10 @@ const AuthLayout: React.FC<AuthLayoutProps> = ({ children }) => {
   };
   
   if (isStudio) {
-    mainContainerStyle.position = 'fixed';
-    mainContainerStyle.inset = 0;
+    // FIX: Use type assertion as 'position' and 'inset' might not be recognized
+    // by the version of TypeScript or React types used in this environment.
+    (mainContainerStyle as any).position = 'fixed';
+    (mainContainerStyle as any).inset = 0;
   }
 
   // ===== Layout unificato e centrato =====
