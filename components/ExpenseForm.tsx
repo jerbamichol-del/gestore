@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Expense, Account, CATEGORIES } from '../types';
 import { XMarkIcon } from './icons/XMarkIcon';
@@ -86,7 +87,8 @@ const parseLocalYYYYMMDD = (dateString: string | null): Date | null => {
   return new Date(parts[0], parts[1] - 1, parts[2]); // locale 00:00
 };
 
-const recurrenceLabels: Record<string, string> = {
+// FIX: Changed type to be more specific to fix type inference issues.
+const recurrenceLabels: Record<'daily' | 'weekly' | 'monthly' | 'yearly', string> = {
   daily: 'Giornaliera',
   weekly: 'Settimanale',
   monthly: 'Mensile',
@@ -664,7 +666,8 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                           className="w-full flex items-center justify-between text-left gap-2 px-3 py-2.5 text-base rounded-lg border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors bg-white border-slate-300 text-slate-800 hover:bg-slate-50"
                         >
                           <span className="truncate flex-1">
-                            {getRecurrenceSummary(formData)}
+                            {/* FIX: Cast formData to Partial<Expense> to resolve type mismatch on `amount` which is not used here. */}
+                            {getRecurrenceSummary(formData as Partial<Expense>)}
                           </span>
                           <ChevronDownIcon className="w-5 h-5 text-slate-500" />
                         </button>

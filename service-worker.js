@@ -1,7 +1,7 @@
 // Importa la libreria idb per un accesso più semplice a IndexedDB
 importScripts('https://cdn.jsdelivr.net/npm/idb@8/build/iife/index-min.js');
 
-const CACHE_NAME = 'expense-manager-cache-v31';
+const CACHE_NAME = 'expense-manager-cache-v32';
 // Aggiunta la pagina di share-target al caching
 const urlsToCache = [
   '/',

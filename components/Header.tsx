@@ -3,7 +3,7 @@ import React from 'react';
 import { PhotoIcon } from './icons/PhotoIcon';
 import { HomeNavIcon } from './icons/HomeNavIcon';
 import { ArchiveBoxIcon } from './icons/ArchiveBoxIcon';
-import { ArrowDownTrayIcon } from './icons/ArrowDownTrayIcon';
+import { ArrowDownOnSquareIcon } from './icons/ArrowDownOnSquareIcon';
 
 type NavView = 'home' | 'history';
 
@@ -60,7 +60,7 @@ const Header: React.FC<HeaderProps> = ({ pendingSyncs, isOnline, activeView, onN
                       aria-label="Installa App"
                       title="Installa App"
                   >
-                      <ArrowDownTrayIcon className="w-5 h-5" />
+                      <ArrowDownOnSquareIcon className="w-5 h-5" />
                       <span>Installa</span>
                   </button>
               )}
