@@ -76,9 +76,13 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
             onLoginSuccess('biometric-local', activeEmail);
             return;
           }
-        } catch {
-          // fallito/cancellato
+        } catch (err) {
           setBioBusy(false);
+          // Se l'utente annulla il prompt (NotAllowedError), interrompi i tentativi.
+          if (err instanceof DOMException && err.name === 'NotAllowedError') {
+            break;
+          }
+          // Per altri errori, continua a riprovare.
         }
         attemptsRef.current += 1;
         await new Promise(r => setTimeout(r, 250));
