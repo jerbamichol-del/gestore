@@ -16,6 +16,20 @@ import {
   setBiometricsOptOut,
 } from '../services/biometrics';
 
+// helper snooze/lock dal service (li importo a runtime per evitare cicli in build)
+type BioHelpers = {
+  isBiometricSnoozed: () => boolean;
+  setBiometricSnooze: () => void;
+  clearBiometricSnooze: () => void;
+};
+
+// lock di sessione per evitare doppio avvio (StrictMode / re-render)
+const BIO_AUTOPROMPT_LOCK_KEY = 'bio.autoprompt.lock';
+const hasAutoPromptLock = () => {
+  try { return sessionStorage.getItem(BIO_AUTOPROMPT_LOCK_KEY) === '1'; } catch { return false; }
+};
+const setAutoPromptLock = () => { try { sessionStorage.setItem(BIO_AUTOPROMPT_LOCK_KEY, '1'); } catch {} };
+
 interface LoginScreenProps {
   onLoginSuccess: (token: string, email: string) => void;
   onGoToRegister: () => void;
@@ -56,43 +70,41 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
     return () => { mounted = false; };
   }, [activeEmail]);
 
-  // Autoprompt biometrico: max 3 tentativi SOLO se non è un annullo/timeout
+  // Autoprompt biometrico: 1 solo tentativo totale per sessione.
+  // Gli "altri 2 tentativi" li gestisce il foglio di sistema dentro lo stesso prompt.
   useEffect(() => {
     if (!activeEmail) return;
     if (!bioSupported || !bioEnabled) return;
     if (autoStartedRef.current) return;
+    if (hasAutoPromptLock()) return;
 
     autoStartedRef.current = true;
+    setAutoPromptLock(); // blocca eventuale secondo run (StrictMode)
 
     (async () => {
-      const { isBiometricSnoozed, clearBiometricSnooze } = await import('../services/biometrics');
+      const { isBiometricSnoozed, setBiometricSnooze, clearBiometricSnooze } =
+        (await import('../services/biometrics')) as unknown as BioHelpers;
+
       if (isBiometricSnoozed()) return;
 
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        try {
-          setBioBusy(true);
-          const ok = await unlockWithBiometric('Sblocca con impronta / FaceID');
-          setBioBusy(false);
-          if (ok) {
-            clearBiometricSnooze();
-            onLoginSuccess('biometric-local', activeEmail);
-            return;
-          }
-          // se mai tornasse false, riproviamo comunque nei limiti
-        } catch (err: any) {
-          setBioBusy(false);
-          const name = err?.name || '';
-          const msg  = String(err?.message || '');
-          // Utente ha premuto Annulla / ha chiuso / timeout → stop immediato
-          if (name === 'NotAllowedError' || name === 'AbortError' || /timeout/i.test(msg)) {
-            break;
-          }
-          // altrimenti (errore “generico”) consentiamo altri 2 tentativi
+      try {
+        setBioBusy(true);
+        const ok = await unlockWithBiometric('Sblocca con impronta / FaceID'); // timeout 60s gestisce retry interno
+        setBioBusy(false);
+        if (ok) {
+          clearBiometricSnooze();
+          onLoginSuccess('biometric-local', activeEmail);
         }
-        // breve pausa tra i tentativi
-        await new Promise(r => setTimeout(r, 300));
+      } catch (err: any) {
+        setBioBusy(false);
+        // Qualsiasi annullo/timeout/chiusura: metti in snooze e non ripresentare
+        const name = err?.name || '';
+        const msg  = String(err?.message || '');
+        if (name === 'NotAllowedError' || name === 'AbortError' || /timeout/i.test(msg)) {
+          setBiometricSnooze();
+        }
+        // resta su PIN, nessun altro prompt automatico
       }
-      // se arrivi qui, niente sblocco: resta il PIN
     })();
   }, [activeEmail, bioSupported, bioEnabled, onLoginSuccess]);
 
@@ -128,7 +140,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
     }
   };
 
-  // Abilita ora (box interno) — se annulla il prompt, NON rilanciare
+  // Abilita ora (box interno) — tenta 1 prompt manuale; se annulla, niente ripresentazione
   const enableBiometricsNow = async () => {
     try {
       setBioBusy(true);
@@ -136,17 +148,26 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
       setBioEnabled(true);
       setShowEnableBox(false);
       setBioBusy(false);
-      // tentativo manuale singolo subito dopo l’abilitazione
+
+      // Tentativo manuale singolo subito dopo l’abilitazione
       try {
-        const { clearBiometricSnooze } = await import('../services/biometrics');
-        clearBiometricSnooze();
+        const { clearBiometricSnooze, setBiometricSnooze } =
+          (await import('../services/biometrics')) as unknown as BioHelpers;
+        clearBiometricSnooze(); // consenti il prompt adesso
         const ok = await unlockWithBiometric('Sblocca con impronta / FaceID');
         if (ok && activeEmail) {
           onLoginSuccess('biometric-local', activeEmail);
           return;
         }
-      } catch {
-        // ha annullato: resta su PIN senza riproporre
+      } catch (err: any) {
+        const name = err?.name || '';
+        const msg  = String(err?.message || '');
+        if (name === 'NotAllowedError' || name === 'AbortError' || /timeout/i.test(msg)) {
+          const { setBiometricSnooze } =
+            (await import('../services/biometrics')) as unknown as BioHelpers;
+          setBiometricSnooze();
+        }
+        // resta su PIN
       }
     } catch {
       setBioBusy(false);
@@ -165,6 +186,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
     setPin('');
     setError(null);
     autoStartedRef.current = false;
+    // non resetto il lock: in questa sessione niente altro auto-prompt
   };
 
   const renderContent = () => {
