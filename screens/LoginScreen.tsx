@@ -16,14 +16,6 @@ import {
   setBiometricsOptOut,
 } from '../services/biometrics';
 
-// ——— Snooze di sessione: dopo “Annulla/Timeout” non auto-promptare più ———
-const BIO_SNOOZE_KEY = 'bio.snooze';
-const isBiometricSnoozed = () => {
-  try { return sessionStorage.getItem(BIO_SNOOZE_KEY) === '1'; } catch { return false; }
-};
-const setBiometricSnooze = () => { try { sessionStorage.setItem(BIO_SNOOZE_KEY, '1'); } catch {} };
-const clearBiometricSnooze = () => { try { sessionStorage.removeItem(BIO_SNOOZE_KEY); } catch {} };
-
 interface LoginScreenProps {
   onLoginSuccess: (token: string, email: string) => void;
   onGoToRegister: () => void;
@@ -47,7 +39,6 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
   const [bioEnabled, setBioEnabled] = useState(false);
   const [showEnableBox, setShowEnableBox] = useState(false);
   const [bioBusy, setBioBusy] = useState(false);
-  const attemptsRef = useRef(0);
   const autoStartedRef = useRef(false);
 
   // verifica stato biometria quando entri nella schermata PIN
@@ -65,45 +56,44 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
     return () => { mounted = false; };
   }, [activeEmail]);
 
-  // Autoprompt biometrico: NON se in snooze (utente ha premuto Annulla/timeout)
+  // Autoprompt biometrico: max 3 tentativi SOLO se non è un annullo/timeout
   useEffect(() => {
     if (!activeEmail) return;
     if (!bioSupported || !bioEnabled) return;
     if (autoStartedRef.current) return;
-    if (isBiometricSnoozed()) return; // << blocca qualsiasi auto-prompt nella sessione
 
     autoStartedRef.current = true;
 
-    const tryAuto = async () => {
-      attemptsRef.current = 0;
-      while (attemptsRef.current < 3) {
+    (async () => {
+      const { isBiometricSnoozed, clearBiometricSnooze } = await import('../services/biometrics');
+      if (isBiometricSnoozed()) return;
+
+      for (let attempt = 1; attempt <= 3; attempt++) {
         try {
           setBioBusy(true);
           const ok = await unlockWithBiometric('Sblocca con impronta / FaceID');
           setBioBusy(false);
           if (ok) {
-            clearBiometricSnooze(); // successo ⇒ consenti futuri auto-prompt
+            clearBiometricSnooze();
             onLoginSuccess('biometric-local', activeEmail);
             return;
           }
+          // se mai tornasse false, riproviamo comunque nei limiti
         } catch (err: any) {
           setBioBusy(false);
-          // Se l'utente annulla (o c'è timeout), metti in snooze e non riproporre
           const name = err?.name || '';
           const msg  = String(err?.message || '');
+          // Utente ha premuto Annulla / ha chiuso / timeout → stop immediato
           if (name === 'NotAllowedError' || name === 'AbortError' || /timeout/i.test(msg)) {
-            setBiometricSnooze();
-            break; // interrompi il while
+            break;
           }
-          // altri errori: tenta ancora fino a 3, poi lascia il PIN
+          // altrimenti (errore “generico”) consentiamo altri 2 tentativi
         }
-        attemptsRef.current += 1;
-        await new Promise(r => setTimeout(r, 250));
+        // breve pausa tra i tentativi
+        await new Promise(r => setTimeout(r, 300));
       }
-      // dopo 3 tentativi → lascia usare il PIN senza altri prompt automatici
-    };
-
-    tryAuto();
+      // se arrivi qui, niente sblocco: resta il PIN
+    })();
   }, [activeEmail, bioSupported, bioEnabled, onLoginSuccess]);
 
   // Verifica PIN
@@ -118,7 +108,6 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
     if (email) {
       setActiveEmail(email.toLowerCase());
       setError(null);
-      // non forziamo biometria qui; l'effetto sopra si occuperà, se non in snooze
     }
   };
 
@@ -139,7 +128,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
     }
   };
 
-  // Abilita ora (box interno) — se annulla il prompt, metti in snooze
+  // Abilita ora (box interno) — se annulla il prompt, NON rilanciare
   const enableBiometricsNow = async () => {
     try {
       setBioBusy(true);
@@ -147,26 +136,21 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
       setBioEnabled(true);
       setShowEnableBox(false);
       setBioBusy(false);
-      // appena abilitato, prova 1 sblocco immediato (manuale)
+      // tentativo manuale singolo subito dopo l’abilitazione
       try {
-        clearBiometricSnooze(); // nuova prova esplicita ⇒ consenti prompt
+        const { clearBiometricSnooze } = await import('../services/biometrics');
+        clearBiometricSnooze();
         const ok = await unlockWithBiometric('Sblocca con impronta / FaceID');
         if (ok && activeEmail) {
           onLoginSuccess('biometric-local', activeEmail);
           return;
         }
-      } catch (err: any) {
-        // Se annulla/timeout, NON riproporre: metti in snooze finché non clicca di nuovo manualmente
-        const name = err?.name || '';
-        const msg  = String(err?.message || '');
-        if (name === 'NotAllowedError' || name === 'AbortError' || /timeout/i.test(msg)) {
-          setBiometricSnooze();
-        }
-        // resta su PIN
+      } catch {
+        // ha annullato: resta su PIN senza riproporre
       }
     } catch {
-      // Se l'utente annulla durante la registrazione, non fare nulla e lascia il PIN
       setBioBusy(false);
+      // se annulla in registrazione, resta tutto com’è
     }
   };
 
@@ -174,8 +158,6 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
   const denyBiometricsOffer = () => {
     setBiometricsOptOut(true);
     setShowEnableBox(false);
-    // opzionale: metti in snooze la sessione per evitare proposte subito dopo
-    setBiometricSnooze();
   };
 
   const handleSwitchUser = () => {
@@ -183,11 +165,10 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
     setPin('');
     setError(null);
     autoStartedRef.current = false;
-    // non tocchiamo lo snooze: è per sessione, coerente non riproporre subito
   };
 
   const renderContent = () => {
-    // —— SCHERMATA EMAIL —— 
+    // —— SCHERMATA EMAIL ——
     if (!activeEmail) {
       return (
         <div className="text-center">
@@ -218,7 +199,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
       );
     }
 
-    // —— SCHERMATA PIN —— 
+    // —— SCHERMATA PIN ——
     return (
       <div className="text-center">
         <p className="text-sm text-slate-600 mb-2 truncate" title={activeEmail}>
