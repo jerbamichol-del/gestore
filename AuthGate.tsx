@@ -4,11 +4,10 @@ import LoginScreen from './screens/LoginScreen';
 import SetupScreen from './screens/SetupScreen';
 import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
 import ForgotPasswordSuccessScreen from './screens/ForgotPasswordSuccessScreen';
-import ForgotEmailScreen from './screens/ForgotEmailScreen';
 import ResetPinScreen from './screens/ResetPinScreen';
 import { useLocalStorage } from './hooks/useLocalStorage';
 
-type AuthView = 'login' | 'register' | 'forgotPassword' | 'forgotEmail' | 'forgotPasswordSuccess';
+type AuthView = 'login' | 'register' | 'forgotPassword' | 'forgotPasswordSuccess';
 type ResetContext = { token: string; email: string; } | null;
 
 const LOCK_TIMEOUT_MS = 30000; // 30 secondi
@@ -125,8 +124,6 @@ const AuthGate: React.FC = () => {
         email={emailForReset}
         onBackToLogin={() => setAuthView('login')} 
       />;
-    case 'forgotEmail':
-        return <ForgotEmailScreen onBackToLogin={() => setAuthView('login')} />;
     case 'login':
     default:
       return (
@@ -134,7 +131,8 @@ const AuthGate: React.FC = () => {
             onLoginSuccess={handleAuthSuccess}
             onGoToRegister={() => setAuthView('register')}
             onGoToForgotPassword={() => setAuthView('forgotPassword')}
-            onGoToForgotEmail={() => setAuthView('forgotEmail')}
+            // FIX: Add missing onGoToForgotEmail prop to satisfy LoginScreenProps.
+            onGoToForgotEmail={() => setAuthView('forgotPassword')}
         />
       );
   }

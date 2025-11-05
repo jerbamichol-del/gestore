@@ -414,6 +414,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({ expenses, accounts, onEdi
             </div>
             
             <HistoryFilterCard
+                isActive={isActive}
                 onSelectQuickFilter={(value) => {
                     setDateFilter(value);
                     setCustomRange({ start: null, end: null });

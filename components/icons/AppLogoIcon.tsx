@@ -1,7 +1,9 @@
 import React from 'react';
 
+// Using React.SVGProps<SVGSVGElement> allows standard SVG attributes to be passed as props.
 export const AppLogoIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
-<svg version="1.0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" {...props}>
+    <svg version="1.0" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlnsXlink="http://www.w3.org/1999/xlink" 
+        viewBox="0 0 64 64" enableBackground="new 0 0 64 64" xmlSpace="preserve" {...props}>
     <g>
         <path fill="#F9EBB2" d="M43.025,2.123c1.039-0.379,2.186,0.156,2.564,1.195L48.75,12h-6.098C41.826,9.671,39.611,8,37,8
             s-4.826,1.672-5.65,4H15.885L43.025,2.123z"/>
@@ -47,5 +49,5 @@ export const AppLogoIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
             <path fill="#394240" d="M7,56H5c-0.553,0-1,0.447-1,1s0.447,1,1,1h2c0.553,0,1-0.447,1-1S7.553,56,7,56z"/>
         </g>
     </g>
-</svg>
+    </svg>
 );

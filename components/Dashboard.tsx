@@ -6,7 +6,7 @@ import { Expense } from '../types';
 import { formatCurrency } from './icons/formatters';
 import { getCategoryStyle } from '../utils/categoryStyles';
 import { LockClosedIcon } from './icons/LockClosedIcon';
-import { CalendarDaysIcon } from './icons/CalendarDaysIcon';
+import { ArrowPathIcon } from './icons/ArrowPathIcon';
 import { ChevronRightIcon } from './icons/ChevronRightIcon';
 
 const categoryHexColors: Record<string, string> = {
@@ -163,7 +163,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, onLogout, onNavigateToR
         >
             <div className="flex items-center gap-4">
                 <span className="w-10 h-10 rounded-xl flex items-center justify-center bg-indigo-100">
-                    <CalendarDaysIcon className="w-6 h-6 text-indigo-600" />
+                    <ArrowPathIcon className="w-6 h-6 text-indigo-600" />
                 </span>
                 <div>
                     <span className="text-base">Spese Ricorrenti</span>

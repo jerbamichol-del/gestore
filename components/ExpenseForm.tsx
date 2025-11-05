@@ -1,6 +1,7 @@
 
 
 
+
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Expense, Account, CATEGORIES } from '../types';
 import { XMarkIcon } from './icons/XMarkIcon';
@@ -15,6 +16,7 @@ import { ClockIcon } from './icons/ClockIcon';
 import { CalendarDaysIcon } from './icons/CalendarDaysIcon';
 import { ChevronDownIcon } from './icons/ChevronDownIcon';
 import { formatDate } from './icons/formatters';
+import ConfirmationModal from './ConfirmationModal';
 
 
 interface ExpenseFormProps {
@@ -163,6 +165,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
 
   const [originalExpenseState, setOriginalExpenseState] = useState<Partial<Expense> | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
+  const [isConfirmCloseOpen, setIsConfirmCloseOpen] = useState(false);
   
   // Recurrence Modal State
   const [isRecurrenceModalOpen, setIsRecurrenceModalOpen] = useState(false);
@@ -207,9 +210,17 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
     setOriginalExpenseState(null);
   }, [accounts]);
   
-  const handleClose = () => {
+  const forceClose = () => {
     setIsAnimating(false);
     setTimeout(onClose, 300);
+  };
+  
+  const handleClose = () => {
+    if (isEditing && hasChanges) {
+        setIsConfirmCloseOpen(true);
+    } else {
+        forceClose();
+    }
   };
   
   const handleBackdropClick = () => {
@@ -790,6 +801,20 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
           </div>
         </div>
       )}
+      
+      <ConfirmationModal
+        isOpen={isConfirmCloseOpen}
+        onClose={() => setIsConfirmCloseOpen(false)}
+        onConfirm={() => {
+            setIsConfirmCloseOpen(false);
+            forceClose();
+        }}
+        title="Annullare le modifiche?"
+        message="Sei sicuro di voler chiudere senza salvare? Le modifiche andranno perse."
+        variant="danger"
+        confirmButtonText="Sì, annulla"
+        cancelButtonText="No, continua"
+      />
     </div>
   );
 };

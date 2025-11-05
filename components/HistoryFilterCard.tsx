@@ -10,6 +10,7 @@ interface HistoryFilterCardProps {
   currentCustomRange: { start: string | null, end: string | null };
   isCustomRangeActive: boolean;
   onDateModalStateChange: (isOpen: boolean) => void;
+  isActive: boolean;
 }
 
 const QuickFilterTable: React.FC<{
@@ -33,8 +34,10 @@ const QuickFilterTable: React.FC<{
             return (
               <td key={filter.value} className="border border-slate-400 p-0 h-11">
                 <button
-                  onPointerUp={(e) => { e.preventDefault(); onSelect(currentValue === filter.value ? 'all' : filter.value); }}
-                  onClick={(e) => e.preventDefault()}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    onSelect(currentValue === filter.value ? 'all' : filter.value);
+                  }}
                   style={{ touchAction: 'manipulation' }}
                   className={`w-full h-full flex items-center justify-center px-2 text-center font-semibold text-sm transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 ${
                     isActive ? 'bg-indigo-600 text-white'
@@ -94,7 +97,7 @@ const CustomDateRangeInputs: React.FC<{
 
 
 export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = ({
-  onSelectQuickFilter, currentQuickFilter, onCustomRangeChange, currentCustomRange, isCustomRangeActive, onDateModalStateChange
+  onSelectQuickFilter, currentQuickFilter, onCustomRangeChange, currentCustomRange, isCustomRangeActive, onDateModalStateChange, isActive
 }) => {
   const [activeView, setActiveView] = useState<'quick' | 'custom'>('quick');
   const [isDateModalOpen, setIsDateModalOpen] = useState(false);
@@ -106,6 +109,68 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = ({
 
   const [dragPct, setDragPct] = useState<number | null>(null);
   const [dragging, setDragging] = useState(false);
+
+  // ===== First-tap fixer =====
+  const needsFirstTapFixRef = useRef(false);
+  const firstTapDataRef = useRef({ armed: false, startX: 0, startY: 0, startTime: 0, moved: false });
+  const cardRootRef = useRef<HTMLDivElement>(null);
+  const TAP_MS = 300;
+  const SLOP_PX = 10;
+
+  useEffect(() => {
+    if (isActive) {
+      needsFirstTapFixRef.current = true;
+      firstTapDataRef.current = { armed: false, startX: 0, startY: 0, startTime: 0, moved: false };
+    }
+  }, [isActive, currentQuickFilter, isCustomRangeActive]);
+
+  const onFirstTapPointerDownCapture: React.PointerEventHandler<HTMLDivElement> = (e) => {
+    if (!needsFirstTapFixRef.current) return;
+    firstTapDataRef.current.armed = true;
+    firstTapDataRef.current.startX = e.clientX ?? 0;
+    firstTapDataRef.current.startY = e.clientY ?? 0;
+    firstTapDataRef.current.startTime = performance.now();
+    firstTapDataRef.current.moved = false;
+  };
+
+  const onFirstTapPointerMoveCapture: React.PointerEventHandler<HTMLDivElement> = (e) => {
+    const d = firstTapDataRef.current;
+    if (!d.armed || d.moved) return;
+    const dx = Math.abs((e.clientX ?? 0) - d.startX);
+    const dy = Math.abs((e.clientY ?? 0) - d.startY);
+    if (dx > SLOP_PX || dy > SLOP_PX) {
+      d.moved = true;
+      d.armed = false;
+      // Do not disarm needsFirstTapFixRef on swipe
+    }
+  };
+
+  const onFirstTapPointerUpCapture: React.PointerEventHandler<HTMLDivElement> = (e) => {
+    const d = firstTapDataRef.current;
+    if (!d.armed) return;
+
+    const dt = performance.now() - d.startTime;
+    const isTap = !d.moved && dt < TAP_MS;
+
+    d.armed = false;
+
+    if (!isTap) return; // Not a tap, do nothing, let fixer remain armed
+
+    needsFirstTapFixRef.current = false; // It was a tap, consume the fix
+
+    const raw = e.target as HTMLElement;
+    const focusable = (raw.closest('button, [role="button"]') as HTMLElement) || raw;
+    try {
+      setTimeout(() => focusable.click(), 0);
+    } catch {}
+
+    e.preventDefault();
+    e.stopPropagation();
+  };
+  
+  const onFirstTapPointerCancelCapture: React.PointerEventHandler<HTMLDivElement> = () => {
+    firstTapDataRef.current.armed = false;
+  };
 
   useEffect(() => {
     const el = swipeContainerRef.current;
@@ -216,7 +281,14 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = ({
 
   return (
     <>
-      <div className="flex-shrink-0 z-30">
+      <div 
+        ref={cardRootRef}
+        onPointerDownCapture={onFirstTapPointerDownCapture}
+        onPointerMoveCapture={onFirstTapPointerMoveCapture}
+        onPointerUpCapture={onFirstTapPointerUpCapture}
+        onPointerCancelCapture={onFirstTapPointerCancelCapture}
+        className="flex-shrink-0 z-30"
+      >
         <div className="bg-white/95 backdrop-blur-sm shadow-[0_-8px_20px_-5px_rgba(0,0,0,0.08)]">
           <div className="mx-auto pt-3 pb-2 rounded-t-2xl">
             <div

@@ -53,7 +53,7 @@ export const register = async (
         return;
       }
       const { hash, salt } = await hashPinWithSalt(pin);
-      users[normalizedEmail] = { email: normalizedEmail, pinHash: hash, pinSalt: salt, phoneNumber: phoneNumber || null };
+      users[normalizedEmail] = { email: normalizedEmail, pinHash: hash, pinSalt: salt, phoneNumber: phoneNumber || '' };
       saveUsers(users);
       resolve({ success: true, message: 'Registrazione completata.' });
     }, 1000);
@@ -104,24 +104,6 @@ export const forgotPassword = async (email: string): Promise<{ success: boolean;
     console.warn('forgotPassword (fire-and-forget) warning:', err);
   }
   return { success: true, message: "Se l'email è registrata, riceverai un link per il reset." };
-};
-
-/** Recupero email da telefono (mock). */
-export const findEmailByPhoneNumber = async (
-  phoneNumber: string
-): Promise<{ success: boolean; message: string }> => {
-  return new Promise(resolve => {
-    setTimeout(() => {
-      const users = getUsers();
-      const foundUser = Object.values(users).find((user: any) => (user as any).phoneNumber === phoneNumber);
-      if (foundUser) {
-        console.log(`(SIMULAZIONE) SMS a ${phoneNumber} con email: ${(foundUser as any).email}`);
-      } else {
-        console.log(`(SIMULAZIONE) Numero non registrato: ${phoneNumber}`);
-      }
-      resolve({ success: true, message: 'Se il numero è associato a un account, riceverai un SMS con la tua email.' });
-    }, 1500);
-  });
 };
 
 /**
