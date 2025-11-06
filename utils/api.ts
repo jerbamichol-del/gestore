@@ -41,8 +41,7 @@ async function postJSON<T = any>(url: string, data: any): Promise<T> {
 /** Registra un nuovo utente (mock locale). */
 export const register = async (
   email: string,
-  pin: string,
-  phoneNumber?: string
+  pin: string
 ): Promise<{ success: boolean; message: string }> => {
   return new Promise(resolve => {
     setTimeout(async () => {
@@ -53,7 +52,7 @@ export const register = async (
         return;
       }
       const { hash, salt } = await hashPinWithSalt(pin);
-      users[normalizedEmail] = { email: normalizedEmail, pinHash: hash, pinSalt: salt, phoneNumber: phoneNumber || '' };
+      users[normalizedEmail] = { email: normalizedEmail, pinHash: hash, pinSalt: salt };
       saveUsers(users);
       resolve({ success: true, message: 'Registrazione completata.' });
     }, 1000);

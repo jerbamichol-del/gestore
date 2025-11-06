@@ -4,7 +4,8 @@ import { Expense } from '../types';
 import { createLiveSession, createBlob } from '../utils/ai';
 import { XMarkIcon } from './icons/XMarkIcon';
 import { MicrophoneIcon } from './icons/MicrophoneIcon';
-import { LiveServerMessage, LiveSession } from '@google/genai';
+// FIX: Removed deprecated LiveSession import.
+import { LiveServerMessage } from '@google/genai';
 
 interface VoiceInputModalProps {
   isOpen: boolean;
@@ -18,7 +19,8 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({ isOpen, onClose, onPa
   const [transcript, setTranscript] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  const sessionPromise = useRef<Promise<LiveSession> | null>(null);
+  // FIX: Use ReturnType for proper type inference as LiveSession is not exported.
+  const sessionPromise = useRef<ReturnType<typeof createLiveSession> | null>(null);
   const audioContext = useRef<AudioContext | null>(null);
   const scriptProcessor = useRef<ScriptProcessorNode | null>(null);
   const stream = useRef<MediaStream | null>(null);
@@ -43,7 +45,31 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({ isOpen, onClose, onPa
     try {
       stream.current = await navigator.mediaDevices.getUserMedia({ audio: true });
 
+      // FIX: Moved audio processing setup into `onopen` callback and added type assertions for function call args.
       sessionPromise.current = createLiveSession({
+        onopen: () => {
+          const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+          if (!AudioContext) {
+            setError("Il tuo browser non supporta l'input vocale.");
+            setStatus('error');
+            return;
+          }
+    
+          audioContext.current = new AudioContext({ sampleRate: 16000 });
+          const source = audioContext.current.createMediaStreamSource(stream.current!);
+          scriptProcessor.current = audioContext.current.createScriptProcessor(4096, 1, 1);
+          
+          scriptProcessor.current.onaudioprocess = (audioProcessingEvent) => {
+              const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
+              const pcmBlob = createBlob(inputData);
+              sessionPromise.current?.then((session) => {
+                  session.sendRealtimeInput({ media: pcmBlob });
+              });
+          };
+    
+          source.connect(scriptProcessor.current);
+          scriptProcessor.current.connect(audioContext.current.destination);
+        },
         onmessage: (message: LiveServerMessage) => {
           if (message.serverContent?.inputTranscription) {
             setTranscript(prev => prev + message.serverContent.inputTranscription.text);
@@ -52,9 +78,9 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({ isOpen, onClose, onPa
             setStatus('processing');
             const args = message.toolCall.functionCalls[0].args;
             onParsed({
-              description: args.description,
-              amount: args.amount,
-              category: args.category,
+              description: args.description as string,
+              amount: args.amount as number,
+              category: args.category as string,
             });
             cleanUp();
           }
@@ -69,28 +95,6 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({ isOpen, onClose, onPa
            // Session closed
         }
       });
-      
-      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioContext) {
-        setError("Il tuo browser non supporta l'input vocale.");
-        setStatus('error');
-        return;
-      }
-
-      audioContext.current = new AudioContext({ sampleRate: 16000 });
-      const source = audioContext.current.createMediaStreamSource(stream.current);
-      scriptProcessor.current = audioContext.current.createScriptProcessor(4096, 1, 1);
-      
-      scriptProcessor.current.onaudioprocess = (audioProcessingEvent) => {
-          const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
-          const pcmBlob = createBlob(inputData);
-          sessionPromise.current?.then((session) => {
-              session.sendRealtimeInput({ media: pcmBlob });
-          });
-      };
-
-      source.connect(scriptProcessor.current);
-      scriptProcessor.current.connect(audioContext.current.destination);
 
     } catch (err) {
       console.error(err);

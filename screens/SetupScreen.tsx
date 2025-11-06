@@ -3,7 +3,6 @@ import AuthLayout from '../components/auth/AuthLayout';
 import PinInput from '../components/auth/PinInput';
 import { register, login } from '../utils/api';
 import { EnvelopeIcon } from '../components/icons/EnvelopeIcon';
-import { PhoneIcon } from '../components/icons/PhoneIcon';
 import { SpinnerIcon } from '../components/icons/SpinnerIcon';
 
 // biometria
@@ -27,7 +26,6 @@ type Step = 'email' | 'pin_setup' | 'pin_confirm' | 'bio_offer' | 'processing';
 const SetupScreen: React.FC<SetupScreenProps> = ({ onSetupSuccess, onGoToLogin }) => {
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState('');
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -53,7 +51,7 @@ const SetupScreen: React.FC<SetupScreenProps> = ({ onSetupSuccess, onGoToLogin }
     const normalizedEmail = email.toLowerCase();
 
     // Registrazione
-    const regResponse = await register(normalizedEmail, pin, phoneNumber);
+    const regResponse = await register(normalizedEmail, pin);
     if (!regResponse.success) {
       setError(regResponse.message);
       setIsLoading(false);
@@ -146,22 +144,6 @@ const SetupScreen: React.FC<SetupScreenProps> = ({ onSetupSuccess, onGoToLogin }
                     className={inputStyles}
                     placeholder="La tua email"
                     required
-                  />
-                </div>
-              </div>
-              <div>
-                <label htmlFor="phone-register" className="sr-only">Numero di telefono (opzionale)</label>
-                <div className="relative">
-                  <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                    <PhoneIcon className="h-5 w-5 text-slate-400" aria-hidden="true" />
-                  </div>
-                  <input
-                    type="tel"
-                    id="phone-register"
-                    value={phoneNumber}
-                    onChange={(e) => setPhoneNumber(e.target.value)}
-                    className={inputStyles}
-                    placeholder="Telefono (opzionale per recupero)"
                   />
                 </div>
               </div>

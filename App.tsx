@@ -1,5 +1,7 @@
 
 
+
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Expense, Account } from './types';
 import { useLocalStorage } from './hooks/useLocalStorage';
@@ -257,7 +259,19 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     if (activeView === 'history') { handleNavigation('home'); }
   }, [activeView, handleNavigation]);
 
-  const { progress, isSwiping } = useSwipe( swipeContainerRef, { onSwipeLeft: activeView === 'home' ? () => handleNavigation('history') : undefined, onSwipeRight: activeView === 'history' ? handleNavigateHome : undefined, }, { enabled: !isCalculatorContainerOpen && !isHistoryItemInteracting && !isDateModalOpen && !isRecurringScreenOpen, threshold: 32, slop: 6, ignoreSelector: '[data-swipeable-item="true"], [data-no-page-swipe="true"]', } );
+  const { progress, isSwiping } = useSwipe(
+    swipeContainerRef,
+    {
+      onSwipeLeft: activeView === 'home' ? () => handleNavigation('history') : undefined,
+      onSwipeRight: activeView === 'history' ? handleNavigateHome : undefined,
+    },
+    {
+      enabled: !isCalculatorContainerOpen && !isDateModalOpen && !isRecurringScreenOpen,
+      threshold: 32,
+      slop: 30, // Increased slop to make page swipe less sensitive than item swipe
+      ignoreSelector: '[data-no-page-swipe]',
+    }
+  );
   
   useEffect(() => {
     const handleBeforeInstallPrompt = (e: Event) => { e.preventDefault(); setInstallPromptEvent(e); };
@@ -479,7 +493,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
                 }}
             >
                 <div className="w-1/2 h-full overflow-y-auto space-y-6 swipe-view" style={{ touchAction: 'pan-y' }}>
-                    <Dashboard expenses={expenses} onLogout={onLogout} onNavigateToRecurring={() => setIsRecurringScreenOpen(true)} />
+                    <Dashboard expenses={expenses} onLogout={onLogout} onNavigateToRecurring={() => setIsRecurringScreenOpen(true)} isPageSwiping={isSwiping} />
                     <PendingImages 
                         images={pendingImages}
                         onAnalyze={(image) => handleAnalyzeImage(image, true)}
@@ -502,6 +516,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
                       onNavigateHome={handleNavigateHome}
                       isActive={activeView === 'history'}
                       onDateModalStateChange={setIsDateModalOpen}
+                      isPageSwiping={isSwiping}
                     />
                 </div>
             </div>

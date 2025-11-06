@@ -1,5 +1,6 @@
 
 
+
 import React, { useMemo, useState } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Sector } from 'recharts';
 import { Expense } from '../types';
@@ -57,9 +58,10 @@ interface DashboardProps {
   expenses: Expense[];
   onLogout: () => void;
   onNavigateToRecurring: () => void;
+  isPageSwiping?: boolean;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ expenses, onLogout, onNavigateToRecurring }) => {
+const Dashboard: React.FC<DashboardProps> = ({ expenses, onLogout, onNavigateToRecurring, isPageSwiping }) => {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const activeIndex = selectedIndex;
 
@@ -176,7 +178,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, onLogout, onNavigateToR
         <div className="bg-white p-6 rounded-2xl shadow-lg">
             <h3 className="text-xl font-bold text-slate-700 mb-2 text-center">Spese per Categoria</h3>
             {categoryData.length > 0 ? (
-                <div className="relative cursor-pointer" onClick={handleChartBackgroundClick}>
+                <div className={`relative cursor-pointer ${isPageSwiping ? 'pointer-events-none' : ''}`} onClick={handleChartBackgroundClick}>
                     <ResponsiveContainer width="100%" height={300}>
                         <PieChart>
                         <Pie

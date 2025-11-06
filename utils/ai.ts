@@ -1,5 +1,5 @@
 
-import { GoogleGenAI, Type, FunctionDeclaration, LiveSession, Modality, Blob, LiveServerMessage } from '@google/genai';
+import { GoogleGenAI, Type, FunctionDeclaration, Modality, Blob, LiveServerMessage } from '@google/genai';
 import { CATEGORIES, Expense } from '../types';
 
 if (!process.env.API_KEY) {
@@ -129,12 +129,13 @@ export function createBlob(data: Float32Array): Blob {
   };
 }
 
-export async function createLiveSession(callbacks: {
-    onopen?: () => void,
-    onmessage?: (message: LiveServerMessage) => void,
-    onerror?: (e: ErrorEvent) => void,
-    onclose?: (e: CloseEvent) => void
-}): Promise<LiveSession> {
+// FIX: Made callbacks required and removed async/return type as per Gemini API guidelines.
+export function createLiveSession(callbacks: {
+    onopen: () => void,
+    onmessage: (message: LiveServerMessage) => void,
+    onerror: (e: ErrorEvent) => void,
+    onclose: (e: CloseEvent) => void
+}) {
     const sessionPromise = ai.live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-09-2025',
         callbacks,

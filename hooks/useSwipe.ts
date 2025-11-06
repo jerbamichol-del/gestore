@@ -3,12 +3,12 @@ import * as React from "react";
 
 type SwipeOpts = {
   enabled?: boolean;
-  slop?: number;        // px per "armare" il gesto (default 12)
-  threshold?: number;   // px per confermare la nav (default 56)
-  angle?: number;       // tolleranza orizzontale (± gradi, default 30)
-  enableLeftAtRightEdge?: boolean;  // default true
-  enableRightAtLeftEdge?: boolean;  // default false
-  ignoreSelector?: string; // New option to ignore swipes on certain elements
+  slop?: number;        // px per "armare" il gesto
+  threshold?: number;   // px per confermare la nav
+  angle?: number;       // tolleranza orizzontale (± gradi)
+  enableLeftAtRightEdge?: boolean;
+  enableRightAtLeftEdge?: boolean;
+  ignoreSelector?: string;
   disableDrag?: (intent: "left" | "right") => boolean;
 };
 
@@ -44,7 +44,7 @@ export function useSwipe(
 ) {
   const {
     enabled = true,
-    slop = 6,
+    slop = 10,
     threshold = 32,
     angle = 30,
     enableLeftAtRightEdge = true,
@@ -55,16 +55,14 @@ export function useSwipe(
 
   const st = React.useRef({
     tracking: false,
+    pointerId: null as number | null,
     startX: 0,
     startY: 0,
     dx: 0,
     dy: 0,
-    armed: false,
+    armed: false, // Becomes true only after slop is exceeded
     intent: null as null | "left" | "right",
-    scroller: null as HTMLElement | null,
-    mode: null as null | "scroll" | "page",
-    handoffX: null as number | null, // X al momento del passaggio "scroll → page"
-  });
+  }).current;
 
   const [progress, setProgress] = React.useState(0);
   const [isSwiping, setIsSwiping] = React.useState(false);
@@ -78,172 +76,117 @@ export function useSwipe(
     if (!root || !enabled) return;
 
     const onDown = (e: PointerEvent) => {
-      // Check if the event target or its parent matches the ignore selector.
       if (ignoreSelector && (e.target as HTMLElement).closest(ignoreSelector)) {
-        return; // Do not start tracking the swipe.
+        return;
       }
+      if (st.tracking) return;
 
-      st.current.tracking = true;
-      st.current.startX = e.clientX;
-      st.current.startY = e.clientY;
-      st.current.dx = 0;
-      st.current.dy = 0;
-      st.current.armed = false;
-      st.current.intent = null;
-      st.current.mode = null;
-      st.current.handoffX = null;
-      st.current.scroller = nearestHorizScroller(e.target);
-
+      st.tracking = true;
+      st.pointerId = e.pointerId;
+      st.startX = e.clientX;
+      st.startY = e.clientY;
+      st.dx = 0;
+      st.dy = 0;
+      st.armed = false;
+      st.intent = null;
+      
       setIsSwiping(false);
       setProgress(0);
-      // 🔸 non catturiamo subito il pointer: lasciamo scorrere la card liberamente
     };
 
     const onMove = (e: PointerEvent) => {
-      if (!st.current.tracking) return;
+      if (!st.tracking || e.pointerId !== st.pointerId) return;
 
-      const dx = e.clientX - st.current.startX;
-      const dy = e.clientY - st.current.startY;
-      st.current.dx = dx;
-      st.current.dy = dy;
+      const dx = e.clientX - st.startX;
+      const dy = e.clientY - st.startY;
+      st.dx = dx;
+      st.dy = dy;
 
-      const mostlyHorizontal = Math.abs(dx) > Math.abs(dy) * TAN;
+      if (!st.armed) {
+        if (Math.abs(dx) > slop || Math.abs(dy) > slop) {
+           if (Math.abs(dx) > Math.abs(dy) * TAN) {
+              // Horizontal gesture detected, arm the swipe and capture pointer
+              st.armed = true;
+              setIsSwiping(true);
+              st.intent = dx < 0 ? "left" : "right";
+              try { 
+                (e.target as HTMLElement).setPointerCapture(e.pointerId); 
+                if (e.cancelable) e.preventDefault(); // Prevent scroll only when swipe is confirmed
+              } catch {}
+           } else {
+              // Vertical gesture, just stop tracking this gesture
+              st.tracking = false;
+           }
+        }
+        // Don't proceed if not armed yet
+        if (!st.armed) return;
+      }
+      
+      // If we are here, we are armed and swiping horizontally
+      
+      const hasHandler =
+        (st.intent === 'left' && handlersRef.current.onSwipeLeft) ||
+        (st.intent === 'right' && handlersRef.current.onSwipeRight);
+      
+      if (!hasHandler) return;
 
-      // 1) Lock della direzione quando superiamo lo slop in orizzontale
-      if (!st.current.armed && mostlyHorizontal && Math.abs(dx) >= slop) {
-        st.current.armed = true;
-        st.current.intent = dx < 0 ? "left" : "right";
-
-        const hasHandler =
-          (st.current.intent === 'left' && handlersRef.current.onSwipeLeft) ||
-          (st.current.intent === 'right' && handlersRef.current.onSwipeRight);
-
-        const sc = st.current.scroller;
-        if (sc) {
-          // Politica: nav solo Left@RightEdge (storico); Right@LeftEdge opzionale (default off)
-          if (st.current.intent === "left") {
-            st.current.mode = enableLeftAtRightEdge && atEnd(sc) && hasHandler ? "page" : "scroll";
-            if (st.current.mode === "page") {
-              st.current.handoffX = e.clientX;
-              try { root.setPointerCapture?.((e as any).pointerId ?? 1); } catch {}
-            }
-          } else { // intent === 'right'
-            st.current.mode = enableRightAtLeftEdge && atStart(sc) && hasHandler ? "page" : "scroll";
-            if (st.current.mode === "page") {
-              st.current.handoffX = e.clientX;
-              try { root.setPointerCapture?.((e as any).pointerId ?? 1); } catch {}
-            }
-          }
-        } else {
-          // nessuno scroller: è swipe di pagina, only if handler exists
-          if (hasHandler) {
-             st.current.mode = "page";
-             st.current.handoffX = e.clientX;
-             try { root.setPointerCapture?.((e as any).pointerId ?? 1); } catch {}
+      const screenWidth = root.offsetWidth;
+      if (screenWidth > 0) {
+          const p = Math.max(-1, Math.min(1, dx / screenWidth));
+          if (st.intent && disableDrag?.(st.intent)) {
+            setProgress(0);
           } else {
-             // No handler, no scroller. This swipe does nothing.
-             st.current.armed = false;
-             st.current.intent = null;
+            setProgress(p);
           }
-        }
-      }
-
-      if (!st.current.armed || !mostlyHorizontal) return;
-
-      // 2) Se siamo in modalità "scroll", controlla se raggiungiamo il bordo giusto DURANTE lo stesso gesto
-      if (st.current.mode === "scroll" && st.current.scroller) {
-        const sc = st.current.scroller;
-        const hasHandler =
-          (st.current.intent === 'left' && handlersRef.current.onSwipeLeft) ||
-          (st.current.intent === 'right' && handlersRef.current.onSwipeRight);
-
-        if (
-          hasHandler && // Check handler before handoff
-          st.current.intent === "left" &&
-          enableLeftAtRightEdge &&
-          atEnd(sc)
-        ) {
-          // **Edge handoff**: la card è ora tutta a destra e continui verso sinistra → passa a pagina
-          st.current.mode = "page";
-          st.current.handoffX = e.clientX; // zero locale per progress
-          try { root.setPointerCapture?.((e as any).pointerId ?? 1); } catch {}
-        } else if (
-          hasHandler && // Check handler before handoff
-          st.current.intent === "right" &&
-          enableRightAtLeftEdge &&
-          atStart(sc)
-        ) {
-          st.current.mode = "page";
-          st.current.handoffX = e.clientX;
-          try { root.setPointerCapture?.((e as any).pointerId ?? 1); } catch {}
-        } else {
-          // resta scroll: non interferire
-          setIsSwiping(false);
-          setProgress(0);
-          return;
-        }
-      }
-
-      // 3) Modalità pagina: gestiamo il gesto rispetto al punto di handoff
-      if (st.current.mode === "page") {
-        // Prevent default only on significant movement to avoid killing taps.
-        if (Math.abs(dx) > slop * 2.5 && e.cancelable) {
-          e.preventDefault();
-        }
-        setIsSwiping(true);
-
-        const baseX = st.current.handoffX ?? st.current.startX;
-        const dxFromHandoff = e.clientX - baseX; // negativo = left, positivo = right
-
-        // progress normalizzato (clamp −1..1)
-        const screenWidth = root.offsetWidth;
-        if (screenWidth > 0) {
-            const p = Math.max(-1, Math.min(1, dxFromHandoff / screenWidth));
-            if (st.current.intent && disableDrag?.(st.current.intent)) {
-              setProgress(0);
-            } else {
-              setProgress(p);
-            }
-        }
       }
     };
 
     const onUp = (e: PointerEvent) => {
-      if (!st.current.tracking) return;
+      if (!st.tracking || e.pointerId !== st.pointerId) return;
 
-      const { armed, intent, mode, handoffX } = st.current;
+      const wasArmed = st.armed;
       
-      try { root.releasePointerCapture?.((e as any).pointerId ?? 1); } catch {}
-
-      st.current.tracking = false;
-      setIsSwiping(false);
-      setProgress(0);
-
-      if (!armed || mode !== "page" || !intent) return;
-
-      const baseX = handoffX ?? st.current.startX;
-      const dxFromHandoff = e.clientX - baseX;
-
-      if (Math.abs(dxFromHandoff) >= threshold) {
-          if (intent === "left" && handlersRef.current.onSwipeLeft) {
-            handlersRef.current.onSwipeLeft();
-          } else if (intent === "right" && handlersRef.current.onSwipeRight) {
-            handlersRef.current.onSwipeRight();
-          }
+      if (wasArmed && st.pointerId !== null) {
+        try { (e.target as HTMLElement).releasePointerCapture(e.pointerId); } catch {}
       }
-      // altrimenti: gesto non confermato → nessuna nav
-    };
 
-    const onCancel = (e: PointerEvent) => {
-      try { root.releasePointerCapture?.((e as any).pointerId ?? 1); } catch {}
-      st.current.tracking = false;
+      // Reset state
+      st.tracking = false;
+      st.pointerId = null;
+      st.armed = false;
       setIsSwiping(false);
       setProgress(0);
+
+      if (wasArmed) {
+        if (e.cancelable) e.preventDefault(); // Prevent click if it was a swipe
+        
+        if (Math.abs(st.dx) >= threshold) {
+            if (st.intent === "left" && handlersRef.current.onSwipeLeft) {
+              handlersRef.current.onSwipeLeft();
+            } else if (st.intent === "right" && handlersRef.current.onSwipeRight) {
+              handlersRef.current.onSwipeRight();
+            }
+        }
+      }
+    };
+    
+    const onCancel = (e: PointerEvent) => {
+        if (!st.tracking || e.pointerId !== st.pointerId) return;
+        
+        if(st.armed && st.pointerId !== null) {
+            try { (e.target as HTMLElement).releasePointerCapture(e.pointerId); } catch {}
+        }
+        
+        st.tracking = false;
+        st.pointerId = null;
+        st.armed = false;
+        setIsSwiping(false);
+        setProgress(0);
     };
 
-    root.addEventListener("pointerdown", onDown, { passive: true });
-    root.addEventListener("pointermove", onMove, { passive: false }); // serve per preventDefault
-    root.addEventListener("pointerup", onUp, { passive: true });
+    root.addEventListener("pointerdown", onDown);
+    root.addEventListener("pointermove", onMove);
+    root.addEventListener("pointerup", onUp);
     root.addEventListener("pointercancel", onCancel);
 
     return () => {
@@ -253,15 +196,7 @@ export function useSwipe(
       root.removeEventListener("pointercancel", onCancel as any);
     };
   }, [
-    ref,
-    enabled,
-    slop,
-    threshold,
-    angle,
-    enableLeftAtRightEdge,
-    enableRightAtLeftEdge,
-    ignoreSelector,
-    disableDrag,
+    ref, enabled, slop, threshold, angle, ignoreSelector, disableDrag, TAN, st
   ]);
 
   return { progress, isSwiping };

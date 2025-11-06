@@ -1,7 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { DateRangePickerModal } from './DateRangePickerModal';
+import { ChevronLeftIcon } from './icons/ChevronLeftIcon';
+import { ChevronRightIcon } from './icons/ChevronRightIcon';
+import { useSwipe } from '../hooks/useSwipe';
 
 type DateFilter = 'all' | '7d' | '30d' | '6m' | '1y';
+type PeriodType = 'day' | 'week' | 'month' | 'year';
 
 interface HistoryFilterCardProps {
   onSelectQuickFilter: (value: DateFilter) => void;
@@ -11,13 +15,20 @@ interface HistoryFilterCardProps {
   isCustomRangeActive: boolean;
   onDateModalStateChange: (isOpen: boolean) => void;
   isActive: boolean;
+  // Period filter props
+  onSelectPeriodType: (type: PeriodType) => void;
+  onSetPeriodDate: (date: Date) => void;
+  periodType: PeriodType;
+  periodDate: Date;
+  onActivatePeriodFilter: () => void;
+  isPeriodFilterActive: boolean;
 }
 
-const QuickFilterTable: React.FC<{
+const QuickFilterControl: React.FC<{
   onSelect: (value: DateFilter) => void;
   currentValue: DateFilter;
-  isCustomActive: boolean;
-}> = ({ onSelect, currentValue, isCustomActive }) => {
+  isActive: boolean;
+}> = ({ onSelect, currentValue, isActive }) => {
   const filters: { value: DateFilter; label: string }[] = [
     { value: '7d', label: '7G' },
     { value: '30d', label: '30G' },
@@ -26,68 +37,54 @@ const QuickFilterTable: React.FC<{
   ];
 
   return (
-    <table className="w-full table-fixed border-collapse border border-slate-400">
-      <tbody>
-        <tr>
-          {filters.map(filter => {
-            const isActive = !isCustomActive && currentValue === filter.value;
-            return (
-              <td key={filter.value} className="border border-slate-400 p-0 h-11">
-                <button
-                  onClick={(e) => {
-                    e.preventDefault();
-                    onSelect(currentValue === filter.value ? 'all' : filter.value);
-                  }}
-                  style={{ touchAction: 'manipulation' }}
-                  className={`w-full h-full flex items-center justify-center px-2 text-center font-semibold text-sm transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 ${
-                    isActive ? 'bg-indigo-600 text-white'
-                             : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                  }`}
-                >
-                  {filter.label}
-                </button>
-              </td>
-            );
-          })}
-        </tr>
-      </tbody>
-    </table>
+    <div className={`w-full h-10 flex border rounded-lg overflow-hidden transition-colors ${isActive ? 'border-indigo-600' : 'border-slate-400'}`}>
+      {filters.map((filter, index) => {
+        const isButtonActive = isActive && currentValue === filter.value;
+        return (
+          <button
+            key={filter.value}
+            onClick={() => {
+              onSelect(currentValue === filter.value ? 'all' : filter.value);
+            }}
+            className={`flex-1 flex items-center justify-center px-2 text-center font-semibold text-sm transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500
+              ${index > 0 ? 'border-l' : ''}
+              ${isButtonActive ? 'bg-indigo-600 text-white border-indigo-600'
+                               : `bg-slate-100 text-slate-700 hover:bg-slate-200 ${isActive ? 'border-indigo-600' : 'border-slate-400'}`
+              }`}
+          >
+            {filter.label}
+          </button>
+        );
+      })}
+    </div>
   );
 };
 
 const formatDateForButton = (dateString: string): string => {
-    // Correctly parse YYYY-MM-DD as a local date to avoid timezone issues.
     const parts = dateString.split('-').map(Number);
-    // Date constructor month is 0-indexed
     const date = new Date(parts[0], parts[1] - 1, parts[2]);
-    
     return new Intl.DateTimeFormat('it-IT', { day: '2-digit', month: 'short', year: '2-digit' }).format(date).replace('.', '');
 };
 
 const CustomDateRangeInputs: React.FC<{
   onClick: () => void;
   range: { start: string | null; end: string | null };
-}> = ({ onClick, range }) => {
+  isActive: boolean;
+}> = ({ onClick, range, isActive }) => {
   const hasRange = range.start && range.end;
   const buttonText = hasRange
     ? `${formatDateForButton(range.start!)} - ${formatDateForButton(range.end!)}`
     : "Imposta periodo";
-  const ariaLabelText = hasRange
-    ? `Attualmente: ${buttonText}`
-    : 'Nessun intervallo impostato';
+  const ariaLabelText = hasRange ? `Attualmente: ${buttonText}` : 'Nessun intervallo impostato';
 
   return (
-    <div className="border border-slate-400 h-11">
+    <div className={`border h-10 transition-colors rounded-lg ${isActive ? 'border-indigo-600' : 'border-slate-400'}`}>
       <button
-        onClick={(e) => {
-          e.stopPropagation(); // Ferma la propagazione ma non previene il default
-          onClick();
-        }}
-        style={{ touchAction: 'manipulation' }}
+        onClick={onClick}
         aria-label={`Seleziona intervallo di date. ${ariaLabelText}`}
-        className="w-full h-full flex items-center justify-center gap-2 px-2 bg-slate-100 hover:bg-slate-200 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500"
+        className={`w-full h-full flex items-center justify-center gap-2 px-2 hover:bg-slate-200 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 rounded-lg ${isActive ? 'bg-indigo-100' : 'bg-slate-100'}`}
       >
-        <span className="text-sm font-semibold text-slate-700">
+        <span className={`text-sm font-semibold ${isActive ? 'text-indigo-700' : 'text-slate-700'}`}>
           {buttonText}
         </span>
       </button>
@@ -95,249 +92,183 @@ const CustomDateRangeInputs: React.FC<{
   );
 };
 
+const PeriodNavigator: React.FC<{
+  periodType: PeriodType;
+  periodDate: Date;
+  onTypeChange: (type: PeriodType) => void;
+  onDateChange: (date: Date) => void;
+  isActive: boolean;
+  onActivate: () => void;
+  isMenuOpen: boolean;
+  onMenuToggle: (isOpen: boolean) => void;
+}> = ({ periodType, periodDate, onTypeChange, onDateChange, isActive, onActivate, isMenuOpen, onMenuToggle }) => {
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+        onMenuToggle(false);
+      }
+    };
+  
+    if (isMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+  
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isMenuOpen, onMenuToggle]);
+  
+  const handlePrev = () => { onActivate(); const newDate = new Date(periodDate); switch (periodType) { case 'day': newDate.setDate(newDate.getDate() - 1); break; case 'week': newDate.setDate(newDate.getDate() - 7); break; case 'month': newDate.setMonth(newDate.getMonth() - 1); break; case 'year': newDate.setFullYear(newDate.getFullYear() - 1); break; } onDateChange(newDate); };
+  const handleNext = () => { onActivate(); const newDate = new Date(periodDate); switch (periodType) { case 'day': newDate.setDate(newDate.getDate() + 1); break; case 'week': newDate.setDate(newDate.getDate() + 7); break; case 'month': newDate.setMonth(newDate.getMonth() + 1); break; case 'year': newDate.setFullYear(newDate.getFullYear() + 1); break; } onDateChange(newDate); };
+  const handleTypeSelect = (type: PeriodType) => { onActivate(); onTypeChange(type); onMenuToggle(false); };
+  const toggleMenu = () => { if (!isActive) { onActivate(); } onMenuToggle(!isMenuOpen); };
+
+  const getLabel = () => {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const periodDateStart = new Date(periodDate); periodDateStart.setHours(0, 0, 0, 0);
+
+    switch (periodType) {
+      case 'day':
+        if (periodDateStart.getTime() === today.getTime()) return 'Oggi';
+        const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+        if (periodDateStart.getTime() === yesterday.getTime()) return 'Ieri';
+        return periodDate.toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' }).replace('.', '');
+      case 'week':
+        const startOfWeek = new Date(periodDate); const day = startOfWeek.getDay(); const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1); startOfWeek.setDate(diff); startOfWeek.setHours(0,0,0,0);
+        const endOfWeek = new Date(startOfWeek); endOfWeek.setDate(startOfWeek.getDate() + 6);
+        const todayStartOfWeek = new Date(today); const todayDay = todayStartOfWeek.getDay(); const todayDiff = todayStartOfWeek.getDate() - todayDay + (todayDay === 0 ? -6:1); todayStartOfWeek.setDate(todayDiff); todayStartOfWeek.setHours(0,0,0,0);
+        if(startOfWeek.getTime() === todayStartOfWeek.getTime()) return 'Questa Settimana';
+        const lastWeekStart = new Date(todayStartOfWeek); lastWeekStart.setDate(todayStartOfWeek.getDate() - 7);
+        if(startOfWeek.getTime() === lastWeekStart.getTime()) return 'Settimana Scorsa';
+        return `${startOfWeek.toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })} - ${endOfWeek.toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+      case 'month':
+        const currentMonth = today.getMonth(); const currentYear = today.getFullYear();
+        if (periodDate.getMonth() === currentMonth && periodDate.getFullYear() === currentYear) return 'Questo Mese';
+        if (periodDate.getMonth() === (currentMonth === 0 ? 11 : currentMonth - 1) && periodDate.getFullYear() === (currentMonth === 0 ? currentYear - 1 : currentYear)) return 'Mese Scorso';
+        return periodDate.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
+      case 'year':
+        if (periodDate.getFullYear() === today.getFullYear()) return 'Quest\'Anno';
+        if (periodDate.getFullYear() === today.getFullYear() - 1) return 'Anno Scorso';
+        return periodDate.getFullYear().toString();
+    }
+  };
+  
+  const periodTypes: {value: PeriodType, label: string}[] = [ { value: 'day', label: 'Giorno' }, { value: 'week', label: 'Settimana' }, { value: 'month', label: 'Mese' }, { value: 'year', label: 'Anno' }, ];
+
+  return (
+    <div ref={wrapperRef} className={`w-full h-10 flex items-center justify-between border rounded-lg relative transition-colors bg-white ${isActive ? 'border-indigo-600' : 'border-slate-400'}`}>
+      <button onClick={handlePrev} className="h-full px-4 flex items-center justify-center bg-white hover:bg-slate-100 active:scale-95 transition-transform focus:outline-none rounded-l-lg [-webkit-tap-highlight-color:transparent]" aria-label="Periodo precedente"> <ChevronLeftIcon className="w-5 h-5 text-slate-700" /> </button>
+      <div className={`flex-1 text-center relative h-full ${isActive ? 'bg-indigo-100' : 'bg-slate-100'}`}>
+        <button onClick={toggleMenu} className={`w-full h-full flex items-center justify-center text-sm font-semibold transition-colors ${isActive ? 'text-indigo-700' : 'text-slate-700'} hover:bg-slate-200`}> {getLabel()} </button>
+        {isMenuOpen && ( <div className="absolute bottom-full mb-2 left-0 right-0 mx-auto w-40 bg-white border border-slate-200 shadow-lg rounded-lg z-20 p-2 space-y-1 animate-fade-in-down"> {periodTypes.map(p => ( <button key={p.value} onClick={() => handleTypeSelect(p.value)} className={`w-full text-left px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${periodType === p.value ? 'bg-indigo-100 text-indigo-800' : 'bg-slate-50 text-slate-800 hover:bg-slate-200'}`}> {p.label} </button> ))} </div> )}
+      </div>
+      <button onClick={handleNext} className="h-full px-4 flex items-center justify-center bg-white hover:bg-slate-100 active:scale-95 transition-transform focus:outline-none rounded-r-lg [-webkit-tap-highlight-color:transparent]" aria-label="Periodo successivo"> <ChevronRightIcon className="w-5 h-5 text-slate-700" /> </button>
+    </div>
+  );
+};
 
 export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = ({
-  onSelectQuickFilter, currentQuickFilter, onCustomRangeChange, currentCustomRange, isCustomRangeActive, onDateModalStateChange, isActive
+  onSelectQuickFilter, currentQuickFilter, onCustomRangeChange, currentCustomRange, isCustomRangeActive, onDateModalStateChange, isActive,
+  periodType, periodDate, onSelectPeriodType, onSetPeriodDate, isPeriodFilterActive, onActivatePeriodFilter
 }) => {
-  const [activeView, setActiveView] = useState<'quick' | 'custom'>('quick');
+  const [activeViewIndex, setActiveViewIndex] = useState(0); // 0: Rapidi, 1: Periodo, 2: Date
   const [isDateModalOpen, setIsDateModalOpen] = useState(false);
-  const swipeContainerRef = useRef<HTMLDivElement>(null);
-  
+  const [isPeriodMenuOpen, setIsPeriodMenuOpen] = useState(false);
+  const swipeWrapperRef = useRef<HTMLDivElement>(null);
+
+  const handleViewChange = (newIndex: number) => {
+    setActiveViewIndex(newIndex);
+    if (newIndex === 0) {
+      onSelectQuickFilter(currentQuickFilter); // Re-asserts the current quick filter to activate the mode
+    } else if (newIndex === 1) {
+      onActivatePeriodFilter();
+    } else if (newIndex === 2) {
+      onCustomRangeChange(currentCustomRange); // Re-asserts the current range to activate the mode
+    }
+  };
+
+  const { progress, isSwiping } = useSwipe(swipeWrapperRef, {
+      onSwipeLeft: () => handleViewChange(Math.min(2, activeViewIndex + 1)),
+      onSwipeRight: () => handleViewChange(Math.max(0, activeViewIndex - 1)),
+  }, {
+      enabled: isActive && !isPeriodMenuOpen,
+      slop: 10,
+  });
+
   useEffect(() => {
     onDateModalStateChange(isDateModalOpen);
   }, [isDateModalOpen, onDateModalStateChange]);
 
-  const [dragPct, setDragPct] = useState<number | null>(null);
-  const [dragging, setDragging] = useState(false);
+  const translateX = -activeViewIndex * (100 / 3) + progress * (100 / 3);
+  const finalTransform = isPeriodMenuOpen ? `translateX(-${100/3}%)` : `translateX(${translateX}%)`;
 
-  // ===== First-tap fixer =====
-  const needsFirstTapFixRef = useRef(false);
-  const firstTapDataRef = useRef({ armed: false, startX: 0, startY: 0, startTime: 0, moved: false });
-  const cardRootRef = useRef<HTMLDivElement>(null);
-  const TAP_MS = 300;
-  const SLOP_PX = 10;
-
-  useEffect(() => {
-    if (isActive) {
-      needsFirstTapFixRef.current = true;
-      firstTapDataRef.current = { armed: false, startX: 0, startY: 0, startTime: 0, moved: false };
-    }
-  }, [isActive, currentQuickFilter, isCustomRangeActive]);
-
-  const onFirstTapPointerDownCapture: React.PointerEventHandler<HTMLDivElement> = (e) => {
-    if (!needsFirstTapFixRef.current) return;
-    firstTapDataRef.current.armed = true;
-    firstTapDataRef.current.startX = e.clientX ?? 0;
-    firstTapDataRef.current.startY = e.clientY ?? 0;
-    firstTapDataRef.current.startTime = performance.now();
-    firstTapDataRef.current.moved = false;
-  };
-
-  const onFirstTapPointerMoveCapture: React.PointerEventHandler<HTMLDivElement> = (e) => {
-    const d = firstTapDataRef.current;
-    if (!d.armed || d.moved) return;
-    const dx = Math.abs((e.clientX ?? 0) - d.startX);
-    const dy = Math.abs((e.clientY ?? 0) - d.startY);
-    if (dx > SLOP_PX || dy > SLOP_PX) {
-      d.moved = true;
-      d.armed = false;
-      // Do not disarm needsFirstTapFixRef on swipe
-    }
-  };
-
-  const onFirstTapPointerUpCapture: React.PointerEventHandler<HTMLDivElement> = (e) => {
-    const d = firstTapDataRef.current;
-    if (!d.armed) return;
-
-    const dt = performance.now() - d.startTime;
-    const isTap = !d.moved && dt < TAP_MS;
-
-    d.armed = false;
-
-    if (!isTap) return; // Not a tap, do nothing, let fixer remain armed
-
-    needsFirstTapFixRef.current = false; // It was a tap, consume the fix
-
-    const raw = e.target as HTMLElement;
-    const focusable = (raw.closest('button, [role="button"]') as HTMLElement) || raw;
-    try {
-      setTimeout(() => focusable.click(), 0);
-    } catch {}
-
-    e.preventDefault();
-    e.stopPropagation();
-  };
+  const isQuickFilterActive = !isPeriodFilterActive && !isCustomRangeActive;
   
-  const onFirstTapPointerCancelCapture: React.PointerEventHandler<HTMLDivElement> = () => {
-    firstTapDataRef.current.armed = false;
-  };
-
-  useEffect(() => {
-    const el = swipeContainerRef.current;
-    if (!el) return;
-
-    const ANG = 30;
-    const TAN = Math.tan((ANG * Math.PI) / 180);
-    const SLOP = 10;
-    const TRIGGER_RATIO = 0.10;
-
-    let hasDown = false;
-    let lock: null | 'h' | 'v' = null;
-    let sx = 0, sy = 0;
-    let width = 1;
-    let pid: number | null = null;
-    let startTime = 0;
-
-    const basePct = () => (activeView === 'quick' ? 0 : -50);
-
-    const onDown = (e: PointerEvent) => {
-        if (e.button !== 0) return;
-        hasDown = true;
-        lock = null;
-        sx = e.clientX;
-        sy = e.clientY;
-        width = el.getBoundingClientRect().width || 1;
-        pid = e.pointerId;
-        startTime = performance.now();
-    };
-
-    const onMove = (e: PointerEvent) => {
-        if (!hasDown || e.pointerId !== pid) return;
-        const dx = e.clientX - sx;
-        const dy = e.clientY - sy;
-
-        if (!lock) {
-            if (Math.max(Math.abs(dx), Math.abs(dy)) > SLOP) {
-                lock = Math.abs(dx) > Math.abs(dy) * TAN ? 'h' : 'v';
-                if (lock === 'h') {
-                    try { el.setPointerCapture?.(pid); } catch {}
-                }
-            }
-        }
-
-        if (lock !== 'h') return;
-        
-        setDragging(true);
-        const deltaPct = (dx / width) * 50;
-        let t = basePct() + deltaPct;
-        if (t > 0) t = 0;
-        if (t < -50) t = -50;
-        setDragPct(t);
-    };
-
-    const onEnd = (e: PointerEvent) => {
-        if (!hasDown || e.pointerId !== pid) return;
-
-        const wasLocked = lock === 'h';
-        const dx = e.clientX - sx;
-        const dy = e.clientY - sy;
-        const distance = Math.hypot(dx, dy);
-        const elapsed = performance.now() - startTime;
-        const isTapLike = distance < SLOP * 1.5 && elapsed < 300;
-
-        if (wasLocked) {
-            try { el.releasePointerCapture?.(pid); } catch {}
-            
-            const triggerPx = width * TRIGGER_RATIO;
-            let swiped = false;
-            if (activeView === 'quick' && dx <= -triggerPx) {
-                setActiveView('custom');
-                swiped = true;
-            } else if (activeView === 'custom' && dx >= triggerPx) {
-                setActiveView('quick');
-                swiped = true;
-            }
-
-            // Only consume the event (stop propagation) if it was a clear swipe,
-            // not an imprecise tap.
-            if (swiped) {
-                e.stopPropagation();
-            }
-        }
-
-        setDragging(false);
-        setDragPct(null);
-        hasDown = false;
-        pid = null;
-        lock = null;
-    };
-
-    el.addEventListener('pointerdown', onDown);
-    el.addEventListener('pointermove', onMove);
-    el.addEventListener('pointerup', onEnd);
-    el.addEventListener('pointercancel', onEnd);
-
-    return () => {
-        el.removeEventListener('pointerdown', onDown);
-        el.removeEventListener('pointermove', onMove);
-        el.removeEventListener('pointerup', onEnd);
-        el.removeEventListener('pointercancel', onEnd);
-    };
-}, [activeView]);
-
-
-  const baseTranslate = activeView === 'quick' ? 0 : -50;
-  const translateX = dragPct !== null ? dragPct : baseTranslate;
-
   return (
     <>
       <div 
-        ref={cardRootRef}
-        onPointerDownCapture={onFirstTapPointerDownCapture}
-        onPointerMoveCapture={onFirstTapPointerMoveCapture}
-        onPointerUpCapture={onFirstTapPointerUpCapture}
-        onPointerCancelCapture={onFirstTapPointerCancelCapture}
+        data-no-page-swipe="true"
         className="flex-shrink-0 z-30"
       >
         <div className="bg-white/95 backdrop-blur-sm shadow-[0_-8px_20px_-5px_rgba(0,0,0,0.08)]">
-          <div className="mx-auto pt-3 pb-2 rounded-t-2xl">
-            <div
-              className="overflow-hidden"
-              ref={swipeContainerRef}
-              data-no-page-swipe="true"
-              style={{ touchAction: 'pan-y', overscrollBehaviorX: 'contain' }}
-            >
+            <div className="pt-2 rounded-t-2xl">
               <div
-                className="flex"
-                style={{
-                  width: '200%',
-                  transform: `translateX(${translateX}%)`,
-                  transition: dragging ? 'none' : 'transform 0.12s ease-out'
-                }}
+                ref={swipeWrapperRef}
+                className={`relative ${isPeriodMenuOpen ? 'overflow-visible' : 'overflow-x-hidden'}`}
+                style={{ touchAction: 'pan-y', overscrollBehaviorX: 'contain' }}
               >
-                <div className="w-1/2 flex-shrink-0 px-4">
-                  <QuickFilterTable
-                    onSelect={onSelectQuickFilter}
-                    currentValue={currentQuickFilter}
-                    isCustomActive={isCustomRangeActive}
-                  />
-                </div>
-                <div className="w-1/2 flex-shrink-0 px-4">
-                  <CustomDateRangeInputs
-                    onClick={() => setIsDateModalOpen(true)}
-                    range={currentCustomRange}
-                  />
-                </div>
+                  <div
+                      className="w-[300%] flex"
+                      style={{
+                          transform: finalTransform,
+                          transition: isSwiping ? 'none' : 'transform 0.2s cubic-bezier(0.22, 0.61, 0.36, 1)',
+                          willChange: 'transform',
+                      }}
+                  >
+                      <div className="w-1/3 px-4 py-1">
+                        <QuickFilterControl
+                          onSelect={onSelectQuickFilter}
+                          currentValue={currentQuickFilter}
+                          isActive={isQuickFilterActive}
+                        />
+                      </div>
+                      <div className="w-1/3 px-4 py-1">
+                        <PeriodNavigator
+                          periodType={periodType}
+                          periodDate={periodDate}
+                          onTypeChange={onSelectPeriodType}
+                          onDateChange={onSetPeriodDate}
+                          isActive={isPeriodFilterActive}
+                          onActivate={onActivatePeriodFilter}
+                          isMenuOpen={isPeriodMenuOpen}
+                          onMenuToggle={setIsPeriodMenuOpen}
+                        />
+                      </div>
+                      <div className="w-1/3 px-4 py-1">
+                        <CustomDateRangeInputs
+                          onClick={() => {
+                            if (!isCustomRangeActive) onCustomRangeChange({start: null, end: null});
+                            setIsDateModalOpen(true);
+                          }}
+                          range={currentCustomRange}
+                          isActive={isCustomRangeActive}
+                        />
+                      </div>
+                  </div>
+              </div>
+              <div className="flex justify-center items-center pt-1 pb-2 gap-2">
+                {[0, 1, 2].map(i => (
+                    <button 
+                        key={i} 
+                        onClick={() => handleViewChange(i)} 
+                        className={`w-2.5 h-2.5 rounded-full transition-colors duration-200 ${activeViewIndex === i ? 'bg-indigo-600' : 'bg-slate-300 hover:bg-slate-400'}`} 
+                        aria-label={`Vai al filtro ${i === 0 ? 'Rapidi' : i === 1 ? 'Periodo' : 'Date'}`}
+                    />
+                ))}
               </div>
             </div>
-
-            <div className="flex justify-center items-center gap-2.5 pt-2">
-              <button
-                onPointerUp={() => setActiveView('quick')}
-                onClick={(e) => e.preventDefault()}
-                style={{ touchAction: 'manipulation' }}
-                aria-label="Vai ai filtri rapidi"
-                className={`w-3 h-3 rounded-full transition-colors ${activeView === 'quick' ? 'bg-indigo-600' : 'bg-slate-300 hover:bg-slate-400'}`}
-              />
-              <button
-                onPointerUp={() => setActiveView('custom')}
-                onClick={(e) => e.preventDefault()}
-                style={{ touchAction: 'manipulation' }}
-                aria-label="Vai al filtro per data personalizzata"
-                className={`w-3 h-3 rounded-full transition-colors ${activeView === 'custom' ? 'bg-indigo-600' : 'bg-slate-300 hover:bg-slate-400'}`}
-              />
-            </div>
-          </div>
           <div style={{ height: `env(safe-area-inset-bottom, 0px)` }} />
         </div>
       </div>
