@@ -55,7 +55,6 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
     onMenuStateChange(activeMenu !== null);
   }, [activeMenu, onMenuStateChange]);
 
-  // Reset flags quando la pagina viene attivata
   useEffect(() => {
     const onActivated = (e: Event) => {
       const ce = e as CustomEvent;
@@ -69,18 +68,15 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
     return () => window.removeEventListener('page-activated', onActivated as EventListener);
   }, []);
 
-  // Parent -> display
   useEffect(() => {
     const parentAmount = formData.amount || 0;
     const currentDisplayAmount = parseFloat(currentValue.replace(/\./g, '').replace(',', '.')) || 0;
-
     if (Math.abs(parentAmount - currentDisplayAmount) > 1e-9) {
       if (!typingSinceActivationRef.current) {
         isSyncingFromParent.current = true;
         setCurrentValue(String(parentAmount).replace('.', ','));
       }
     }
-
     if (formData.amount === 0 || !formData.amount) {
       setPreviousValue(null);
       setOperator(null);
@@ -89,7 +85,6 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
     }
   }, [formData.amount, currentValue]);
 
-  // Display -> parent
   useEffect(() => {
     if (isSyncingFromParent.current) {
       isSyncingFromParent.current = false;
@@ -125,7 +120,7 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
     });
   }, [justCalculated, shouldResetCurrentValue, handleClearAmount]);
 
-  // --- Long-press per ⌫ ---
+  // long-press backspace
   const delTimerRef = useRef<number | null>(null);
   const delDidLongRef = useRef(false);
   const delStartXRef = useRef(0);
@@ -244,7 +239,7 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
   const handleSelectChange = (field: keyof Omit<Expense, 'id'>, value: string) => {
     const updatedFormData = { [field]: value };
     if (field === 'category') {
-      (updatedFormData as any).subcategory = ''; // reset subcategory
+      (updatedFormData as any).subcategory = '';
     }
     onFormChange(updatedFormData);
     setActiveMenu(null);
@@ -263,7 +258,6 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
     ? (CATEGORIES[formData.category]?.map(sub => ({ value: sub, label: sub })) || [])
     : [];
   const accountOptions = accounts.map(acc => ({ value: acc.id, label: acc.name }));
-  const isSubcategoryDisabled = !formData.category || subcategoryOptions.length === 0;
 
   const displayValue = formatAmountForDisplay(currentValue);
   const smallDisplayValue = previousValue && operator ? `${formatAmountForDisplay(previousValue)} ${operator}` : ' ';
@@ -305,10 +299,8 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
     </div>
   );
 
-  // helper per attivare i menu su tap immediato anche se lo swipe ha “toccato” pointerdown
-  const onPU = (fn: () => void) => (e: React.PointerEvent<HTMLButtonElement>) => {
-    fn();
-  };
+  // helper: far scattare il tap anche se lo swipe ha “toccato” pointerdown
+  const onPU = (fn: () => void) => () => fn();
 
   return (
     <div ref={ref} tabIndex={-1} className="bg-slate-100 w-full h-full flex flex-col focus:outline-none">
@@ -358,11 +350,7 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
           >
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="transform -rotate-90">
-                <SmoothPullTab
-                  width="148"
-                  height="32"
-                  fill="rgba(199, 210, 254, 0.8)"
-                />
+                <SmoothPullTab width="148" height="32" fill="rgba(199, 210, 254, 0.8)" />
               </div>
             </div>
             <ChevronLeftIcon className="relative z-10 w-6 h-6 text-indigo-600 transition-colors" />
@@ -373,6 +361,7 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
       <div className="flex-shrink-0 flex flex-col" style={{ height: '52vh' }}>
         <div className="flex justify-between items-center my-2 w-full px-4" style={{ touchAction: 'pan-y' }}>
           <button
+            data-swipe-ignore="true"
             onClick={() => setActiveMenu('account')}
             onPointerUp={onPU(() => setActiveMenu('account'))}
             className="font-semibold text-indigo-600 hover:text-indigo-800 text-lg w-1/3 truncate p-2 rounded-lg focus:outline-none focus:ring-0 text-left"
@@ -381,6 +370,7 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
             {accounts.find(a => a.id === formData.accountId)?.name || 'Conto'}
           </button>
           <button
+            data-swipe-ignore="true"
             onClick={() => setActiveMenu('category')}
             onPointerUp={onPU(() => setActiveMenu('category'))}
             className="font-semibold text-indigo-600 hover:text-indigo-800 text-lg w-1/3 truncate p-2 rounded-lg focus:outline-none focus:ring-0 text-center"
@@ -389,6 +379,7 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
             {formData.category ? getCategoryStyle(formData.category).label : 'Categoria'}
           </button>
           <button
+            data-swipe-ignore="true"
             onClick={() => setActiveMenu('subcategory')}
             onPointerUp={onPU(() => setActiveMenu('subcategory'))}
             disabled={!formData.category || (CATEGORIES[formData.category]?.length || 0) === 0}
