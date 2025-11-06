@@ -88,10 +88,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
       enabled: !isDesktop && isOpen && !isMenuOpen,
       threshold: 32,
       slop: 6,
-      // swipe ovunque: non ignorare nessun target
-      ignoreSelector: '',
-      // se supportato dall’hook, utile per evitare click fantasma dopo uno swipe:
-      // cancelClickOnSwipe: true,
+      // ignoreSelector rimosso per permettere lo swipe su tutta la superficie
     }
   );
 
@@ -103,12 +100,10 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
     } else {
       setIsAnimating(false);
       const timers: number[] = [];
-      timers.push(
-        window.setTimeout(() => {
-          setFormData(resetFormData());
-          setDateError(false);
-        }, 300)
-      );
+      timers.push(window.setTimeout(() => {
+        setFormData(resetFormData());
+        setDateError(false);
+      }, 300));
       return () => timers.forEach(clearTimeout);
     }
   }, [isOpen, resetFormData]);
@@ -143,19 +138,23 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
 
       setTimeout(() => {
         const activeElement = document.activeElement as HTMLElement | null;
-        activeElement?.blur?.();
+        if (activeElement?.blur) {
+          activeElement.blur();
+        }
       }, 50);
 
       requestAnimationFrame(() => {
         const node = targetView === 'details' ? detailsPageRef.current : calculatorPageRef.current;
-        node?.focus?.({ preventScroll: true });
+        if (node?.focus) {
+          node.focus({ preventScroll: true });
+        }
       });
     }
   };
 
   if (!isOpen) return null;
 
-  const translateX = (view === 'calculator' ? 0 : -50) + progress * 50;
+  const translateX = (view === 'calculator' ? 0 : -50) + (progress * 50);
   const isCalculatorActive = view === 'calculator';
   const isDetailsActive = view === 'details';
   const isClosing = !isOpen;
@@ -171,9 +170,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
       <div
         ref={containerRef}
         className="relative h-full w-full overflow-hidden"
-        // pan-y = lascia allo user-agent lo scroll verticale,
-        // ma consente all’app di gestire pan orizzontali per lo swipe
-        style={{ touchAction: 'pan-y' }}
+        style={{ touchAction: 'pan-y', overscrollBehaviorX: 'contain' }}
       >
         <div
           ref={swipeableDivRef}
