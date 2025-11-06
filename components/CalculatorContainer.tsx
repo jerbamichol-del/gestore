@@ -42,7 +42,6 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   onSubmit,
   accounts,
 }) => {
-  const [isMounted, setIsMounted] = useState(true);
   const [isAnimating, setIsAnimating] = useState(false);
   const [view, setView] = useState<'calculator' | 'details'>('calculator');
 
@@ -78,17 +77,57 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   const calculatorPageRef = useRef<HTMLDivElement>(null);
   const detailsPageRef = useRef<HTMLDivElement>(null);
 
+  // Larghezza container per trasformazioni in px
+  const [containerWidth, setContainerWidth] = useState(0);
+  const [dragXPx, setDragXPx] = useState(0);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      setContainerWidth(el.clientWidth);
+    });
+    ro.observe(el);
+    setContainerWidth(el.clientWidth);
+    return () => ro.disconnect();
+  }, []);
+
+  const navigateTo = (targetView: 'calculator' | 'details') => {
+    if (view !== targetView) {
+      setView(targetView);
+      window.dispatchEvent(new Event('numPad:cancelLongPress'));
+      window.dispatchEvent(new CustomEvent('page-activated', { detail: targetView }));
+      setTimeout(() => {
+        const activeElement = document.activeElement as HTMLElement | null;
+        activeElement?.blur?.();
+      }, 50);
+      requestAnimationFrame(() => {
+        const node = targetView === 'details' ? detailsPageRef.current : calculatorPageRef.current;
+        node?.focus?.({ preventScroll: true });
+      });
+    }
+  };
+
   const { progress, isSwiping } = useSwipe(
     containerRef,
     {
       onSwipeLeft: view === 'calculator' ? () => navigateTo('details') : undefined,
       onSwipeRight: view === 'details' ? () => navigateTo('calculator') : undefined,
+      onSwipeStart: () => {
+        // Chiudi subito la tastiera per evitare “mezzo schermo”
+        const ae = document.activeElement as HTMLElement | null;
+        ae?.blur?.();
+        // Evita ricalcoli bruschi: il drag è in px, quindi siamo al sicuro
+      },
+      onSwipeMove: (_p, dxPx) => {
+        setDragXPx(dxPx);
+      },
     },
     {
       enabled: !isDesktop && isOpen && !isMenuOpen,
-      threshold: 32,
-      slop: 6,
-      // ignoreSelector rimosso per permettere lo swipe su tutta la superficie
+      threshold: 48,
+      slop: 8,
+      cancelClickOnSwipe: true,
     }
   );
 
@@ -99,23 +138,18 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
       return () => clearTimeout(timer);
     } else {
       setIsAnimating(false);
-      const timers: number[] = [];
-      timers.push(window.setTimeout(() => {
+      const t = window.setTimeout(() => {
         setFormData(resetFormData());
         setDateError(false);
-      }, 300));
-      return () => timers.forEach(clearTimeout);
+      }, 300);
+      return () => window.clearTimeout(t);
     }
   }, [isOpen, resetFormData]);
 
-  const handleClose = () => {
-    onClose();
-  };
+  const handleClose = () => onClose();
 
   const handleFormChange = (newData: Partial<Omit<Expense, 'id'>>) => {
-    if ('date' in newData && newData.date) {
-      setDateError(false);
-    }
+    if ('date' in newData && newData.date) setDateError(false);
     setFormData(prev => ({ ...prev, ...newData }));
   };
 
@@ -130,31 +164,17 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
     onSubmit(submittedData);
   };
 
-  const navigateTo = (targetView: 'calculator' | 'details') => {
-    if (view !== targetView) {
-      setView(targetView);
-      window.dispatchEvent(new Event('numPad:cancelLongPress'));
-      window.dispatchEvent(new CustomEvent('page-activated', { detail: targetView }));
-
-      setTimeout(() => {
-        const activeElement = document.activeElement as HTMLElement | null;
-        if (activeElement?.blur) {
-          activeElement.blur();
-        }
-      }, 50);
-
-      requestAnimationFrame(() => {
-        const node = targetView === 'details' ? detailsPageRef.current : calculatorPageRef.current;
-        if (node?.focus) {
-          node.focus({ preventScroll: true });
-        }
-      });
-    }
-  };
-
   if (!isOpen) return null;
 
-  const translateX = (view === 'calculator' ? 0 : -50) + (progress * 50);
+  // Posizione base delle due pagine in PX
+  const baseOffsetPx = view === 'calculator' ? 0 : -containerWidth;
+  // Se sto trascinando, applico dx in PX; altrimenti, snap alla posizione base
+  const transformPx = isDesktop
+    ? 0
+    : isSwiping
+      ? baseOffsetPx + dragXPx
+      : baseOffsetPx;
+
   const isCalculatorActive = view === 'calculator';
   const isDetailsActive = view === 'details';
   const isClosing = !isOpen;
@@ -174,18 +194,20 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
       >
         <div
           ref={swipeableDivRef}
-          className="absolute inset-0 flex w-[200%] md:w-full md:grid md:grid-cols-2"
+          className="absolute inset-0 flex md:w-full md:grid md:grid-cols-2"
           style={{
-            transform: isDesktop ? 'none' : `translateX(${translateX}%)`,
+            width: isDesktop ? '100%' : `${containerWidth * 2}px`,
+            transform: isDesktop ? 'none' : `translateX(${transformPx}px)`,
             transition: isSwiping ? 'none' : 'transform 0.12s ease-out',
             willChange: 'transform',
           }}
         >
           <div
-            className={`w-1/2 md:w-auto h-full relative ${
+            className={`w-[${containerWidth}px] md:w-auto h-full relative ${
               isCalculatorActive ? 'z-10' : 'z-0'
             } ${!isCalculatorActive ? 'pointer-events-none' : ''}`}
             aria-hidden={!isCalculatorActive}
+            style={!isDesktop ? { width: `${containerWidth}px` } : undefined}
           >
             <CalculatorInputScreen
               ref={calculatorPageRef}
@@ -201,10 +223,11 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
           </div>
 
           <div
-            className={`w-1/2 md:w-auto h-full relative ${
+            className={`w-[${containerWidth}px] md:w-auto h-full relative ${
               isDetailsActive ? 'z-10' : 'z-0'
             } ${!isDetailsActive ? 'pointer-events-none' : ''}`}
             aria-hidden={!isDetailsActive}
+            style={!isDesktop ? { width: `${containerWidth}px` } : undefined}
           >
             <TransactionDetailPage
               ref={detailsPageRef}
