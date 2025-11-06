@@ -283,11 +283,10 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
     setIsFrequencyModalOpen(false);
   };
 
-  const [isRecurrenceEndOptionsOpenState, setIsRecurrenceEndOptionsOpenState] = useState(false);
   const handleCloseRecurrenceModal = () => {
     setIsRecurrenceModalAnimating(false);
     setIsRecurrenceModalOpen(false);
-    setIsRecurrenceEndOptionsOpenState(false);
+    setIsRecurrenceEndOptionsOpen(false);
   };
 
   const handleApplyRecurrence = () => {
@@ -316,17 +315,13 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
     setIsRecurrenceEndOptionsOpen(false);
   };
 
-  // alias per JSX (mantenuto come nel tuo codice)
-  const isRecurrenceEndOptionsOpen = isRecurrenceEndOptionsOpenState;
-  const setIsRecurrenceEndOptionsOpen = setIsRecurrenceEndOptionsOpenState;
-
   const handleToggleDay = (dayValue: number) => {
     setTempRecurrenceDays(prevDays => {
-      const currentDays = prevDays || [];
-      const newDays = currentDays.includes(dayValue)
-        ? currentDays.filter(d => d !== dayValue)
-        : [...currentDays, dayValue];
-      return newDays.sort((a, b) => {
+      const current = prevDays || [];
+      const next = current.includes(dayValue)
+        ? current.filter(d => d !== dayValue)
+        : [...current, dayValue];
+      return next.sort((a, b) => {
         const aa = a === 0 ? 7 : a;
         const bb = b === 0 ? 7 : b;
         return aa - bb;
@@ -729,7 +724,13 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
                       onClick={() => { setIsRecurrenceEndOptionsOpen(prev => !prev); setIsRecurrenceOptionsOpen(false); }}
                       className="w-full flex items-center justify-between text-left gap-2 px-3 py-2.5 text-base rounded-lg border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors bg-white border-slate-300 text-slate-800 hover:bg-slate-50"
                     >
-                      <span className="truncate flex-1 capitalize">{getRecurrenceEndLabel()}</span>
+                      <span className="truncate flex-1 capitalize">{(() => {
+                        const { recurrenceEndType } = formData;
+                        if (!recurrenceEndType || recurrenceEndType === 'forever') return 'Per sempre';
+                        if (recurrenceEndType === 'date') return 'Fino a';
+                        if (recurrenceEndType === 'count') return 'Numero di volte';
+                        return 'Per sempre';
+                      })()}</span>
                       <ChevronDownIcon className={`w-5 h-5 text-slate-500 transition-transform ${isRecurrenceEndOptionsOpen ? 'rotate-180' : ''}`} />
                     </button>
                     {isRecurrenceEndOptionsOpen && (
