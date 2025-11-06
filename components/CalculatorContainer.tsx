@@ -42,7 +42,6 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   onSubmit,
   accounts,
 }) => {
-  const [isMounted, setIsMounted] = useState(true);
   const [isAnimating, setIsAnimating] = useState(false);
   const [view, setView] = useState<'calculator' | 'details'>('calculator');
 
@@ -78,6 +77,20 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   const calculatorPageRef = useRef<HTMLDivElement>(null);
   const detailsPageRef = useRef<HTMLDivElement>(null);
 
+  // === Rileva tastiera virtuale aperta (Android/TWA: VisualViewport) ===
+  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
+  useEffect(() => {
+    const vv = (window as any).visualViewport as VisualViewport | undefined;
+    if (!vv) return;
+    const onVVResize = () => {
+      const gap = window.innerHeight - vv.height; // px "mangiati" dalla tastiera
+      setIsKeyboardOpen(gap > 120);               // soglia robusta
+    };
+    onVVResize();
+    vv.addEventListener('resize', onVVResize);
+    return () => vv.removeEventListener('resize', onVVResize);
+  }, []);
+
   const { progress, isSwiping } = useSwipe(
     containerRef,
     {
@@ -85,14 +98,16 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
       onSwipeRight: view === 'details' ? () => navigateTo('calculator') : undefined,
     },
     {
-      enabled: !isDesktop && isOpen && !isMenuOpen,
+      enabled: !isDesktop && isOpen && !isMenuOpen && !isKeyboardOpen, // ⬅️ disabilita con tastiera aperta
       threshold: 32,
       slop: 6,
-      // lasciamo lo swipe ovunque, niente ignoreSelector
+      // ignora gli elementi interattivi per non “mangiare” il primo tap
+      ignoreSelector:
+        'input, textarea, select, label, a, button, [role="button"], [contenteditable="true"], [data-swipe-ignore="true"]',
     }
   );
 
-  // Chiudi la tastiera non appena parte lo swipe (evita blocchi a metà).
+  // Se parte lo swipe, blur degli input (evita mezze transizioni quando la tastiera si chiude)
   useEffect(() => {
     if (!isSwiping) return;
     const ae = document.activeElement as HTMLElement | null;
@@ -101,7 +116,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
     }
   }, [isSwiping]);
 
-  // Migliora l’handling di tap/scroll: permetti pan-y e non selezionare testo per errore
+  // qualità della vita su container
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -123,25 +138,18 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
       return () => clearTimeout(timer);
     } else {
       setIsAnimating(false);
-      const timers: number[] = [];
-      timers.push(
-        window.setTimeout(() => {
-          setFormData(resetFormData());
-          setDateError(false);
-        }, 300)
-      );
-      return () => timers.forEach(clearTimeout);
+      const t = window.setTimeout(() => {
+        setFormData(resetFormData());
+        setDateError(false);
+      }, 300);
+      return () => clearTimeout(t);
     }
   }, [isOpen, resetFormData]);
 
-  const handleClose = () => {
-    onClose();
-  };
+  const handleClose = () => onClose();
 
   const handleFormChange = (newData: Partial<Omit<Expense, 'id'>>) => {
-    if ('date' in newData && newData.date) {
-      setDateError(false);
-    }
+    if ('date' in newData && newData.date) setDateError(false);
     setFormData(prev => ({ ...prev, ...newData }));
   };
 
@@ -157,25 +165,21 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   };
 
   const navigateTo = (targetView: 'calculator' | 'details') => {
-    if (view !== targetView) {
-      setView(targetView);
+    if (view === targetView) return;
+    setView(targetView);
 
-      window.dispatchEvent(new Event('numPad:cancelLongPress'));
-      window.dispatchEvent(new CustomEvent('page-activated', { detail: targetView }));
+    window.dispatchEvent(new Event('numPad:cancelLongPress'));
+    window.dispatchEvent(new CustomEvent('page-activated', { detail: targetView }));
 
-      // Dai un attimo di vantaggio all’animazione, poi blur.
-      setTimeout(() => {
-        const activeElement = document.activeElement as HTMLElement | null;
-        if (activeElement?.blur) {
-          activeElement.blur();
-        }
-      }, 50);
+    setTimeout(() => {
+      const activeElement = document.activeElement as HTMLElement | null;
+      activeElement?.blur?.();
+    }, 50);
 
-      requestAnimationFrame(() => {
-        const node = targetView === 'details' ? detailsPageRef.current : calculatorPageRef.current;
-        if (node?.focus) node.focus({ preventScroll: true });
-      });
-    }
+    requestAnimationFrame(() => {
+      const node = targetView === 'details' ? detailsPageRef.current : calculatorPageRef.current;
+      node?.focus?.({ preventScroll: true });
+    });
   };
 
   if (!isOpen) return null;
@@ -183,13 +187,12 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   const translateX = (view === 'calculator' ? 0 : -50) + (progress * 50);
   const isCalculatorActive = view === 'calculator';
   const isDetailsActive = view === 'details';
-  const isClosing = !isOpen;
 
   return (
     <div
       className={`fixed inset-0 z-50 bg-slate-100 transform transition-transform duration-300 ease-in-out ${
         isAnimating ? 'translate-y-0' : 'translate-y-full'
-      } ${isClosing ? 'pointer-events-none' : ''}`}
+      }`}
       aria-modal="true"
       role="dialog"
     >
