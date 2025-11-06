@@ -42,6 +42,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   onSubmit,
   accounts,
 }) => {
+  const [isMounted, setIsMounted] = useState(true);
   const [isAnimating, setIsAnimating] = useState(false);
   const [view, setView] = useState<'calculator' | 'details'>('calculator');
 
@@ -54,8 +55,8 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
       accountId: accounts.length > 0 ? accounts[0].id : '',
       category: '',
       subcategory: undefined,
-      frequency: undefined, // No default frequency
-      recurrence: undefined, // reset this too to be clean
+      frequency: undefined,
+      recurrence: undefined,
       monthlyRecurrenceType: 'dayOfMonth',
       recurrenceInterval: undefined,
       recurrenceDays: undefined,
@@ -77,6 +78,44 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   const calculatorPageRef = useRef<HTMLDivElement>(null);
   const detailsPageRef = useRef<HTMLDivElement>(null);
 
+  const { progress, isSwiping } = useSwipe(
+    containerRef,
+    {
+      onSwipeLeft: view === 'calculator' ? () => navigateTo('details') : undefined,
+      onSwipeRight: view === 'details' ? () => navigateTo('calculator') : undefined,
+    },
+    {
+      enabled: !isDesktop && isOpen && !isMenuOpen,
+      threshold: 32,
+      slop: 6,
+      // lasciamo lo swipe ovunque, niente ignoreSelector
+    }
+  );
+
+  // Chiudi la tastiera non appena parte lo swipe (evita blocchi a metà).
+  useEffect(() => {
+    if (!isSwiping) return;
+    const ae = document.activeElement as HTMLElement | null;
+    if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')) {
+      ae.blur();
+    }
+  }, [isSwiping]);
+
+  // Migliora l’handling di tap/scroll: permetti pan-y e non selezionare testo per errore
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    (el.style as any).touchAction = 'pan-y';
+    el.style.webkitUserSelect = 'none';
+    el.style.userSelect = 'none';
+    return () => {
+      if (!el) return;
+      (el.style as any).touchAction = '';
+      el.style.webkitUserSelect = '';
+      el.style.userSelect = '';
+    };
+  }, []);
+
   useEffect(() => {
     if (isOpen) {
       setView('calculator');
@@ -85,10 +124,12 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
     } else {
       setIsAnimating(false);
       const timers: number[] = [];
-      timers.push(window.setTimeout(() => {
-        setFormData(resetFormData());
-        setDateError(false);
-      }, 300));
+      timers.push(
+        window.setTimeout(() => {
+          setFormData(resetFormData());
+          setDateError(false);
+        }, 300)
+      );
       return () => timers.forEach(clearTimeout);
     }
   }, [isOpen, resetFormData]);
@@ -117,47 +158,25 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
 
   const navigateTo = (targetView: 'calculator' | 'details') => {
     if (view !== targetView) {
-      // 1) Cambia subito vista
       setView(targetView);
 
-      // 2) Eventi di cleanup/notify
       window.dispatchEvent(new Event('numPad:cancelLongPress'));
       window.dispatchEvent(new CustomEvent('page-activated', { detail: targetView }));
 
-      // 3) Leggero delay prima di blur per avviare la transizione
+      // Dai un attimo di vantaggio all’animazione, poi blur.
       setTimeout(() => {
         const activeElement = document.activeElement as HTMLElement | null;
-        if (activeElement?.blur) activeElement.blur();
+        if (activeElement?.blur) {
+          activeElement.blur();
+        }
       }, 50);
 
-      // 4) Focus al nuovo container per evitare che la tastiera riappaia
       requestAnimationFrame(() => {
         const node = targetView === 'details' ? detailsPageRef.current : calculatorPageRef.current;
         if (node?.focus) node.focus({ preventScroll: true });
       });
     }
   };
-
-  const { progress, isSwiping } = useSwipe(
-    containerRef,
-    {
-      onSwipeLeft: view === 'calculator' ? () => navigateTo('details') : undefined,
-      onSwipeRight: view === 'details' ? () => navigateTo('calculator') : undefined,
-      onSwipeStart: () => {
-        // CHIUSURA IMMEDIATA TASTIERA: evita blocchi a metà su Android
-        const ae = document.activeElement as HTMLElement | null;
-        if (ae?.blur) ae.blur();
-        // Piccolo scroll to top per eliminare offset residui
-        requestAnimationFrame(() => window.scrollTo(0, 0));
-      },
-    },
-    {
-      enabled: !isDesktop && isOpen && !isMenuOpen,
-      threshold: 48,
-      slop: 10,
-      cancelClickOnSwipe: true,
-    }
-  );
 
   if (!isOpen) return null;
 
@@ -174,11 +193,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
       aria-modal="true"
       role="dialog"
     >
-      <div
-        ref={containerRef}
-        className="relative h-full w-full overflow-hidden"
-        style={{ touchAction: 'pan-y', overscrollBehaviorX: 'contain' }}
-      >
+      <div ref={containerRef} className="relative h-full w-full overflow-hidden">
         <div
           ref={swipeableDivRef}
           className="absolute inset-0 flex w-[200%] md:w-full md:grid md:grid-cols-2"
