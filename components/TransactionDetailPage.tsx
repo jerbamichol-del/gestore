@@ -47,13 +47,7 @@ const recurrenceLabels = {
 
 type DOW = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 const daysOfWeekLabels: Record<DOW, string> = {
-  0: 'Dom',
-  1: 'Lun',
-  2: 'Mar',
-  3: 'Mer',
-  4: 'Gio',
-  5: 'Ven',
-  6: 'Sab',
+  0: 'Dom', 1: 'Lun', 2: 'Mar', 3: 'Mer', 4: 'Gio', 5: 'Ven', 6: 'Sab'
 };
 const dayOfWeekNames = ['domenica', 'lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato'];
 const ordinalSuffixes = ['primo', 'secondo', 'terzo', 'quarto', 'ultimo'];
@@ -62,9 +56,7 @@ const formatShortDate = (dateString: string | undefined): string => {
   if (!dateString) return '';
   const date = parseLocalYYYYMMDD(dateString);
   if (!date) return '';
-  return new Intl.DateTimeFormat('it-IT', { day: 'numeric', month: 'short' })
-    .format(date)
-    .replace('.', '');
+  return new Intl.DateTimeFormat('it-IT', { day: 'numeric', month: 'short' }).format(date).replace('.', '');
 };
 
 const getRecurrenceSummary = (expense: Partial<Expense>): string => {
@@ -212,6 +204,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
     }
   }, [isRecurrenceModalOpen, formData.recurrence, formData.recurrenceInterval, formData.recurrenceDays, formData.monthlyRecurrenceType]);
 
+  // Sync amount
   useEffect(() => {
     if (!isAmountFocused) {
       const parentAmount = formData.amount || 0;
@@ -230,9 +223,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
     }
     const num = parseFloat(amountStr.replace(',', '.'));
     const newAmount = isNaN(num) ? 0 : num;
-    if (newAmount !== formData.amount) {
-      onFormChange({ amount: newAmount });
-    }
+    if (newAmount !== formData.amount) onFormChange({ amount: newAmount });
   }, [amountStr, formData.amount, onFormChange]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -288,17 +279,15 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
       }
     }
     onFormChange(updates);
-    handleCloseFrequencyModal();
-  };
-
-  const handleCloseFrequencyModal = () => {
     setIsFrequencyModalAnimating(false);
     setIsFrequencyModalOpen(false);
   };
 
+  const [isRecurrenceEndOptionsOpenState, setIsRecurrenceEndOptionsOpenState] = useState(false);
   const handleCloseRecurrenceModal = () => {
     setIsRecurrenceModalAnimating(false);
     setIsRecurrenceModalOpen(false);
+    setIsRecurrenceEndOptionsOpenState(false);
   };
 
   const handleApplyRecurrence = () => {
@@ -326,6 +315,10 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
     onFormChange(updates);
     setIsRecurrenceEndOptionsOpen(false);
   };
+
+  // alias per JSX (mantenuto come nel tuo codice)
+  const isRecurrenceEndOptionsOpen = isRecurrenceEndOptionsOpenState;
+  const setIsRecurrenceEndOptionsOpen = setIsRecurrenceEndOptionsOpenState;
 
   const handleToggleDay = (dayValue: number) => {
     setTempRecurrenceDays(prevDays => {
@@ -393,7 +386,11 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
     <div className={`grid ${!formData.frequency ? 'grid-cols-2' : 'grid-cols-1'} gap-4`}>
       <div>
         <label htmlFor="date" className={`block text-base font-medium mb-1 transition-colors ${dateError ? 'text-red-600' : 'text-slate-700'}`}>
-          {isSingleRecurring ? 'Data del Pagamento' : formData.frequency === 'recurring' ? 'Data di inizio' : 'Data'}
+          {formData.frequency === 'recurring' && formData.recurrenceEndType === 'count' && formData.recurrenceCount === 1
+            ? 'Data del Pagamento'
+            : formData.frequency === 'recurring'
+              ? 'Data di inizio'
+              : 'Data'}
         </label>
         <div className="relative">
           <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
@@ -451,7 +448,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
         <div className="w-11 h-11 flex items-center justify-center" />
       </header>
 
-      {/* touchAction pan-y: evita che un primo piccolo movimento orizzontale “mangi” il tap */}
+      {/* pan-y: niente concorrenza col tap; lo swipe orizzontale resta al container */}
       <main className="flex-1 p-4 flex flex-col overflow-y-auto" style={{ touchAction: 'pan-y' }}>
         <div className="space-y-4">
           <div>
@@ -461,7 +458,6 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
                 <CurrencyEuroIcon className="h-5 w-5 text-slate-400" />
               </div>
               <input
-                ref={amountInputRef}
                 id="amount"
                 name="amount"
                 type="text"
@@ -483,7 +479,6 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
                 <DocumentTextIcon className="h-5 w-5 text-slate-400" />
               </div>
               <input
-                ref={descriptionInputRef}
                 id="description"
                 name="description"
                 type="text"
@@ -501,7 +496,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
               type="button"
               onClick={() => setActiveMenu('account')}
               className="w-full flex items-center text-left gap-2 px-3 py-2.5 text-base rounded-lg border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors bg-white border-slate-300 text-slate-800 hover:bg-slate-50"
-              style={{ touchAction: 'manipulation' }} // tap immediato
+              style={{ touchAction: 'manipulation' }}
             >
               <CreditCardIcon className="h-5 w-5 text-slate-400" />
               <span className="truncate flex-1">{selectedAccountLabel || 'Seleziona'}</span>
@@ -524,7 +519,11 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
                 style={{ touchAction: 'manipulation' }}
               >
                 <span className="truncate flex-1 capitalize">
-                  {isSingleRecurring ? 'Singolo' : formData.frequency === 'recurring' ? 'Ricorrente' : 'Nessuna'}
+                  {formData.frequency === 'recurring' && formData.recurrenceEndType === 'count' && formData.recurrenceCount === 1
+                    ? 'Singolo'
+                    : formData.frequency === 'recurring'
+                      ? 'Ricorrente'
+                      : 'Nessuna'}
                 </span>
                 <ChevronDownIcon className="w-5 h-5 text-slate-500" />
               </button>
@@ -532,7 +531,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
 
             {isFrequencySet && DateTimeInputs}
 
-            {formData.frequency === 'recurring' && !isSingleRecurring && (
+            {formData.frequency === 'recurring' && !(formData.recurrenceEndType === 'count' && formData.recurrenceCount === 1) && (
               <div>
                 <label className="block text-base font-medium text-slate-700 mb-1">Ricorrenza</label>
                 <button
@@ -576,7 +575,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
           className={`absolute inset-0 z-[60] flex justify-center items-center p-4 transition-opacity duration-300 ease-in-out ${
             isFrequencyModalAnimating ? 'opacity-100' : 'opacity-0'
           } bg-slate-900/60 backdrop-blur-sm`}
-          onClick={handleCloseFrequencyModal}
+          onClick={() => { setIsFrequencyModalAnimating(false); setIsFrequencyModalOpen(false); }}
           aria-modal="true"
           role="dialog"
         >
@@ -590,7 +589,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
               <h2 className="text-lg font-bold text-slate-800">Seleziona Frequenza</h2>
               <button
                 type="button"
-                onClick={handleCloseFrequencyModal}
+                onClick={() => { setIsFrequencyModalAnimating(false); setIsFrequencyModalOpen(false); }}
                 className="text-slate-500 hover:text-slate-800 transition-colors p-1 rounded-full hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 aria-label="Chiudi"
               >
