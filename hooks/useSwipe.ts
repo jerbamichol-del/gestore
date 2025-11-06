@@ -1,156 +1,195 @@
-import { RefObject, useEffect, useRef, useState } from 'react';
+// useSwipe.ts / useSwipe.js
+import * as React from "react";
 
-type Handlers = {
-  onSwipeLeft?: () => void;
-  onSwipeRight?: () => void;
-  onSwipeStart?: () => void;                 // es. per blur tastiera
-  onSwipeMove?: (progress: number) => void;  // opzionale
+type SwipeOpts = {
+  enabled?: boolean;
+  slop?: number;        // px per "armare" il gesto
+  threshold?: number;   // px per confermare la nav
+  ignoreSelector?: string;
+  disableDrag?: (intent: "left" | "right") => boolean;
 };
 
-type Options = {
-  enabled: boolean;
-  threshold?: number;      // px necessari per confermare lo swipe
-  slop?: number;           // px per riconoscere il drag orizzontale
-  cancelClickOnSwipe?: boolean; // sopprimi il click solo se c'è stato swipe reale
-};
+function isHorizScrollable(el: HTMLElement | null) {
+  if (!el) return false;
+  const s = getComputedStyle(el);
+  if (!(s.overflowX === "auto" || s.overflowX === "scroll")) return false;
+  return el.scrollWidth > el.clientWidth + 1;
+}
 
-type SwipeState = {
-  progress: number;   // -1..1
-  isSwiping: boolean;
-};
+function nearestHorizScroller(from: EventTarget | null): HTMLElement | null {
+  let el = from as HTMLElement | null;
+  while (el) {
+    if (isHorizScrollable(el)) return el;
+    el = el.parentElement;
+  }
+  return null;
+}
+
+function atStart(sc: HTMLElement) {
+  // LTR: 0; usiamo una tolleranza di 1px
+  return sc.scrollLeft <= 1;
+}
+function atEnd(sc: HTMLElement) {
+  const max = sc.scrollWidth - sc.clientWidth;
+  return sc.scrollLeft >= max - 1;
+}
 
 export function useSwipe(
-  containerRef: RefObject<HTMLElement>,
-  handlers: Handlers,
-  opts: Options
-): SwipeState {
+  ref: React.RefObject<HTMLElement>,
+  handlers: { onSwipeLeft?: () => void; onSwipeRight?: () => void },
+  opts: SwipeOpts = {}
+) {
   const {
-    enabled,
-    threshold = 48,
+    enabled = true,
     slop = 10,
-    cancelClickOnSwipe = true,
+    threshold = 32,
+    ignoreSelector,
+    disableDrag,
   } = opts;
 
-  const [progress, setProgress] = useState(0);
-  const [isSwiping, setIsSwiping] = useState(false);
+  const st = React.useRef({
+    tracking: false,
+    pointerId: null as number | null,
+    startX: 0,
+    startY: 0,
+    dx: 0,
+    dy: 0,
+    armed: false, // Becomes true only after slop is exceeded
+    intent: null as null | "left" | "right",
+  }).current;
 
-  const startXRef = useRef(0);
-  const startYRef = useRef(0);
-  const draggingRef = useRef(false);
-  const swipedRef = useRef(false);
-  const widthRef = useRef(1);
-  const pointerIdRef = useRef<number | null>(null);
+  const [progress, setProgress] = React.useState(0);
+  const [isSwiping, setIsSwiping] = React.useState(false);
+  
+  const handlersRef = React.useRef(handlers);
+  handlersRef.current = handlers;
 
-  // Sopprimi UN click sintetico subito dopo uno swipe reale
-  const clickSuppressTimer = useRef<number | null>(null);
-  const suppressNextClick = (root: HTMLElement) => {
-    const handler = (e: MouseEvent) => {
-      root.removeEventListener('click', handler, true);
-      if (clickSuppressTimer.current) {
-        window.clearTimeout(clickSuppressTimer.current);
-        clickSuppressTimer.current = null;
+  React.useEffect(() => {
+    const root = ref.current;
+    if (!root || !enabled) return;
+
+    const onDown = (e: PointerEvent) => {
+      if (ignoreSelector && (e.target as HTMLElement).closest(ignoreSelector)) {
+        return;
       }
-      e.stopPropagation();
-      e.preventDefault();
-    };
-    root.addEventListener('click', handler, true);
-    clickSuppressTimer.current = window.setTimeout(() => {
-      root.removeEventListener('click', handler, true);
-      clickSuppressTimer.current = null;
-    }, 250);
-  };
+      if (st.tracking) return;
 
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el || !enabled) return;
-
-    const onPointerDown = (e: PointerEvent) => {
-      pointerIdRef.current = e.pointerId ?? null;
-      widthRef.current = el.clientWidth || 1;
-      startXRef.current = e.clientX;
-      startYRef.current = e.clientY;
-      draggingRef.current = false;
-      swipedRef.current = false;
-      // NIENTE setPointerCapture qui: la faremo solo quando riconosciamo il drag
-    };
-
-    const onPointerMove = (e: PointerEvent) => {
-      if (pointerIdRef.current === null) return;
-
-      const dx = e.clientX - startXRef.current;
-      const dy = e.clientY - startYRef.current;
-      const adx = Math.abs(dx);
-      const ady = Math.abs(dy);
-
-      if (!draggingRef.current) {
-        // inizia a considerare swipe solo se orizzontale netto
-        if (adx > slop && adx > ady) {
-          draggingRef.current = true;
-          setIsSwiping(true);
-          handlers.onSwipeStart?.();
-          try { (el as any).setPointerCapture?.((e as any).pointerId); } catch {}
-          // adesso sì, preveniamo default per evitare selezioni/scroll orizzontale
-          e.preventDefault();
-        } else {
-          // ancora nessun drag: lascia passare TAP e scroll verticali
-          return;
-        }
-      } else {
-        // drag in corso
-        e.preventDefault();
-      }
-
-      const p = Math.max(-1, Math.min(1, dx / widthRef.current));
-      setProgress(p);
-      handlers.onSwipeMove?.(p);
-    };
-
-    const endDrag = (e: PointerEvent) => {
-      if (pointerIdRef.current === null) return;
-
-      const dx = e.clientX - startXRef.current;
-      const adx = Math.abs(dx);
-
-      if (draggingRef.current) {
-        if (adx >= threshold) {
-          if (dx < 0) handlers.onSwipeLeft?.();
-          else handlers.onSwipeRight?.();
-          swipedRef.current = true;
-        }
-      }
-
-      draggingRef.current = false;
-      pointerIdRef.current = null;
-      setProgress(0);
+      st.tracking = true;
+      st.pointerId = e.pointerId;
+      st.startX = e.clientX;
+      st.startY = e.clientY;
+      st.dx = 0;
+      st.dy = 0;
+      st.armed = false;
+      st.intent = null;
+      
       setIsSwiping(false);
-
-      if (swipedRef.current && cancelClickOnSwipe) {
-        suppressNextClick(el);
-      }
-      swipedRef.current = false;
-
-      try { (el as any).releasePointerCapture?.((e as any).pointerId); } catch {}
+      setProgress(0);
     };
 
-    const onPointerUp = (e: PointerEvent) => endDrag(e);
-    const onPointerCancel = (e: PointerEvent) => endDrag(e);
+    const onMove = (e: PointerEvent) => {
+      if (!st.tracking || e.pointerId !== st.pointerId) return;
 
-    el.addEventListener('pointerdown', onPointerDown, { passive: true });
-    el.addEventListener('pointermove', onPointerMove, { passive: false });
-    el.addEventListener('pointerup', onPointerUp, { passive: true });
-    el.addEventListener('pointercancel', onPointerCancel, { passive: true });
+      const dx = e.clientX - st.startX;
+      const dy = e.clientY - st.startY;
+      st.dx = dx;
+      st.dy = dy;
+
+      if (!st.armed) {
+        // Arm only if the gesture is decisively horizontal and has passed the slop distance.
+        // The dy * 2 check makes it much stricter, preferring vertical scroll unless the swipe is clearly horizontal.
+        if (Math.abs(dx) > slop && Math.abs(dx) > Math.abs(dy) * 2) {
+          st.armed = true;
+          setIsSwiping(true);
+          st.intent = dx < 0 ? 'left' : 'right';
+          try {
+            (e.target as HTMLElement).setPointerCapture(e.pointerId);
+            if (e.cancelable) e.preventDefault();
+          } catch {}
+        } else if (Math.abs(dy) > slop) {
+          // If it's a vertical gesture, stop tracking for this interaction.
+          st.tracking = false;
+        }
+        // If not armed yet, do nothing more.
+        if (!st.armed) return;
+      }
+      
+      // If we are here, we are armed and swiping horizontally
+      
+      const hasHandler =
+        (st.intent === 'left' && handlersRef.current.onSwipeLeft) ||
+        (st.intent === 'right' && handlersRef.current.onSwipeRight);
+      
+      if (!hasHandler) return;
+
+      const screenWidth = root.offsetWidth;
+      if (screenWidth > 0) {
+          const p = Math.max(-1, Math.min(1, dx / screenWidth));
+          if (st.intent && disableDrag?.(st.intent)) {
+            setProgress(0);
+          } else {
+            setProgress(p);
+          }
+      }
+    };
+
+    const onUp = (e: PointerEvent) => {
+      if (!st.tracking || e.pointerId !== st.pointerId) return;
+
+      const wasArmed = st.armed;
+      
+      if (wasArmed && st.pointerId !== null) {
+        try { (e.target as HTMLElement).releasePointerCapture(e.pointerId); } catch {}
+      }
+
+      // Reset state
+      st.tracking = false;
+      st.pointerId = null;
+      st.armed = false;
+      setIsSwiping(false);
+      setProgress(0);
+
+      if (wasArmed) {
+        if (e.cancelable) e.preventDefault(); // Prevent click if it was a swipe
+        
+        if (Math.abs(st.dx) >= threshold) {
+            if (st.intent === "left" && handlersRef.current.onSwipeLeft) {
+              handlersRef.current.onSwipeLeft();
+            } else if (st.intent === "right" && handlersRef.current.onSwipeRight) {
+              handlersRef.current.onSwipeRight();
+            }
+        }
+      }
+    };
+    
+    const onCancel = (e: PointerEvent) => {
+        if (!st.tracking || e.pointerId !== st.pointerId) return;
+        
+        if(st.armed && st.pointerId !== null) {
+            try { (e.target as HTMLElement).releasePointerCapture(e.pointerId); } catch {}
+        }
+        
+        st.tracking = false;
+        st.pointerId = null;
+        st.armed = false;
+        setIsSwiping(false);
+        setProgress(0);
+    };
+
+    root.addEventListener("pointerdown", onDown);
+    root.addEventListener("pointermove", onMove);
+    root.addEventListener("pointerup", onUp);
+    root.addEventListener("pointercancel", onCancel);
 
     return () => {
-      el.removeEventListener('pointerdown', onPointerDown as any);
-      el.removeEventListener('pointermove', onPointerMove as any);
-      el.removeEventListener('pointerup', onPointerUp as any);
-      el.removeEventListener('pointercancel', onPointerCancel as any);
-      if (clickSuppressTimer.current) {
-        window.clearTimeout(clickSuppressTimer.current);
-        clickSuppressTimer.current = null;
-      }
+      root.removeEventListener("pointerdown", onDown as any);
+      root.removeEventListener("pointermove", onMove as any);
+      root.removeEventListener("pointerup", onUp as any);
+      root.removeEventListener("pointercancel", onCancel as any);
     };
-  }, [containerRef, enabled, threshold, slop, cancelClickOnSwipe, handlers]);
+  }, [
+    ref, enabled, slop, threshold, ignoreSelector, disableDrag, st
+  ]);
 
   return { progress, isSwiping };
 }

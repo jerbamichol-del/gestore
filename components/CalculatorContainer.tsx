@@ -27,10 +27,10 @@ const useMediaQuery = (query: string) => {
 };
 
 const toYYYYMMDD = (date: Date) => {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 };
 
 const getCurrentTime = () =>
@@ -42,6 +42,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   onSubmit,
   accounts,
 }) => {
+  const [isMounted, setIsMounted] = useState(true);
   const [isAnimating, setIsAnimating] = useState(false);
   const [view, setView] = useState<'calculator' | 'details'>('calculator');
 
@@ -78,19 +79,28 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   const detailsPageRef = useRef<HTMLDivElement>(null);
 
   const navigateTo = (targetView: 'calculator' | 'details') => {
-    if (view !== targetView) {
-      setView(targetView);
-      window.dispatchEvent(new Event('numPad:cancelLongPress'));
-      window.dispatchEvent(new CustomEvent('page-activated', { detail: targetView }));
+    if (view === targetView) return;
 
-      setTimeout(() => {
-        (document.activeElement as HTMLElement | null)?.blur?.();
-      }, 50);
+    const performNavigation = () => {
+        setView(targetView);
+        window.dispatchEvent(new Event('numPad:cancelLongPress'));
+        window.dispatchEvent(new CustomEvent('page-activated', { detail: targetView }));
 
-      requestAnimationFrame(() => {
-        const node = targetView === 'details' ? detailsPageRef.current : calculatorPageRef.current;
-        node?.focus?.({ preventScroll: true });
-      });
+        requestAnimationFrame(() => {
+            const node = targetView === 'details' ? detailsPageRef.current : calculatorPageRef.current;
+            node?.focus?.({ preventScroll: true });
+        });
+    };
+
+    const activeElement = document.activeElement as HTMLElement | null;
+    const isInputFocused = activeElement && (activeElement.tagName === 'INPUT' || activeElement.isContentEditable);
+
+    if (isInputFocused) {
+        activeElement.blur();
+        // Wait for keyboard to start dismissing. This prevents layout shifts during the swipe animation.
+        setTimeout(performNavigation, 200); 
+    } else {
+        performNavigation();
     }
   };
 
@@ -99,38 +109,40 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
     {
       onSwipeLeft: view === 'calculator' ? () => navigateTo('details') : undefined,
       onSwipeRight: view === 'details' ? () => navigateTo('calculator') : undefined,
-      onSwipeStart: () => {
-        // Chiudi subito la tastiera: evita “mezzo schermo” durante la transizione
-        (document.activeElement as HTMLElement | null)?.blur?.();
-      },
     },
     {
       enabled: !isDesktop && isOpen && !isMenuOpen,
-      threshold: 48,
-      slop: 10,
-      cancelClickOnSwipe: true,
+      threshold: 32,
+      slop: 24,
     }
   );
 
   useEffect(() => {
     if (isOpen) {
       setView('calculator');
-      const t = setTimeout(() => setIsAnimating(true), 10);
-      return () => clearTimeout(t);
+      const timer = setTimeout(() => setIsAnimating(true), 10);
+      return () => clearTimeout(timer);
     } else {
       setIsAnimating(false);
-      const t = window.setTimeout(() => {
-        setFormData(resetFormData());
-        setDateError(false);
-      }, 300);
-      return () => window.clearTimeout(t);
+      const timers: number[] = [];
+      timers.push(
+        window.setTimeout(() => {
+          setFormData(resetFormData());
+          setDateError(false);
+        }, 300)
+      );
+      return () => timers.forEach(clearTimeout);
     }
   }, [isOpen, resetFormData]);
 
-  const handleClose = () => onClose();
+  const handleClose = () => {
+    onClose();
+  };
 
   const handleFormChange = (newData: Partial<Omit<Expense, 'id'>>) => {
-    if ('date' in newData && newData.date) setDateError(false);
+    if ('date' in newData && newData.date) {
+      setDateError(false);
+    }
     setFormData(prev => ({ ...prev, ...newData }));
   };
 
@@ -147,7 +159,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
 
   if (!isOpen) return null;
 
-  const translateX = (view === 'calculator' ? 0 : -50) + (progress * 50);
+  const translateX = (view === 'calculator' ? 0 : -50) + progress * 50;
   const isCalculatorActive = view === 'calculator';
   const isDetailsActive = view === 'details';
   const isClosing = !isOpen;
@@ -163,7 +175,9 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
       <div
         ref={containerRef}
         className="relative h-full w-full overflow-hidden"
-        style={{ touchAction: 'pan-y', overscrollBehaviorX: 'contain' }}
+        // pan-y = lascia allo user-agent lo scroll verticale,
+        // ma consente all’app di gestire pan orizzontali per lo swipe
+        style={{ touchAction: 'pan-y' }}
       >
         <div
           ref={swipeableDivRef}

@@ -1,5 +1,5 @@
 {
-  "name": "Copy of Spese prova1",
+  "name": "Copy of Gestore spese",
   "description": "Una semplice applicazione per tracciare le spese, ricreata da zero per garantire pulizia e funzionalità.",
   "requestFramePermissions": [
     "microphone",

@@ -194,7 +194,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = ({
       onSwipeRight: () => handleViewChange(Math.max(0, activeViewIndex - 1)),
   }, {
       enabled: isActive && !isPeriodMenuOpen,
-      slop: 10,
+      slop: 20,
   });
 
   useEffect(() => {

@@ -50,12 +50,14 @@ export function useSheetDragControlled<T extends HTMLElement>(
   const g = useRef({
     active: false,
     tookOver: false,
+    startX: 0,
     startY: 0,
     lastY: 0,
     lastT: 0,
     vy: 0, // Velocity in px/ms
     scroller: null as HTMLElement | null,
     closing: false,
+    isLocked: false, // For gesture direction
   }).current;
 
   const H = () => (sheetRef.current?.clientHeight || 1);
@@ -88,9 +90,11 @@ export function useSheetDragControlled<T extends HTMLElement>(
     const sheet = sheetRef.current;
     if (!sheet) return;
 
-    const onStart = (y: number) => {
+    const onStart = (x: number, y: number) => {
       g.active = true;
       g.tookOver = false;
+      g.isLocked = false;
+      g.startX = x;
       g.startY = y;
       g.lastY = y;
       g.lastT = performance.now();
@@ -98,7 +102,7 @@ export function useSheetDragControlled<T extends HTMLElement>(
       g.scroller = findScrollable(sheet, scrollableSelector);
     };
 
-    const onMove = (y: number, e: Event) => {
+    const onMove = (x: number, y: number, e: Event) => {
       if (!g.active) return;
       
       const t = performance.now();
@@ -112,7 +116,22 @@ export function useSheetDragControlled<T extends HTMLElement>(
       g.lastY = y;
       g.lastT = t;
       
+      const dx = x - g.startX;
       const dy = y - g.startY;
+
+      if (!g.isLocked) {
+        const SLOP = 10;
+        if (Math.abs(dx) <= SLOP && Math.abs(dy) <= SLOP) return;
+
+        const isVertical = Math.abs(dy) > Math.abs(dx);
+        if (!isVertical) {
+            // Horizontal gesture, bail out.
+            g.active = false;
+            return;
+        }
+        g.isLocked = true; // Lock to vertical gesture
+      }
+
 
       const atTop = !g.scroller || g.scroller.scrollTop <= topGuardPx;
       const movingDown = dy > 0;
@@ -157,18 +176,18 @@ export function useSheetDragControlled<T extends HTMLElement>(
     // Prefer TOUCH events for reliability
     const onTouchStart = (e: TouchEvent) => {
       if (e.touches.length !== 1) return;
-      onStart(e.touches[0].clientY);
+      onStart(e.touches[0].clientX, e.touches[0].clientY);
     };
     const onTouchMove = (e: TouchEvent) => {
       if (!g.active || e.touches.length !== 1) return;
-      onMove(e.touches[0].clientY, e);
+      onMove(e.touches[0].clientX, e.touches[0].clientY, e);
     };
     const onTouchEnd = () => onEnd();
     const onTouchCancel = () => onEnd();
 
     // Pointer fallback
-    const onPointerDown = (e: PointerEvent) => onStart(e.clientY);
-    const onPointerMove = (e: PointerEvent) => onMove(e.clientY, e);
+    const onPointerDown = (e: PointerEvent) => onStart(e.clientX, e.clientY);
+    const onPointerMove = (e: PointerEvent) => onMove(e.clientX, e.clientY, e);
     const onPointerUp = () => onEnd();
     const onPointerCancel = () => onEnd();
 

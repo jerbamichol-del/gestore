@@ -291,8 +291,10 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
   });
 
   const onPDcap = (e: React.PointerEvent) => {
-    // Se un item sta già gestendo orizzontale o c’è un item aperto → non gestiamo pagina
-    if (isInteracting || openItemId) return;
+    // Se un item sta già gestendo orizzontale, è aperto, o lo swipe parte da un'area da ignorare, non fare nulla.
+    if (isInteracting || openItemId || (e.target as HTMLElement).closest('[data-no-page-swipe], [role="dialog"]')) {
+      return;
+    }
     pageDrag.current = {
       active: true,
       locked: false,
@@ -300,7 +302,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
       startX: e.clientX,
       startY: e.clientY,
     };
-    try { pageRef.current?.setPointerCapture(e.pointerId); } catch {}
+    // Non catturare subito per permettere i tap sui figli
   };
 
   const onPMcap = (e: React.PointerEvent) => {
@@ -316,13 +318,15 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
 
       const horizontal = Math.abs(dx) > Math.abs(dy);
       if (!horizontal) {
-        // verticale → lascia scorrere
+        // Gesto verticale, lascia scorrere
         pg.active = false;
         pg.pointerId = null;
-        try { pageRef.current?.releasePointerCapture(e.pointerId); } catch {}
         return;
       }
-      pg.locked = true; // da qui consideriamo il gesto come "page swipe"
+      
+      // Gesto orizzontale confermato: cattura il puntatore
+      pg.locked = true;
+      try { pageRef.current?.setPointerCapture(e.pointerId); } catch {}
     }
     // niente animazione live: nav alla fine (pointerup) se supera soglia
   };
@@ -331,18 +335,28 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
     const pg = pageDrag.current;
     if (!pg.active || pg.pointerId !== e.pointerId) return;
 
-    const dx = e.clientX - pg.startX;
-    const dy = e.clientY - pg.startY;
-
+    // Se abbiamo catturato il puntatore, rilasciamolo
+    if (pg.locked) {
+        try { pageRef.current?.releasePointerCapture(e.pointerId); } catch {}
+    }
+    
+    const wasLocked = pg.locked;
+    
+    // Reset state
     pg.active = false;
     pg.locked = false;
     pg.pointerId = null;
-    try { pageRef.current?.releasePointerCapture(e.pointerId); } catch {}
-
-    // Trigger solo swipe a DESTRA (storico → home/calcolatrice)
-    const THRESH = 80;
-    if (Math.abs(dx) > Math.abs(dy) && dx > THRESH && !isInteracting && !openItemId) {
-      onNavigateHome();
+    
+    // Esegui la navigazione solo se era uno swipe confermato
+    if (wasLocked) {
+        const dx = e.clientX - pg.startX;
+        const dy = e.clientY - pg.startY;
+        
+        // Trigger solo swipe a DESTRA (storico → home/calcolatrice)
+        const THRESH = 80;
+        if (Math.abs(dx) > Math.abs(dy) && dx > THRESH && !isInteracting && !openItemId) {
+          onNavigateHome();
+        }
     }
   };
   // ====================================================
