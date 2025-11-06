@@ -3,15 +3,14 @@ import { RefObject, useEffect, useRef, useState } from 'react';
 type Handlers = {
   onSwipeLeft?: () => void;
   onSwipeRight?: () => void;
-  // opzionale: blur immediato tastiera o altre azioni
   onSwipeStart?: () => void;
-  onSwipeMove?: (progress: number) => void;
+  onSwipeMove?: (progress: number, dxPx: number) => void;
 };
 
 type Options = {
   enabled: boolean;
-  threshold?: number;   // px necessari per confermare lo swipe
-  slop?: number;        // px per dichiarare che è un drag orizzontale
+  threshold?: number;   // px per confermare lo swipe
+  slop?: number;        // px per riconoscere il drag orizzontale
   cancelClickOnSwipe?: boolean; // sopprimi il click solo se c'è stato swipe
 };
 
@@ -40,9 +39,9 @@ export function useSwipe(
   const draggingRef = useRef(false);
   const swipedRef = useRef(false);
   const widthRef = useRef(1);
+  const dxPxRef = useRef(0);
   const pointerIdRef = useRef<number | null>(null);
 
-  // sopprime UN solo click subito dopo uno swipe reale
   const clickSuppressTimer = useRef<number | null>(null);
   const suppressNextClick = (root: HTMLElement) => {
     const handler = (e: MouseEvent) => {
@@ -66,16 +65,14 @@ export function useSwipe(
     if (!el || !enabled) return;
 
     const onPointerDown = (e: PointerEvent) => {
-      // Non blocchiamo mai il tap qui: niente preventDefault.
       pointerIdRef.current = e.pointerId ?? null;
       widthRef.current = el.clientWidth || 1;
       startXRef.current = e.clientX;
       startYRef.current = e.clientY;
       draggingRef.current = false;
       swipedRef.current = false;
-
-      // cattura per ricevere move/up anche se esci dal box
-      try { (el as any).setPointerCapture?.(e.pointerId); } catch {}
+      dxPxRef.current = 0;
+      // NIENTE pointerCapture qui: lo metto solo quando riconosco il drag
     };
 
     const onPointerMove = (e: PointerEvent) => {
@@ -86,38 +83,37 @@ export function useSwipe(
       const adx = Math.abs(dx);
       const ady = Math.abs(dy);
 
-      // decidi se è un drag orizzontale
       if (!draggingRef.current) {
         if (adx > slop && adx > ady) {
           draggingRef.current = true;
           setIsSwiping(true);
           handlers.onSwipeStart?.();
-
-          // da ora in poi vogliamo evitare lo scroll orizzontale di default
-          // evitando anche selezioni/gesture “click and hold”
+          // Ora sì: catturo il puntatore per avere move/up consistenti
+          try { (el as any).setPointerCapture?.((e as any).pointerId); } catch {}
+          // Ora posso prevenire default per evitare scroll orizzontale/selezioni
           e.preventDefault();
         } else {
-          // non ancora drag: lascia fare (scroll/tap normali)
+          // Non ancora drag: lascia passare tap/scroll normali
           return;
         }
       } else {
-        // è drag in corso
+        // Drag in corso
         e.preventDefault();
       }
 
+      dxPxRef.current = dx;
       const p = Math.max(-1, Math.min(1, dx / widthRef.current));
       setProgress(p);
-      handlers.onSwipeMove?.(p);
+      handlers.onSwipeMove?.(p, dx);
     };
 
-    const onPointerUp = (e: PointerEvent) => {
+    const endDrag = (e: PointerEvent) => {
       if (pointerIdRef.current === null) return;
 
       const dx = e.clientX - startXRef.current;
       const adx = Math.abs(dx);
 
       if (draggingRef.current) {
-        // c'è stato un drag reale: valuta outcome
         if (adx >= threshold) {
           if (dx < 0) handlers.onSwipeLeft?.();
           else handlers.onSwipeRight?.();
@@ -125,13 +121,12 @@ export function useSwipe(
         }
       }
 
-      // reset stato
       draggingRef.current = false;
       pointerIdRef.current = null;
       setProgress(0);
       setIsSwiping(false);
 
-      // sopprimi un click sintetico solo se c'è stato swipe
+      // Sopprimo UN click sintetico solo se c'è stato swipe
       if (swipedRef.current && cancelClickOnSwipe) {
         suppressNextClick(el);
       }
@@ -140,15 +135,11 @@ export function useSwipe(
       try { (el as any).releasePointerCapture?.((e as any).pointerId); } catch {}
     };
 
-    const onPointerCancel = () => {
-      draggingRef.current = false;
-      pointerIdRef.current = null;
-      setProgress(0);
-      setIsSwiping(false);
-    };
+    const onPointerUp = (e: PointerEvent) => endDrag(e);
+    const onPointerCancel = (e: PointerEvent) => endDrag(e);
 
     el.addEventListener('pointerdown', onPointerDown, { passive: true });
-    el.addEventListener('pointermove', onPointerMove, { passive: false }); // possiamo chiamare preventDefault quando serve
+    el.addEventListener('pointermove', onPointerMove, { passive: false });
     el.addEventListener('pointerup', onPointerUp, { passive: true });
     el.addEventListener('pointercancel', onPointerCancel, { passive: true });
 
