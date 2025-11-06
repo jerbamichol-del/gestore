@@ -3,15 +3,15 @@ import { RefObject, useEffect, useRef, useState } from 'react';
 type Handlers = {
   onSwipeLeft?: () => void;
   onSwipeRight?: () => void;
-  onSwipeStart?: () => void;
-  onSwipeMove?: (progress: number, dxPx: number) => void;
+  onSwipeStart?: () => void;                 // es. per blur tastiera
+  onSwipeMove?: (progress: number) => void;  // opzionale
 };
 
 type Options = {
   enabled: boolean;
-  threshold?: number;   // px per confermare lo swipe
-  slop?: number;        // px per riconoscere il drag orizzontale
-  cancelClickOnSwipe?: boolean; // sopprimi il click solo se c'è stato swipe
+  threshold?: number;      // px necessari per confermare lo swipe
+  slop?: number;           // px per riconoscere il drag orizzontale
+  cancelClickOnSwipe?: boolean; // sopprimi il click solo se c'è stato swipe reale
 };
 
 type SwipeState = {
@@ -27,7 +27,7 @@ export function useSwipe(
   const {
     enabled,
     threshold = 48,
-    slop = 6,
+    slop = 10,
     cancelClickOnSwipe = true,
   } = opts;
 
@@ -39,9 +39,9 @@ export function useSwipe(
   const draggingRef = useRef(false);
   const swipedRef = useRef(false);
   const widthRef = useRef(1);
-  const dxPxRef = useRef(0);
   const pointerIdRef = useRef<number | null>(null);
 
+  // Sopprimi UN click sintetico subito dopo uno swipe reale
   const clickSuppressTimer = useRef<number | null>(null);
   const suppressNextClick = (root: HTMLElement) => {
     const handler = (e: MouseEvent) => {
@@ -71,8 +71,7 @@ export function useSwipe(
       startYRef.current = e.clientY;
       draggingRef.current = false;
       swipedRef.current = false;
-      dxPxRef.current = 0;
-      // NIENTE pointerCapture qui: lo metto solo quando riconosco il drag
+      // NIENTE setPointerCapture qui: la faremo solo quando riconosciamo il drag
     };
 
     const onPointerMove = (e: PointerEvent) => {
@@ -84,27 +83,26 @@ export function useSwipe(
       const ady = Math.abs(dy);
 
       if (!draggingRef.current) {
+        // inizia a considerare swipe solo se orizzontale netto
         if (adx > slop && adx > ady) {
           draggingRef.current = true;
           setIsSwiping(true);
           handlers.onSwipeStart?.();
-          // Ora sì: catturo il puntatore per avere move/up consistenti
           try { (el as any).setPointerCapture?.((e as any).pointerId); } catch {}
-          // Ora posso prevenire default per evitare scroll orizzontale/selezioni
+          // adesso sì, preveniamo default per evitare selezioni/scroll orizzontale
           e.preventDefault();
         } else {
-          // Non ancora drag: lascia passare tap/scroll normali
+          // ancora nessun drag: lascia passare TAP e scroll verticali
           return;
         }
       } else {
-        // Drag in corso
+        // drag in corso
         e.preventDefault();
       }
 
-      dxPxRef.current = dx;
       const p = Math.max(-1, Math.min(1, dx / widthRef.current));
       setProgress(p);
-      handlers.onSwipeMove?.(p, dx);
+      handlers.onSwipeMove?.(p);
     };
 
     const endDrag = (e: PointerEvent) => {
@@ -126,7 +124,6 @@ export function useSwipe(
       setProgress(0);
       setIsSwiping(false);
 
-      // Sopprimo UN click sintetico solo se c'è stato swipe
       if (swipedRef.current && cancelClickOnSwipe) {
         suppressNextClick(el);
       }
