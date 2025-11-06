@@ -79,7 +79,7 @@ const getRecurrenceSummary = (
 
   // Part 1: Frequency and Interval
   if (recurrenceInterval === 1) {
-    summary = recurrenceLabels[recurrence]; // Giornaliera, Settimanale, etc.
+    summary = recurrenceLabels[recurrence as keyof typeof recurrenceLabels]; // Giornaliera, Settimanale, etc.
   } else {
     switch (recurrence) {
       case 'daily': summary = `Ogni ${recurrenceInterval} giorni`; break;
@@ -91,7 +91,7 @@ const getRecurrenceSummary = (
 
   // Part 2: Specific details
   if (recurrence === 'weekly' && recurrenceDays && recurrenceDays.length > 0) {
-    const orderedDays = [...recurrenceDays].sort((a, b) => (a === 0 ? 7 : a) - (b === 0 ? 7));
+    const orderedDays = [...recurrenceDays].sort((a, b) => (a === 0 ? 7 : a) - (b === 0 ? 7 : b));
     const dayLabels = orderedDays.map(d => daysOfWeekLabels[d as keyof typeof daysOfWeekLabels]);
     summary += `: ${dayLabels.join(', ')}`;
   }
@@ -352,7 +352,6 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
 
   const selectedAccountLabel = accounts.find(a => a.id === formData.accountId)?.name;
   const accountOptions = accounts.map(acc => ({ value: acc.id, label: acc.name }));
-  const today = toYYYYMMDD(new Date());
 
   const dynamicMonthlyDayOfWeekLabel = useMemo(() => {
     const dateString = formData.date;
@@ -394,7 +393,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
               <ArrowLeftIcon className="w-6 h-6" />
             </button>
           )}
-        <h2 className="text-xl font-bold">Aggiungi Dettagli</h2>
+          <h2 className="text-xl font-bold">Aggiungi Dettagli</h2>
         </header>
         <p className="text-slate-500 text-center">Nessun dato dall'importo. Torna indietro e inserisci una spesa.</p>
       </div>
@@ -463,7 +462,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
         <div className="w-11 h-11 flex items-center justify-center" />
       </header>
 
-      {/* PATCH UNICA: touchAction pan-y per far passare lo swipe orizzontale ovunque */}
+      {/* touchAction pan-y per lasciare passare lo swipe orizzontale ovunque */}
       <main className="flex-1 p-4 flex flex-col overflow-y-auto" style={{ touchAction: 'pan-y' }}>
         <div className="space-y-4">
           <div>
@@ -590,7 +589,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
           aria-modal="true" role="dialog"
         >
           <div
-            className={`bg-white rounded-lg shadow-xl w/full max-w-xs transform transition-all duration-300 ease-in-out ${isFrequencyModalAnimating ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`}
+            className={`bg-white rounded-lg shadow-xl w-full max-w-xs transform transition-all duration-300 ease-in-out ${isFrequencyModalAnimating ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between items-center p-4 border-b border-slate-200">
@@ -798,6 +797,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
                   )}
                 </div>
               </div>
+
             </main>
 
             <footer className="p-4 bg-slate-100 border-t border-slate-200 flex justify-end">
