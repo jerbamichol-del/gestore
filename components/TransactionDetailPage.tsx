@@ -20,7 +20,6 @@ interface TransactionDetailPageProps {
   isDesktop: boolean;
   onMenuStateChange: (isOpen: boolean) => void;
   dateError: boolean;
-  isSwiping: boolean;
 }
 
 const parseAmountString = (str: string): number => {
@@ -188,7 +187,6 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
   isDesktop,
   onMenuStateChange,
   dateError,
-  isSwiping,
 }, ref) => {
   const rootRef = useRef<HTMLDivElement | null>(null);
   useImperativeHandle(ref, () => rootRef.current as HTMLDivElement);
@@ -200,18 +198,6 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
   const [isAmountFocused, setIsAmountFocused] = useState(false);
   const isPageActiveRef = useRef(false);
   const isSyncingFromParent = useRef(false);
-  const [ghostOverlayActive, setGhostOverlayActive] = useState(false);
-  const [swipeEndedRecently, setSwipeEndedRecently] = useState(false);
-
-  // Tap/swipe gesture detection refs
-  const cancelNextClick = useRef(false);
-  const pRef = useRef<{
-    id: number | null;
-    startX: number;
-    startY: number;
-    moved: boolean;
-    target: HTMLElement | null;
-  }>({ id: null, startX: 0, startY: 0, moved: false, target: null });
 
   const [isFrequencyModalOpen, setIsFrequencyModalOpen] = useState(false);
   const [isFrequencyModalAnimating, setIsFrequencyModalAnimating] = useState(false);
@@ -231,23 +217,6 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
     formData.recurrenceEndType === 'count' &&
     formData.recurrenceCount === 1;
 
-  // Attiva overlay quando swipe è in corso o appena terminato
-  useEffect(() => {
-    if (isSwiping) {
-      // Swipe in corso - attiva IMMEDIATAMENTE
-      setGhostOverlayActive(true);
-      setSwipeEndedRecently(false);
-    } else if (ghostOverlayActive) {
-      // Swipe appena terminato - mantieni attivo per 200ms
-      setSwipeEndedRecently(true);
-      const timer = setTimeout(() => {
-        setGhostOverlayActive(false);
-        setSwipeEndedRecently(false);
-      }, 200);
-      return () => clearTimeout(timer);
-    }
-  }, [isSwiping, ghostOverlayActive]);
-
   // Traccia quando la pagina diventa attiva e sincronizza l'importo
   useEffect(() => {
     const onActivated = (e: Event) => {
@@ -263,19 +232,8 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
           setAmountStr(parent === 0 ? '' : String(parent).replace('.', ','));
         }
       } else {
-        // Quando la pagina diventa inattiva, reset completo dello stato
+        // Quando la pagina diventa inattiva
         isPageActiveRef.current = false;
-
-        // Reset stato tap/swipe per evitare interferenze con altre pagine
-        pRef.current = { id: null, startX: 0, startY: 0, moved: false, target: null };
-        cancelNextClick.current = false;
-
-        // Blur di qualsiasi elemento attivo nella pagina dettagli
-        const root = rootRef.current;
-        const ae = document.activeElement as HTMLElement | null;
-        if (ae && root && root.contains(ae)) {
-          ae.blur();
-        }
       }
     };
     window.addEventListener('page-activated', onActivated as EventListener);
@@ -322,91 +280,6 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
       }
     }
   }, [amountStr, formData.amount, onFormChange]);
-
-  /* ==============================
-     TAP vs SWIPE GESTURE GUARD
-     ============================== */
-  const SLOP = 12; // px – superata => è swipe, non tap
-
-  const onRootPointerDownCapture = useCallback((e: React.PointerEvent) => {
-    const root = rootRef.current;
-    if (!root) return;
-
-    // Ignora eventi se la pagina non è attiva
-    if (!isPageActiveRef.current) return;
-
-    // se il focus è fuori pagina, blur immediato per non "agganciarsi" all'altra view
-    const ae = document.activeElement as HTMLElement | null;
-    if (ae && !root.contains(ae)) ae.blur();
-
-    pRef.current = {
-      id: e.pointerId,
-      startX: e.clientX,
-      startY: e.clientY,
-      moved: false,
-      target: e.target as HTMLElement,
-    };
-  }, []);
-
-  const onRootPointerMoveCapture = useCallback((e: React.PointerEvent) => {
-    // Ignora eventi se la pagina non è attiva
-    if (!isPageActiveRef.current) return;
-
-    const p = pRef.current;
-    if (p.id !== e.pointerId) return;
-
-    const dx = e.clientX - p.startX;
-    const dy = e.clientY - p.startY;
-
-    if (!p.moved && Math.abs(dx) > SLOP && Math.abs(dx) > Math.abs(dy)) {
-      // gesto orizzontale: probabilmente swipe di pagina → annulla il click successivo
-      p.moved = true;
-      cancelNextClick.current = true;
-    }
-  }, []);
-
-  const onRootPointerUpCapture = useCallback((e: React.PointerEvent) => {
-    const root = rootRef.current;
-    const p = pRef.current;
-
-    // Se la pagina non è attiva, reset e ignora
-    if (!isPageActiveRef.current) {
-      pRef.current = { id: null, startX: 0, startY: 0, moved: false, target: null };
-      cancelNextClick.current = false;
-      return;
-    }
-
-    if (!root || p.id !== e.pointerId) return;
-
-    const wasSwipe = p.moved;
-
-    if (!wasSwipe && p.target) {
-      // TAP: mettiamo focus sull'input toccato (risolve primo tap a vuoto)
-      const focusEl = findFocusTarget(p.target, root);
-      if (focusEl && isFocusable(focusEl) && focusEl !== document.activeElement) {
-        requestAnimationFrame(() => {
-          (focusEl as HTMLElement).focus({ preventScroll: true });
-          if ((focusEl as HTMLInputElement).type === 'date' || (focusEl as HTMLInputElement).type === 'time') {
-            (focusEl as HTMLInputElement).click?.();
-          }
-        });
-      }
-    }
-
-    // reset rapida del flag "annulla click"
-    setTimeout(() => { cancelNextClick.current = false; }, 0);
-    pRef.current.id = null;
-  }, []);
-
-  // blocca il click quando abbiamo rilevato uno swipe (prima che il container cambi pagina)
-  const onRootClickCapture = useCallback((e: React.MouseEvent) => {
-    if (cancelNextClick.current) {
-      e.preventDefault();
-      e.stopPropagation();
-      cancelNextClick.current = false;
-    }
-  }, []);
-  /* ============================== */
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -577,31 +450,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
       tabIndex={-1}
       className="flex flex-col h-full bg-slate-100 focus:outline-none relative"
       style={{ touchAction: 'pan-y' }}
-      onPointerDownCapture={onRootPointerDownCapture}
-      onPointerMoveCapture={onRootPointerMoveCapture}
-      onPointerUpCapture={onRootPointerUpCapture}
-      onClickCapture={onRootClickCapture}
     >
-      {/* Overlay anti-ghost: cattura TUTTI i click per 150ms dopo attivazione pagina */}
-      {ghostOverlayActive && (
-        <div
-          className="absolute inset-0 z-50"
-          style={{
-            pointerEvents: 'auto',
-            background: 'transparent',
-            touchAction: 'none'
-          }}
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-          }}
-          onPointerDown={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-          }}
-          aria-hidden="true"
-        />
-      )}
       <header className="p-4 flex items-center justify-between gap-4 text-slate-800 bg-white shadow-sm sticky top-0 z-10">
         <div className="flex items-center gap-4">
           {!isDesktop && (

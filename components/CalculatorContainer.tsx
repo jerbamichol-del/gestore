@@ -238,7 +238,6 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
               onNavigateToDetails={() => navigateTo('details')}
               onMenuStateChange={setIsMenuOpen}
               isDesktop={isDesktop}
-              isSwiping={isSwiping}
             />
           </div>
 
@@ -258,7 +257,6 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
               isDesktop={isDesktop}
               onMenuStateChange={setIsMenuOpen}
               dateError={dateError}
-              isSwiping={isSwiping}
             />
           </div>
         </div>
