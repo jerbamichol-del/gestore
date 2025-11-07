@@ -19,6 +19,13 @@ interface CalculatorInputScreenProps {
   isDesktop: boolean;
 }
 
+const parseAmountString = (str: string): number => {
+  // Rimuove i punti (separatori di migliaia) e converte la virgola in punto decimale
+  const cleaned = (str || '0').replace(/\./g, '').replace(',', '.');
+  const num = parseFloat(cleaned);
+  return isNaN(num) ? 0 : num;
+};
+
 const formatAmountForDisplay = (numStr: string): string => {
   let sanitizedStr = String(numStr || '0').replace('.', ',');
   let [integerPart, decimalPart] = sanitizedStr.split(',');
@@ -59,18 +66,24 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
     const onActivated = (e: Event) => {
       const ce = e as CustomEvent;
       if (ce.detail === 'calculator') {
-        typingSinceActivationRef.current = false;
+        // Forza la sincronizzazione dal parent quando si torna alla calcolatrice
+        // (il valore potrebbe essere stato modificato nella pagina dettagli)
+        const parentAmount = formData.amount || 0;
+        const currentDisplayAmount = parseAmountString(currentValue);
+        if (Math.abs(parentAmount - currentDisplayAmount) > 1e-9) {
+          setCurrentValue(String(parentAmount).replace('.', ','));
+        }
         setShouldResetCurrentValue(false);
         setJustCalculated(false);
       }
     };
     window.addEventListener('page-activated', onActivated as EventListener);
     return () => window.removeEventListener('page-activated', onActivated as EventListener);
-  }, []);
+  }, [formData.amount, currentValue]);
 
   useEffect(() => {
     const parentAmount = formData.amount || 0;
-    const currentDisplayAmount = parseFloat(currentValue.replace(/\./g, '').replace(',', '.')) || 0;
+    const currentDisplayAmount = parseAmountString(currentValue);
 
     if (Math.abs(parentAmount - currentDisplayAmount) > 1e-9) {
       if (!typingSinceActivationRef.current) {
@@ -92,8 +105,8 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
       isSyncingFromParent.current = false;
       return;
     }
-    const newAmount = parseFloat(currentValue.replace(/\./g, '').replace(',', '.'));
-    if (!isNaN(newAmount) && Math.abs((formData.amount || 0) - newAmount) > 1e-9) {
+    const newAmount = parseAmountString(currentValue);
+    if (Math.abs((formData.amount || 0) - newAmount) > 1e-9) {
       onFormChange({ amount: newAmount });
     }
   }, [currentValue, onFormChange, formData.amount]);
@@ -187,8 +200,8 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
   }, []);
 
   const calculate = (): string => {
-    const prev = parseFloat((previousValue || '0').replace(/\./g, '').replace(',', '.'));
-    const current = parseFloat(currentValue.replace(/\./g, '').replace(',', '.'));
+    const prev = parseAmountString(previousValue || '0');
+    const current = parseAmountString(currentValue);
     let result = 0;
     switch (operator) {
       case '+': result = prev + current; break;

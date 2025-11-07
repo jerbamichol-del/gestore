@@ -22,6 +22,13 @@ interface TransactionDetailPageProps {
   dateError: boolean;
 }
 
+const parseAmountString = (str: string): number => {
+  // Rimuove i punti (separatori di migliaia) e converte la virgola in punto decimale
+  const cleaned = (str || '0').replace(/\./g, '').replace(',', '.');
+  const num = parseFloat(cleaned);
+  return isNaN(num) ? 0 : num;
+};
+
 const toYYYYMMDD = (date: Date) => {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -232,7 +239,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
   useEffect(() => {
     if (!isAmountFocused) {
       const parent = formData.amount ?? 0;
-      const local = parseFloat((amountStr || '0').replace(',', '.')) || 0;
+      const local = parseAmountString(amountStr || '0');
       if (Math.abs(parent - local) > 1e-9) {
         setAmountStr(parent === 0 ? '' : String(parent).replace('.', ','));
       }
@@ -241,8 +248,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
 
   // sync parent <- amount string
   useEffect(() => {
-    const num = parseFloat((amountStr || '').replace(',', '.'));
-    const next = isNaN(num) ? 0 : num;
+    const next = parseAmountString(amountStr || '');
     if (next !== formData.amount) onFormChange({ amount: next });
   }, [amountStr, formData.amount, onFormChange]);
 
