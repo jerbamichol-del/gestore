@@ -189,6 +189,16 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = ({
   const [isPeriodMenuOpen, setIsPeriodMenuOpen] = useState(false);
   const swipeWrapperRef = useRef<HTMLDivElement>(null);
 
+  // 🔒 PATCH MINIMALE: chiudi menu/datepicker quando arriva la richiesta globale
+  useEffect(() => {
+    const closeMenus = () => {
+      setIsPeriodMenuOpen(false);
+      setIsDateModalOpen(false);
+    };
+    window.addEventListener('history:close-menus-request', closeMenus);
+    return () => window.removeEventListener('history:close-menus-request', closeMenus);
+  }, []);
+
   const handleViewChange = (newIndex: number) => {
     setActiveViewIndex(newIndex);
     if (newIndex === 0) {
