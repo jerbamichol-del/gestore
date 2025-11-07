@@ -99,11 +99,13 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
   }, [currentValue, onFormChange, formData.amount]);
 
   const handleClearAmount = useCallback(() => {
+    typingSinceActivationRef.current = true;
     setCurrentValue('0');
     setJustCalculated(false);
   }, []);
 
   const handleSingleBackspace = useCallback(() => {
+    typingSinceActivationRef.current = true;
     if (justCalculated) {
       handleClearAmount();
       return;
