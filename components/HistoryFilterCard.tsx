@@ -227,7 +227,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = ({
             <div className="pt-2 rounded-t-2xl">
               <div
                 ref={swipeWrapperRef}
-                className={`relative ${isPeriodMenuOpen ? 'overflow-visible' : 'overflow-x-hidden'}`}
+                className={`relative ${isPeriodMenuOpen ? 'overflow-visible z-10' : 'overflow-x-hidden'}`}
                 style={{ touchAction: 'pan-y', overscrollBehaviorX: 'contain' }}
               >
                   <div
