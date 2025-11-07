@@ -58,7 +58,7 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
   const isSyncingFromParent = useRef(false);
   const typingSinceActivationRef = useRef(false);
   const isPageActiveRef = useRef(true); // Inizia come attiva (pagina di default)
-  const pointerDownTimeRef = useRef(0); // Traccia tempo di pointerDown per rilevare eventi fantasma
+  const pageActivatedTimeRef = useRef(0); // Traccia quando la pagina diventa attiva
 
   useEffect(() => {
     onMenuStateChange(activeMenu !== null);
@@ -69,15 +69,13 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
       const ce = e as CustomEvent;
       if (ce.detail === 'calculator') {
         isPageActiveRef.current = true;
+        pageActivatedTimeRef.current = Date.now(); // Salva timestamp attivazione
 
         // Blur forzato di qualsiasi elemento attivo (potrebbe essere dalla pagina dettagli)
         const ae = document.activeElement as HTMLElement | null;
         if (ae && typeof ae.blur === 'function') {
           ae.blur();
         }
-
-        // Reset timer pointer per rilevare eventi fantasma
-        pointerDownTimeRef.current = 0;
 
         // Forza la sincronizzazione dal parent quando si torna alla calcolatrice
         // (il valore potrebbe essere stato modificato nella pagina dettagli)
@@ -312,9 +310,9 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
   const KeypadButton: React.FC<KeypadButtonProps> = ({ children, onClick, className = '', ...props }) => {
     const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
       // Ignora click troppo veloci dopo attivazione pagina (eventi fantasma)
-      const timeSinceActivation = Date.now() - pointerDownTimeRef.current;
-      if (timeSinceActivation < 100 && pointerDownTimeRef.current > 0) {
-        return;
+      const timeSinceActivation = Date.now() - pageActivatedTimeRef.current;
+      if (timeSinceActivation < 150) {
+        return; // Ignora - troppo veloce dopo attivazione pagina
       }
       onClick?.();
       blurSelf(e.currentTarget);
@@ -327,7 +325,6 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
         onKeyDown={(e) => {
           if ((e.key === 'Enter' || e.key === ' ') && onClick) { e.preventDefault(); onClick(); blurSelf(e.currentTarget); }
         }}
-        onPointerDown={() => { if (pointerDownTimeRef.current === 0) pointerDownTimeRef.current = Date.now(); }}
         onPointerUp={(e) => blurSelf(e.currentTarget)}
         onMouseDown={(e) => e.preventDefault()} // evita focus "appiccicoso" su mobile
         className={`flex items-center justify-center text-5xl font-light focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 transition-colors duration-150 select-none cursor-pointer ${className}`}
@@ -346,9 +343,9 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
   const OperatorButton: React.FC<{ children: React.ReactNode; onClick: () => void }> = ({ children, onClick }) => {
     const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
       // Ignora click troppo veloci dopo attivazione pagina (eventi fantasma)
-      const timeSinceActivation = Date.now() - pointerDownTimeRef.current;
-      if (timeSinceActivation < 100 && pointerDownTimeRef.current > 0) {
-        return;
+      const timeSinceActivation = Date.now() - pageActivatedTimeRef.current;
+      if (timeSinceActivation < 150) {
+        return; // Ignora - troppo veloce dopo attivazione pagina
       }
       onClick();
       blurSelf(e.currentTarget);
@@ -359,7 +356,6 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
         role="button" tabIndex={0}
         onClick={handleClick}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); blurSelf(e.currentTarget); } }}
-        onPointerDown={() => { if (pointerDownTimeRef.current === 0) pointerDownTimeRef.current = Date.now(); }}
         onPointerUp={(e) => blurSelf(e.currentTarget)}
         onMouseDown={(e) => e.preventDefault()}
         className="flex-1 w-full text-5xl text-indigo-600 font-light active:bg-slate-300/80 transition-colors duration-150 flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 select-none cursor-pointer"
