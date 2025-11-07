@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Expense, Account } from '../types';
 import { getCategoryStyle } from '../utils/categoryStyles';
@@ -6,6 +5,7 @@ import { formatCurrency } from '../components/icons/formatters';
 import { ArrowLeftIcon } from '../components/icons/ArrowLeftIcon';
 import { TrashIcon } from '../components/icons/TrashIcon';
 import { CalendarDaysIcon } from '../components/icons/CalendarDaysIcon';
+import ConfirmationModal from '../components/ConfirmationModal';
 
 const ACTION_WIDTH = 72;
 
@@ -31,10 +31,10 @@ const RecurringExpenseItem: React.FC<{
   expense: Expense;
   accounts: Account[];
   onEdit: (expense: Expense) => void;
-  onDelete: (id: string) => void;
+  onDeleteRequest: (id: string) => void;
   isOpen: boolean;
   onOpen: (id: string) => void;
-}> = ({ expense, accounts, onEdit, onDelete, isOpen, onOpen }) => {
+}> = ({ expense, accounts, onEdit, onDeleteRequest, isOpen, onOpen }) => {
     const style = getCategoryStyle(expense.category);
     const accountName = accounts.find(a => a.id === expense.accountId)?.name || 'Sconosciuto';
     const itemRef = useRef<HTMLDivElement>(null);
@@ -69,12 +69,18 @@ const RecurringExpenseItem: React.FC<{
       const currentX = m.m41;
 
       dragState.current = {
-        isDragging: true, isLocked: false,
-        startX: e.clientX, startY: e.clientY, startTime: performance.now(),
-        initialTranslateX: currentX, pointerId: e.pointerId,
+        isDragging: true, 
+        isLocked: false,
+        startX: e.clientX, 
+        startY: e.clientY, 
+        startTime: performance.now(),
+        initialTranslateX: currentX, 
+        pointerId: e.pointerId,
       };
       
-      try { itemRef.current.setPointerCapture(e.pointerId); } catch {}
+      try { itemRef.current.setPointerCapture(e.pointerId); } catch (err) {
+        console.warn("Could not capture pointer: ", err);
+      }
     };
 
     const handlePointerMove = (e: React.PointerEvent) => {
@@ -85,10 +91,10 @@ const RecurringExpenseItem: React.FC<{
       const dy = e.clientY - ds.startY;
 
       if (!ds.isLocked) {
-        const SLOP = 10;
+        const SLOP = 8;
         if (Math.abs(dx) <= SLOP && Math.abs(dy) <= SLOP) return;
         
-        const horizontal = Math.abs(dx) > Math.abs(dy) * 2.5;
+        const horizontal = Math.abs(dx) > Math.abs(dy) * 2;
 
         if (!horizontal) {
           ds.isDragging = false;
@@ -126,7 +132,7 @@ const RecurringExpenseItem: React.FC<{
       const dy = e.clientY - ds.startY;
       const dist = Math.hypot(dx, dy);
       const duration = performance.now() - ds.startTime;
-      const isTap = dist < 12 && duration < 300;
+      const isTap = dist < 10 && duration < 250;
       
       ds.isDragging = false;
       ds.isLocked = false;
@@ -163,9 +169,15 @@ const RecurringExpenseItem: React.FC<{
         <div className="relative bg-white overflow-hidden">
             <div className="absolute top-0 right-0 h-full flex items-center z-0">
                 <button
-                    onPointerUp={(e) => { e.preventDefault(); onDelete(expense.id); }}
-                    onClick={(e) => e.preventDefault()}
-                    style={{ touchAction: 'manipulation' }}
+                    onPointerDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                    }}
+                    onPointerUp={(e) => { 
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onDeleteRequest(expense.id); 
+                    }}
                     className="w-[72px] h-full flex flex-col items-center justify-center bg-red-500 text-white hover:bg-red-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white"
                     aria-label="Elimina spesa ricorrente"
                 >
@@ -179,7 +191,7 @@ const RecurringExpenseItem: React.FC<{
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
                 onPointerCancel={handlePointerCancel}
-                className="relative flex items-center gap-4 py-3 px-4 bg-white z-10"
+                className="relative flex items-center gap-4 py-3 px-4 bg-white z-10 cursor-pointer"
                 style={{ touchAction: 'pan-y' }}
             >
                 <span className={`w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center ${style.bgColor}`}>
@@ -189,7 +201,7 @@ const RecurringExpenseItem: React.FC<{
                     <p className="font-semibold text-slate-800 truncate">{expense.description || 'Senza descrizione'}</p>
                     <p className="text-sm text-slate-500 truncate">{getRecurrenceSummary(expense)} • {accountName}</p>
                 </div>
-                <p className="font-bold text-slate-900 text-lg text-right shrink-0">{formatCurrency(Number(expense.amount) || 0)}</p>
+                <p className="font-bold text-slate-900 text-lg text-right shrink-0 whitespace-nowrap min-w-[90px]">{formatCurrency(Number(expense.amount) || 0)}</p>
             </div>
         </div>
     );
@@ -206,28 +218,59 @@ interface RecurringExpensesScreenProps {
 const RecurringExpensesScreen: React.FC<RecurringExpensesScreenProps> = ({ recurringExpenses, accounts, onClose, onEdit, onDelete }) => {
   const [isAnimatingIn, setIsAnimatingIn] = useState(false);
   const [openItemId, setOpenItemId] = useState<string | null>(null);
+  const [expenseToDeleteId, setExpenseToDeleteId] = useState<string | null>(null);
+  const [isConfirmDeleteModalOpen, setIsConfirmDeleteModalOpen] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setIsAnimatingIn(true), 10);
     return () => clearTimeout(timer);
   }, []);
 
+  useEffect(() => {
+    if (!isAnimatingIn && openItemId) {
+      setOpenItemId(null);
+    }
+  }, [isAnimatingIn, openItemId]);
+
   const handleClose = () => {
+      setOpenItemId(null);
       setIsAnimatingIn(false);
       setTimeout(onClose, 300);
   }
+
+  const handleDeleteRequest = (id: string) => {
+    setExpenseToDeleteId(id);
+    setIsConfirmDeleteModalOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (expenseToDeleteId) {
+      onDelete(expenseToDeleteId);
+      setExpenseToDeleteId(null);
+      setIsConfirmDeleteModalOpen(false);
+      setOpenItemId(null);
+    }
+  };
+
+  const cancelDelete = () => {
+    setIsConfirmDeleteModalOpen(false);
+    setExpenseToDeleteId(null);
+  };
   
   const sortedExpenses = [...recurringExpenses].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   return (
-    <div className={`fixed inset-0 z-50 bg-slate-100 transform transition-transform duration-300 ease-in-out ${isAnimatingIn ? 'translate-x-0' : 'translate-x-full'}`}>
+    <div 
+      className={`fixed inset-0 z-50 bg-slate-100 transform transition-transform duration-300 ease-in-out ${isAnimatingIn ? 'translate-x-0' : 'translate-x-full'}`}
+      style={{ touchAction: 'pan-y' }}
+    >
       <header className="sticky top-0 z-20 flex items-center gap-4 p-4 bg-white/80 backdrop-blur-sm shadow-sm">
         <button onClick={handleClose} className="p-2 rounded-full hover:bg-slate-200 transition-colors" aria-label="Indietro">
           <ArrowLeftIcon className="w-6 h-6 text-slate-700" />
         </button>
         <h1 className="text-xl font-bold text-slate-800">Spese Ricorrenti</h1>
       </header>
-      <main className="overflow-y-auto h-[calc(100%-68px)] p-2">
+      <main className="overflow-y-auto h-[calc(100%-68px)] p-2" style={{ touchAction: 'pan-y' }}>
         {sortedExpenses.length > 0 ? (
             <div className="bg-white rounded-xl shadow-md overflow-hidden my-4">
                 {sortedExpenses.map((expense, index) => (
@@ -237,7 +280,7 @@ const RecurringExpensesScreen: React.FC<RecurringExpensesScreenProps> = ({ recur
                             expense={expense}
                             accounts={accounts}
                             onEdit={onEdit}
-                            onDelete={onDelete}
+                            onDeleteRequest={handleDeleteRequest}
                             isOpen={openItemId === expense.id}
                             onOpen={setOpenItemId}
                         />
@@ -252,6 +295,16 @@ const RecurringExpensesScreen: React.FC<RecurringExpensesScreenProps> = ({ recur
           </div>
         )}
       </main>
+
+      {/* Modal di conferma eliminazione - renderizzato dentro questo componente */}
+      <ConfirmationModal 
+        isOpen={isConfirmDeleteModalOpen}
+        onClose={cancelDelete}
+        onConfirm={confirmDelete}
+        title="Conferma Eliminazione"
+        message={<>Sei sicuro di voler eliminare questa spesa ricorrente? <br/>Le spese già generate non verranno cancellate.</>}
+        variant="danger"
+      />
     </div>
   );
 };

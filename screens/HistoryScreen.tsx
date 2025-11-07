@@ -49,24 +49,13 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
     pointerId: null as number | null,
   });
 
-  const safeGetTranslateX = useCallback((): number => {
-    if (!itemRef.current) return 0;
-    const t = window.getComputedStyle(itemRef.current).transform;
-    if (!t || t === 'none') return 0;
-    try {
-      const m = new DOMMatrixReadOnly(t);
-      return Number.isFinite(m.m41) ? m.m41 : 0;
-    } catch {
-      return 0;
-    }
-  }, []);
-
   const setTranslateX = useCallback((x: number, animated: boolean) => {
     if (!itemRef.current) return;
     itemRef.current.style.transition = animated ? 'transform 0.2s cubic-bezier(0.22,0.61,0.36,1)' : 'none';
     itemRef.current.style.transform = `translateX(${x}px)`;
   }, []);
 
+  // Se il pager prende lo swipe, resettiamo il gesto dell'item
   useEffect(() => {
     if (isPageSwiping && dragState.current.isDragging) {
       dragState.current.isDragging = false;
@@ -78,14 +67,18 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
   }, [isPageSwiping, onInteractionChange, setTranslateX]);
 
   const handlePointerDown = (e: React.PointerEvent) => {
-    // Impedisci che il page-swipe si armi (ora è in bubble)
+    // Non armare lo swipe di pagina
     e.stopPropagation();
 
     if ((e.target as HTMLElement).closest('button') || !itemRef.current) return;
 
     itemRef.current.style.transition = 'none';
 
-    const currentX = safeGetTranslateX();
+    let currentX = 0;
+    const t = window.getComputedStyle(itemRef.current).transform;
+    if (t && t !== 'none') {
+      try { currentX = new DOMMatrixReadOnly(t).m41 || 0; } catch {}
+    }
 
     dragState.current = {
       isDragging: true,
@@ -97,9 +90,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
       pointerId: e.pointerId,
     };
 
-    try {
-      itemRef.current.setPointerCapture(e.pointerId);
-    } catch {}
+    try { itemRef.current.setPointerCapture(e.pointerId); } catch {}
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
@@ -114,7 +105,6 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
       if (Math.abs(dx) <= SLOP && Math.abs(dy) <= SLOP) return;
 
       const horizontal = Math.abs(dx) > Math.abs(dy) * 2;
-
       if (!horizontal) {
         ds.isDragging = false;
         if (ds.pointerId !== null) itemRef.current?.releasePointerCapture(ds.pointerId);
@@ -134,7 +124,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
       onInteractionChange(true);
     }
 
-    // l’item ha preso il gesto → blocca bubble
+    // L’item ha preso il gesto → blocca bubbling e click sintetico
     e.stopPropagation();
     if (e.cancelable) e.preventDefault();
 
@@ -148,25 +138,27 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
     const ds = dragState.current;
     if (!ds.isDragging || e.pointerId !== ds.pointerId) return;
 
-    if (ds.isLocked) e.stopPropagation();
+    // Se il gesto era lockato (swipe), blocca propagazione/click sintetico
+    if (ds.isLocked) {
+      e.stopPropagation();
+      if (e.cancelable) e.preventDefault();
+    }
 
     if (ds.pointerId !== null) itemRef.current?.releasePointerCapture(ds.pointerId);
 
+    const dx = e.clientX - ds.startX;
+    const duration = performance.now() - ds.startTime;
+    const dist = Math.abs(dx);
     const wasLocked = ds.isLocked;
 
-    const dx = e.clientX - ds.startX;
-    const dy = e.clientY - ds.startY;
-    const dist = Math.hypot(dx, dy);
-    const duration = performance.now() - ds.startTime;
-
-    // TAP solo se non c’è stato drag lockato
-    const isTap = !wasLocked && dist < 10 && duration < 250;
-
-    ds.isDragging = false;
-    ds.isLocked = false;
-    ds.pointerId = null;
+    // reset stato gesto
+    dragState.current.isDragging = false;
+    dragState.current.isLocked = false;
+    dragState.current.pointerId = null;
     if (wasLocked) onInteractionChange(false);
 
+    // TAP solo se non c'è stato drag lockato
+    const isTap = !wasLocked && dist < 10 && duration < 250;
     if (isTap) {
       setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
       if (isOpen) onOpen('');
@@ -175,30 +167,38 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
     }
 
     if (wasLocked) {
-      const endX = safeGetTranslateX();
+      // Usa la posizione finale del gesto (non il computedStyle)
+      let finalX = dragState.current.initialTranslateX + dx;
+      if (finalX > 0) finalX = Math.tanh(finalX / 50) * 25;
+      if (finalX < -ACTION_WIDTH) finalX = -ACTION_WIDTH;
+
       const velocity = dx / (duration || 1);
-      const shouldOpen = endX < -ACTION_WIDTH / 2 || (velocity < -0.3 && dx < -20);
+      const shouldOpen =
+        finalX <= -ACTION_WIDTH * 0.4 ||         // soglia 40%
+        (velocity < -0.25 && dx < -18);          // fling verso sinistra
 
       onOpen(shouldOpen ? expense.id : '');
-      setTranslateX(shouldOpen ? -ACTION_WIDTH : 0, true);
+      requestAnimationFrame(() => setTranslateX(shouldOpen ? -ACTION_WIDTH : 0, true));
     } else {
       setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
     }
   };
 
-  const handlePointerCancel = (_e: React.PointerEvent) => {
+  const handlePointerCancel = (e: React.PointerEvent) => {
     const ds = dragState.current;
-    if (!ds.isDragging) return;
+    if (!ds.isDragging || e.pointerId !== ds.pointerId) return;
+
+    if (ds.isLocked) {
+      e.stopPropagation();
+      if (e.cancelable) e.preventDefault();
+    }
 
     if (ds.pointerId !== null) itemRef.current?.releasePointerCapture(ds.pointerId);
 
-    const wasLocked = ds.isLocked;
-
-    ds.isDragging = false;
-    ds.isLocked = false;
-    ds.pointerId = null;
-    if (wasLocked) onInteractionChange(false);
-
+    dragState.current.isDragging = false;
+    dragState.current.isLocked = false;
+    dragState.current.pointerId = null;
+    onInteractionChange(false);
     setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
   };
 
@@ -226,7 +226,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
       {/* contenuto swipeable */}
       <div
         ref={itemRef}
-        data-gesture-scope="item"
+        data-no-page-swipe="true"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -324,7 +324,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
   const [isInteracting, setIsInteracting] = useState(false);
   const autoCloseTimerRef = useRef<number | null>(null);
 
-  // ===== FULL-SURFACE PAGE SWIPE (bubble phase, NON capture) =====
+  // ===== FULL-SURFACE PAGE SWIPE (capture phase) =====
   const pageRef = useRef<HTMLDivElement>(null);
   const pageDrag = useRef({
     active: false,
@@ -334,13 +334,11 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
     startY: 0,
   });
 
-  const onPD = (e: React.PointerEvent) => {
-    const target = e.target as HTMLElement;
-    // ignora se un item o un controllo vuole il gesto
+  const onPDcap = (e: React.PointerEvent) => {
     if (
       isInteracting ||
       openItemId ||
-      target.closest('[data-gesture-scope="item"], [data-no-page-swipe], [role="dialog"], button, input, select, textarea')
+      (e.target as HTMLElement).closest('[data-no-page-swipe], [role="dialog"], button, input, select, textarea')
     ) {
       return;
     }
@@ -353,7 +351,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
     };
   };
 
-  const onPM = (e: React.PointerEvent) => {
+  const onPMcap = (e: React.PointerEvent) => {
     const pg = pageDrag.current;
     if (!pg.active || pg.pointerId !== e.pointerId) return;
 
@@ -372,14 +370,19 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
       }
 
       pg.locked = true;
-      // Chiudi eventuali menu dei filtri quando il page-swipe parte
-      try { window.dispatchEvent(new Event('history:close-menus-request')); } catch {}
+      try { pageRef.current?.setPointerCapture(e.pointerId); } catch {}
+      // chiudi eventuali menu del filtro periodo per non "trasportarli" in Home
+      window.dispatchEvent(new Event('history:close-menus-request'));
     }
   };
 
-  const onPU = (e: React.PointerEvent) => {
+  const onPUcap = (e: React.PointerEvent) => {
     const pg = pageDrag.current;
     if (!pg.active || pg.pointerId !== e.pointerId) return;
+
+    if (pg.locked) {
+      try { pageRef.current?.releasePointerCapture(e.pointerId); } catch {}
+    }
 
     const wasLocked = pg.locked;
 
@@ -398,9 +401,14 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
     }
   };
 
-  const onPC = (_e: React.PointerEvent) => {
+  const onPCcap = (e: React.PointerEvent) => {
     const pg = pageDrag.current;
-    if (!pg.active) return;
+    if (!pg.active || pg.pointerId !== e.pointerId) return;
+
+    if (pg.locked) {
+      try { pageRef.current?.releasePointerCapture(e.pointerId); } catch {}
+    }
+
     pg.active = false;
     pg.locked = false;
     pg.pointerId = null;
@@ -535,10 +543,10 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
       ref={pageRef}
       className="h-full flex flex-col bg-slate-100"
       style={{ touchAction: 'pan-y' }}
-      onPointerDown={onPD}
-      onPointerMove={onPM}
-      onPointerUp={onPU}
-      onPointerCancel={onPC}
+      onPointerDownCapture={onPDcap}
+      onPointerMoveCapture={onPMcap}
+      onPointerUpCapture={onPUcap}
+      onPointerCancelCapture={onPCcap}
     >
       <div className="flex-1 overflow-y-auto" style={{ touchAction: 'pan-y' }}>
         {expenseGroups.length > 0 ? (
