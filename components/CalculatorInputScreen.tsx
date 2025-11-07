@@ -17,7 +17,6 @@ interface CalculatorInputScreenProps {
   onFormChange: (newData: Partial<Omit<Expense, 'id'>>) => void;
   onMenuStateChange: (isOpen: boolean) => void;
   isDesktop: boolean;
-  isSwiping: boolean;
 }
 
 const parseAmountString = (str: string): number => {
@@ -47,7 +46,7 @@ const getAmountFontSize = (value: string): string => {
 
 const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputScreenProps>(({
   onClose, onSubmit, accounts, onNavigateToDetails,
-  formData, onFormChange, onMenuStateChange, isDesktop, isSwiping
+  formData, onFormChange, onMenuStateChange, isDesktop
 }, ref) => {
   const [currentValue, setCurrentValue] = useState('0');
   const [previousValue, setPreviousValue] = useState<string | null>(null);
@@ -58,7 +57,6 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
 
   const isSyncingFromParent = useRef(false);
   const typingSinceActivationRef = useRef(false);
-  const lastPointerDownTime = useRef(0); // Ultimo pointerDown su questa pagina
 
   useEffect(() => {
     onMenuStateChange(activeMenu !== null);
@@ -303,23 +301,13 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
   };
 
   const KeypadButton: React.FC<KeypadButtonProps> = ({ children, onClick, className = '', ...props }) => {
-    const handleClick = () => {
-      // Ignora click senza pointerDown recente (evento fantasma da swipe)
-      const timeSincePointerDown = Date.now() - lastPointerDownTime.current;
-      if (timeSincePointerDown > 500) {
-        return; // Click fantasma - nessun pointerDown recente
-      }
-      onClick?.();
-    };
-
     return (
       <div
         role="button" tabIndex={0}
-        onClick={(e) => { handleClick(); blurSelf(e.currentTarget); }}
+        onClick={(e) => { onClick?.(); blurSelf(e.currentTarget); }}
         onKeyDown={(e) => {
-          if ((e.key === 'Enter' || e.key === ' ') && onClick) { e.preventDefault(); handleClick(); blurSelf(e.currentTarget); }
+          if ((e.key === 'Enter' || e.key === ' ') && onClick) { e.preventDefault(); onClick(); blurSelf(e.currentTarget); }
         }}
-        onPointerDown={() => { lastPointerDownTime.current = Date.now(); }}
         onPointerUp={(e) => blurSelf(e.currentTarget)}
         onMouseDown={(e) => e.preventDefault()} // evita focus "appiccicoso" su mobile
         className={`flex items-center justify-center text-5xl font-light focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 transition-colors duration-150 select-none cursor-pointer ${className}`}
@@ -336,21 +324,11 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
   };
 
   const OperatorButton: React.FC<{ children: React.ReactNode; onClick: () => void }> = ({ children, onClick }) => {
-    const handleClick = () => {
-      // Ignora click senza pointerDown recente (evento fantasma da swipe)
-      const timeSincePointerDown = Date.now() - lastPointerDownTime.current;
-      if (timeSincePointerDown > 500) {
-        return; // Click fantasma - nessun pointerDown recente
-      }
-      onClick();
-    };
-
     return (
       <div
         role="button" tabIndex={0}
-        onClick={(e) => { handleClick(); blurSelf(e.currentTarget); }}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick(); blurSelf(e.currentTarget); } }}
-        onPointerDown={() => { lastPointerDownTime.current = Date.now(); }}
+        onClick={(e) => { onClick(); blurSelf(e.currentTarget); }}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); blurSelf(e.currentTarget); } }}
         onPointerUp={(e) => blurSelf(e.currentTarget)}
         onMouseDown={(e) => e.preventDefault()}
         className="flex-1 w-full text-5xl text-indigo-600 font-light active:bg-slate-300/80 transition-colors duration-150 flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 select-none cursor-pointer"
