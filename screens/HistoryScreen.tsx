@@ -50,6 +50,18 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
     pointerId: null as number | null,
   });
 
+  const safeGetTranslateX = useCallback((): number => {
+    if (!itemRef.current) return 0;
+    const t = window.getComputedStyle(itemRef.current).transform;
+    if (!t || t === 'none') return 0;
+    try {
+      const m = new DOMMatrixReadOnly(t);
+      return Number.isFinite(m.m41) ? m.m41 : 0;
+    } catch {
+      return 0;
+    }
+  }, []);
+
   const setTranslateX = useCallback((x: number, animated: boolean) => {
     if (!itemRef.current) return;
     itemRef.current.style.transition = animated ? 'transform 0.2s cubic-bezier(0.22,0.61,0.36,1)' : 'none';
@@ -68,12 +80,14 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
   }, [isPageSwiping, onInteractionChange, setTranslateX]);
 
   const handlePointerDown = (e: React.PointerEvent) => {
+    // impedisci che il page-swipe in capture si armi
+    e.stopPropagation();
+
     if ((e.target as HTMLElement).closest('button') || !itemRef.current) return;
 
     itemRef.current.style.transition = 'none';
 
-    const m = new DOMMatrixReadOnly(window.getComputedStyle(itemRef.current).transform);
-    const currentX = m.m41;
+    const currentX = safeGetTranslateX();
 
     dragState.current = {
       isDragging: true,
@@ -122,6 +136,8 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
       onInteractionChange(true);
     }
 
+    // lo swipe dell’item non deve salire al parent
+    e.stopPropagation();
     if (e.cancelable) e.preventDefault();
 
     let x = ds.initialTranslateX + dx;
@@ -134,6 +150,8 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
     const ds = dragState.current;
     if (!ds.isDragging || e.pointerId !== ds.pointerId) return;
 
+    if (ds.isLocked) e.stopPropagation();
+
     if (ds.pointerId !== null) itemRef.current?.releasePointerCapture(ds.pointerId);
 
     const wasLocked = ds.isLocked;
@@ -143,7 +161,8 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
     const dist = Math.hypot(dx, dy);
     const duration = performance.now() - ds.startTime;
 
-    const isTap = dist < 10 && duration < 250;
+    // TAP valido solo se non c'è stato drag lockato
+    const isTap = !wasLocked && dist < 10 && duration < 250;
 
     ds.isDragging = false;
     ds.isLocked = false;
@@ -158,7 +177,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
     }
 
     if (wasLocked) {
-      const endX = new DOMMatrixReadOnly(window.getComputedStyle(itemRef.current!).transform).m41;
+      const endX = safeGetTranslateX();
       const velocity = dx / (duration || 1);
       const shouldOpen = endX < -ACTION_WIDTH / 2 || (velocity < -0.3 && dx < -20);
 
@@ -173,6 +192,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
     const ds = dragState.current;
     if (!ds.isDragging || e.pointerId !== ds.pointerId) return;
 
+    if (ds.isLocked) e.stopPropagation();
     if (ds.pointerId !== null) itemRef.current?.releasePointerCapture(ds.pointerId);
 
     const wasLocked = ds.isLocked;
@@ -192,7 +212,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
   }, [isOpen, setTranslateX]);
 
   return (
-    <div className="relative bg-white overflow-hidden">
+    <div className="relative bg-white overflow-hidden" data-no-page-swipe>
       {/* layer azioni */}
       <div className="absolute top-0 right-0 h-full flex items-center z-0">
         <button
@@ -209,6 +229,10 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
       {/* contenuto swipeable */}
       <div
         ref={itemRef}
+        data-no-page-swipe
+        onPointerDownCapture={(e) => e.stopPropagation()}
+        onPointerMoveCapture={(e) => { if (dragState.current.isLocked) e.stopPropagation(); }}
+        onPointerUpCapture={(e) => { if (dragState.current.isLocked) e.stopPropagation(); }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -317,8 +341,12 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
   });
 
   const onPDcap = (e: React.PointerEvent) => {
-    // Se un item sta già gestendo orizzontale, è aperto, o lo swipe parte da un'area da ignorare, non fare nulla.
-    if (isInteracting || openItemId || (e.target as HTMLElement).closest('[data-no-page-swipe], [role="dialog"], button, input, select, textarea')) {
+    // se un item sta gestendo, o partiamo da un'area esclusa, non armiamo il page-swipe
+    if (
+      isInteracting ||
+      openItemId ||
+      (e.target as HTMLElement).closest('[data-no-page-swipe], [role="dialog"], button, input, select, textarea')
+    ) {
       return;
     }
     pageDrag.current = {
@@ -350,8 +378,6 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
 
       pg.locked = true;
       try { pageRef.current?.setPointerCapture(e.pointerId); } catch {}
-      // 👇 PATCH MINIMALE: chiudi eventuali menu/modali dei filtri
-      window.dispatchEvent(new Event('history:close-menus-request'));
     }
   };
 
@@ -380,12 +406,12 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
     }
   };
 
-  const onPCcap = (e: React.PointerEvent) => {
+  const onPCcap = (_e: React.PointerEvent) => {
     const pg = pageDrag.current;
-    if (!pg.active || pg.pointerId !== e.pointerId) return;
+    if (!pg.active) return;
 
     if (pg.locked) {
-      try { pageRef.current?.releasePointerCapture(e.pointerId); } catch {}
+      try { pageRef.current?.releasePointerCapture(pg.pointerId as number); } catch {}
     }
 
     pg.active = false;
@@ -534,7 +560,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
               <h2 className="font-bold text-slate-800 text-lg px-4 py-2 sticky top-0 bg-slate-100/80 backdrop-blur-sm z-10">
                 {group.label}
               </h2>
-              <div className="bg-white rounded-xl shadow-md mx-2 overflow-hidden">
+              <div className="bg-white rounded-xl shadow-md mx-2 overflow-hidden" data-no-page-swipe>
                 {group.expenses.map((expense, index) => (
                   <React.Fragment key={expense.id}>
                     {index > 0 && <hr className="border-t border-slate-200 ml-16" />}
