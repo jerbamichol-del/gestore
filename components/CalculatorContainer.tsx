@@ -189,12 +189,6 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
     // 4) Cleanup/notify
     window.dispatchEvent(new Event('numPad:cancelLongPress'));
     window.dispatchEvent(new CustomEvent('page-activated', { detail: targetView }));
-
-    // 5) Focus “muto” sul contenitore della nuova pagina (non riapre tastiera)
-    requestAnimationFrame(() => {
-      const node = targetView === 'details' ? detailsPageRef.current : calculatorPageRef.current;
-      node?.focus?.({ preventScroll: true });
-    });
   };
 
   if (!isOpen) return null;
