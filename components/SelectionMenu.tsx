@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { XMarkIcon } from './icons/XMarkIcon';
 import { CheckCircleIcon } from './icons/CheckCircleIcon';
@@ -120,7 +121,9 @@ const SelectionMenu: React.FC<SelectionMenuProps> = ({ isOpen, onClose, title, o
               return (
                 <li key={option.value}>
                   <button
-                    onClick={() => onSelect(option.value)}
+                    onPointerUp={(e) => { e.preventDefault(); onSelect(option.value); }}
+                    onClick={(e) => e.preventDefault()}
+                    style={{ touchAction: 'manipulation' }}
                     className={`w-full text-left p-4 flex items-center justify-between gap-4 transition-colors rounded-lg ${
                       isSelected ? 'bg-indigo-100' : 'hover:bg-slate-200'
                     }`}

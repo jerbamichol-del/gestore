@@ -69,6 +69,8 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
 
   const handlePointerDown = (e: React.PointerEvent) => {
     if ((e.target as HTMLElement).closest('button') || !itemRef.current) return;
+    
+    itemRef.current.style.transition = 'none';
 
     const m = new DOMMatrixReadOnly(window.getComputedStyle(itemRef.current).transform);
     const currentX = m.m41;
@@ -82,6 +84,12 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
       initialTranslateX: currentX,
       pointerId: e.pointerId,
     };
+    
+    try {
+      itemRef.current.setPointerCapture(e.pointerId);
+    } catch (err) {
+      console.warn("Could not capture pointer: ", err);
+    }
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
@@ -94,30 +102,40 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
     if (!ds.isLocked) {
       const SLOP = 10;
       if (Math.abs(dx) <= SLOP && Math.abs(dy) <= SLOP) return;
+      
+      const horizontal = Math.abs(dx) > Math.abs(dy) * 2.5;
 
-      const horizontal = Math.abs(dx) > Math.abs(dy);
       if (!horizontal) {
-        ds.isDragging = false;           // lascia scorrere verticalmente
+        ds.isDragging = false;
+        if (ds.pointerId !== null) {
+          itemRef.current?.releasePointerCapture(ds.pointerId);
+        }
         ds.pointerId = null;
         return;
       }
 
       const wasOpen = ds.initialTranslateX < -1 || isOpen;
-      // non catturare swipe a destra se chiuso → lo gestirà il pager
       if (dx > 0 && !wasOpen) {
         ds.isDragging = false;
+        if (ds.pointerId !== null) {
+          itemRef.current?.releasePointerCapture(ds.pointerId);
+        }
         ds.pointerId = null;
         return;
       }
-
+      
       ds.isLocked = true;
       onInteractionChange(true);
     }
+    
+    if (e.cancelable) e.preventDefault();
 
     let x = ds.initialTranslateX + dx;
-    if (x > 0) x = 0;
+    if (x > 0) {
+      x = Math.tanh(x / 50) * 25;
+    }
     if (x < -ACTION_WIDTH) {
-      x = -ACTION_WIDTH - Math.tanh((-x - ACTION_WIDTH) / 50) * 25;
+      x = -ACTION_WIDTH - Math.tanh((Math.abs(x) - ACTION_WIDTH) / 50) * 25;
     }
     setTranslateX(x, false);
   };
@@ -125,35 +143,66 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
   const handlePointerUp = (e: React.PointerEvent) => {
     const ds = dragState.current;
     if (!ds.isDragging || e.pointerId !== ds.pointerId) return;
+    
+    if (ds.pointerId !== null) {
+        itemRef.current?.releasePointerCapture(ds.pointerId);
+    }
+
+    const wasLocked = ds.isLocked;
 
     const dx = e.clientX - ds.startX;
     const dy = e.clientY - ds.startY;
     const dist = Math.hypot(dx, dy);
-    const isTap = dist < 12 && performance.now() - ds.startTime < 250;
+    const duration = performance.now() - ds.startTime;
 
-    const wasLocked = ds.isLocked;
-    const wasOpenInitially = ds.initialTranslateX < -1 || isOpen;
+    const isTap = dist < 12 && duration < 300;
+    
+    ds.isDragging = false;
+    ds.isLocked = false;
+    ds.pointerId = null;
+    if (wasLocked) {
+      onInteractionChange(false);
+    }
+
+    if (isTap) {
+      setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
+      if (isOpen) {
+        onOpen('');
+      } else {
+        onEdit(expense);
+      }
+      return;
+    }
+    
+    if (wasLocked) {
+        const endX = new DOMMatrixReadOnly(window.getComputedStyle(itemRef.current!).transform).m41;
+        const velocity = dx / (duration || 1);
+        
+        const shouldOpen = (endX < -ACTION_WIDTH / 2) || (velocity < -0.3 && dx < -20);
+        
+        onOpen(shouldOpen ? expense.id : '');
+        setTranslateX(shouldOpen ? -ACTION_WIDTH : 0, true);
+    } else {
+        setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
+    }
+  };
+  
+    const handlePointerCancel = (e: React.PointerEvent) => {
+    const ds = dragState.current;
+    if (!ds.isDragging || e.pointerId !== ds.pointerId) return;
+
+    if (ds.pointerId !== null) {
+      itemRef.current?.releasePointerCapture(ds.pointerId);
+    }
 
     ds.isDragging = false;
     ds.isLocked = false;
     ds.pointerId = null;
-    if (wasLocked) onInteractionChange(false);
-
-    if (isTap) {
-      if (wasOpenInitially) onOpen('');
-      else onEdit(expense);
-      return;
+    if (ds.isLocked) {
+      onInteractionChange(false);
     }
-
-    if (!wasLocked) {
-      setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
-      return;
-    }
-
-    const endX = new DOMMatrixReadOnly(window.getComputedStyle(itemRef.current!).transform).m41;
-    const shouldOpen = endX < -ACTION_WIDTH / 2;
-    onOpen(shouldOpen ? expense.id : '');
-    setTranslateX(shouldOpen ? -ACTION_WIDTH : 0, true);
+    
+    setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
   };
 
   useEffect(() => {
@@ -186,7 +235,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
         className="relative flex items-center gap-4 py-3 px-4 bg-white z-10"
         style={{ touchAction: 'pan-y' }} // verticale al browser, orizzontale a noi/pager
       >

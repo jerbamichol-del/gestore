@@ -1,7 +1,3 @@
-
-
-
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Expense, Account } from './types';
 import { useLocalStorage } from './hooks/useLocalStorage';
@@ -217,12 +213,15 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
   const handleNavigation = useCallback((targetView: NavView) => {
     if (activeView === targetView) return;
+
     if (activeView === 'history' && isDateModalOpen) {
         setIsDateModalOpen(false);
     }
+    
     setActiveView(targetView);
     window.history.pushState({ view: targetView }, '');
   }, [activeView, isDateModalOpen]);
+  
 
     useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
@@ -256,8 +255,8 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const swipeContainerRef = useRef<HTMLDivElement>(null);
   
   const handleNavigateHome = useCallback(() => {
-    if (activeView === 'history') { handleNavigation('home'); }
-  }, [activeView, handleNavigation]);
+    handleNavigation('home');
+  }, [handleNavigation]);
 
   const { progress, isSwiping } = useSwipe(
     swipeContainerRef,
@@ -455,8 +454,13 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const mainContentClasses = isCalculatorContainerOpen || isRecurringScreenOpen ? 'pointer-events-none' : '';
   
   const baseTranslatePercent = activeView === 'home' ? 0 : -50;
-  const dragTranslatePercent = progress * 50;
+  const dragTranslatePercent = isSwiping ? progress * 50 : 0;
   const viewTranslate = baseTranslatePercent + dragTranslatePercent;
+
+  const swipeContainerStyle: React.CSSProperties = {
+      transform: `translateX(${viewTranslate}%)`,
+      transition: isSwiping ? 'none' : 'transform 0.25s cubic-bezier(0.22, 0.61, 0.36, 1)',
+  };
 
   const isAnyModalOpen = isFormOpen || isImageSourceModalOpen || isVoiceModalOpen || isConfirmDeleteModalOpen || isConfirmDeleteRecurringModalOpen || isMultipleExpensesModalOpen || isDateModalOpen || isParsingImage || !!imageForAnalysis || isRecurringScreenOpen;
 
@@ -487,10 +491,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         >
             <div 
                 className="w-[200%] h-full flex swipe-container"
-                style={{
-                  transform: `translateX(${viewTranslate}%)`,
-                  transition: isSwiping ? 'none' : 'transform 0.12s ease-out',
-                }}
+                style={swipeContainerStyle}
             >
                 <div className="w-1/2 h-full overflow-y-auto space-y-6 swipe-view" style={{ touchAction: 'pan-y' }}>
                     <Dashboard expenses={expenses} onLogout={onLogout} onNavigateToRecurring={() => setIsRecurringScreenOpen(true)} isPageSwiping={isSwiping} />

@@ -32,69 +32,140 @@ const RecurringExpenseItem: React.FC<{
   accounts: Account[];
   onEdit: (expense: Expense) => void;
   onDelete: (id: string) => void;
-}> = ({ expense, accounts, onEdit, onDelete }) => {
+  isOpen: boolean;
+  onOpen: (id: string) => void;
+}> = ({ expense, accounts, onEdit, onDelete, isOpen, onOpen }) => {
     const style = getCategoryStyle(expense.category);
     const accountName = accounts.find(a => a.id === expense.accountId)?.name || 'Sconosciuto';
     const itemRef = useRef<HTMLDivElement>(null);
-    const [isSwiping, setIsSwiping] = useState(false);
-    const [translateX, setTranslateX] = useState(0);
-    const startX = useRef(0);
-    const currentX = useRef(0);
-    const tapThreshold = 10;
-    const startTime = useRef(0);
+
+    const dragState = useRef({
+      isDragging: false,
+      isLocked: false,
+      startX: 0,
+      startY: 0,
+      startTime: 0,
+      initialTranslateX: 0,
+      pointerId: null as number | null,
+    });
+
+    const setTranslateX = useCallback((x: number, animated: boolean) => {
+      if (!itemRef.current) return;
+      itemRef.current.style.transition = animated ? 'transform 0.2s cubic-bezier(0.22,0.61,0.36,1)' : 'none';
+      itemRef.current.style.transform = `translateX(${x}px)`;
+    }, []);
+    
+    useEffect(() => {
+      if (!dragState.current.isDragging) {
+        setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
+      }
+    }, [isOpen, setTranslateX]);
 
     const handlePointerDown = (e: React.PointerEvent) => {
-        if ((e.target as HTMLElement).closest('button')) return;
-        startX.current = e.clientX;
-        currentX.current = translateX;
-        startTime.current = Date.now();
-        setIsSwiping(true);
-        itemRef.current?.setPointerCapture(e.pointerId);
-        itemRef.current!.style.transition = 'none';
+      if ((e.target as HTMLElement).closest('button') || !itemRef.current) return;
+      
+      itemRef.current.style.transition = 'none';
+      const m = new DOMMatrixReadOnly(window.getComputedStyle(itemRef.current).transform);
+      const currentX = m.m41;
+
+      dragState.current = {
+        isDragging: true, isLocked: false,
+        startX: e.clientX, startY: e.clientY, startTime: performance.now(),
+        initialTranslateX: currentX, pointerId: e.pointerId,
+      };
+      
+      try { itemRef.current.setPointerCapture(e.pointerId); } catch {}
     };
 
     const handlePointerMove = (e: React.PointerEvent) => {
-        if (!isSwiping) return;
-        const deltaX = e.clientX - startX.current;
-        let newTranslateX = currentX.current + deltaX;
-        if (newTranslateX > 0) newTranslateX = 0;
-        if (newTranslateX < -ACTION_WIDTH) {
-             newTranslateX = -ACTION_WIDTH - Math.tanh((-newTranslateX - ACTION_WIDTH) / 50) * 25;
+      const ds = dragState.current;
+      if (!ds.isDragging || e.pointerId !== ds.pointerId) return;
+
+      const dx = e.clientX - ds.startX;
+      const dy = e.clientY - ds.startY;
+
+      if (!ds.isLocked) {
+        const SLOP = 10;
+        if (Math.abs(dx) <= SLOP && Math.abs(dy) <= SLOP) return;
+        
+        const horizontal = Math.abs(dx) > Math.abs(dy) * 2.5;
+
+        if (!horizontal) {
+          ds.isDragging = false;
+          if (ds.pointerId !== null) itemRef.current?.releasePointerCapture(ds.pointerId);
+          ds.pointerId = null;
+          return;
         }
-        setTranslateX(newTranslateX);
+
+        const wasOpen = ds.initialTranslateX < -1 || isOpen;
+        if (dx > 0 && !wasOpen) {
+          ds.isDragging = false;
+          if (ds.pointerId !== null) itemRef.current?.releasePointerCapture(ds.pointerId);
+          ds.pointerId = null;
+          return;
+        }
+        ds.isLocked = true;
+      }
+      
+      if (e.cancelable) e.preventDefault();
+
+      let x = ds.initialTranslateX + dx;
+      if (x > 0) x = Math.tanh(x / 50) * 25;
+      if (x < -ACTION_WIDTH) x = -ACTION_WIDTH - Math.tanh((Math.abs(x) - ACTION_WIDTH) / 50) * 25;
+      setTranslateX(x, false);
     };
 
     const handlePointerUp = (e: React.PointerEvent) => {
-        if (!isSwiping) return;
-        setIsSwiping(false);
-        itemRef.current?.releasePointerCapture(e.pointerId);
-        itemRef.current!.style.transition = 'transform 0.2s ease-out';
-        
-        const deltaX = e.clientX - startX.current;
-        const duration = Date.now() - startTime.current;
-        const isTap = Math.abs(deltaX) < tapThreshold && duration < 200;
+      const ds = dragState.current;
+      if (!ds.isDragging || e.pointerId !== ds.pointerId) return;
+      
+      if (ds.pointerId !== null) itemRef.current?.releasePointerCapture(ds.pointerId);
+      
+      const wasLocked = ds.isLocked;
+      const dx = e.clientX - ds.startX;
+      const dy = e.clientY - ds.startY;
+      const dist = Math.hypot(dx, dy);
+      const duration = performance.now() - ds.startTime;
+      const isTap = dist < 12 && duration < 300;
+      
+      ds.isDragging = false;
+      ds.isLocked = false;
+      ds.pointerId = null;
 
-        if (isTap) {
-            if(translateX !== 0) {
-                 setTranslateX(0);
-            } else {
-                onEdit(expense);
-            }
-            return;
-        }
-
-        if (translateX < -ACTION_WIDTH / 2) {
-            setTranslateX(-ACTION_WIDTH);
-        } else {
-            setTranslateX(0);
-        }
+      if (isTap) {
+        setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
+        if (isOpen) { onOpen(''); } else { onEdit(expense); }
+        return;
+      }
+      
+      if (wasLocked) {
+        const endX = new DOMMatrixReadOnly(window.getComputedStyle(itemRef.current!).transform).m41;
+        const velocity = dx / (duration || 1);
+        const shouldOpen = (endX < -ACTION_WIDTH / 2) || (velocity < -0.3 && dx < -20);
+        onOpen(shouldOpen ? expense.id : '');
+        setTranslateX(shouldOpen ? -ACTION_WIDTH : 0, true);
+      } else {
+        setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
+      }
+    };
+    
+    const handlePointerCancel = (e: React.PointerEvent) => {
+      const ds = dragState.current;
+      if (!ds.isDragging || e.pointerId !== ds.pointerId) return;
+      if (ds.pointerId !== null) itemRef.current?.releasePointerCapture(ds.pointerId);
+      ds.isDragging = false;
+      ds.isLocked = false;
+      ds.pointerId = null;
+      setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
     };
 
     return (
         <div className="relative bg-white overflow-hidden">
             <div className="absolute top-0 right-0 h-full flex items-center z-0">
                 <button
-                    onClick={() => onDelete(expense.id)}
+                    onPointerUp={(e) => { e.preventDefault(); onDelete(expense.id); }}
+                    onClick={(e) => e.preventDefault()}
+                    style={{ touchAction: 'manipulation' }}
                     className="w-[72px] h-full flex flex-col items-center justify-center bg-red-500 text-white hover:bg-red-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white"
                     aria-label="Elimina spesa ricorrente"
                 >
@@ -107,9 +178,9 @@ const RecurringExpenseItem: React.FC<{
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
-                onPointerCancel={handlePointerUp}
+                onPointerCancel={handlePointerCancel}
                 className="relative flex items-center gap-4 py-3 px-4 bg-white z-10"
-                style={{ transform: `translateX(${translateX}px)`, touchAction: 'pan-y' }}
+                style={{ touchAction: 'pan-y' }}
             >
                 <span className={`w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center ${style.bgColor}`}>
                     <style.Icon className={`w-6 h-6 ${style.color}`} />
@@ -134,6 +205,7 @@ interface RecurringExpensesScreenProps {
 
 const RecurringExpensesScreen: React.FC<RecurringExpensesScreenProps> = ({ recurringExpenses, accounts, onClose, onEdit, onDelete }) => {
   const [isAnimatingIn, setIsAnimatingIn] = useState(false);
+  const [openItemId, setOpenItemId] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => setIsAnimatingIn(true), 10);
@@ -166,6 +238,8 @@ const RecurringExpensesScreen: React.FC<RecurringExpensesScreenProps> = ({ recur
                             accounts={accounts}
                             onEdit={onEdit}
                             onDelete={onDelete}
+                            isOpen={openItemId === expense.id}
+                            onOpen={setOpenItemId}
                         />
                     </React.Fragment>
                 ))}
