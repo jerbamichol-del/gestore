@@ -199,6 +199,16 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
   const isPageActiveRef = useRef(false);
   const isSyncingFromParent = useRef(false);
 
+  // Tap/swipe gesture detection refs
+  const cancelNextClick = useRef(false);
+  const pRef = useRef<{
+    id: number | null;
+    startX: number;
+    startY: number;
+    moved: boolean;
+    target: HTMLElement | null;
+  }>({ id: null, startX: 0, startY: 0, moved: false, target: null });
+
   const [isFrequencyModalOpen, setIsFrequencyModalOpen] = useState(false);
   const [isFrequencyModalAnimating, setIsFrequencyModalAnimating] = useState(false);
 
@@ -231,7 +241,19 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
           setAmountStr(parent === 0 ? '' : String(parent).replace('.', ','));
         }
       } else {
+        // Quando la pagina diventa inattiva, reset completo dello stato
         isPageActiveRef.current = false;
+
+        // Reset stato tap/swipe per evitare interferenze con altre pagine
+        pRef.current = { id: null, startX: 0, startY: 0, moved: false, target: null };
+        cancelNextClick.current = false;
+
+        // Blur di qualsiasi elemento attivo nella pagina dettagli
+        const root = rootRef.current;
+        const ae = document.activeElement as HTMLElement | null;
+        if (ae && root && root.contains(ae)) {
+          ae.blur();
+        }
       }
     };
     window.addEventListener('page-activated', onActivated as EventListener);
@@ -282,15 +304,6 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
   /* ==============================
      TAP vs SWIPE GESTURE GUARD
      ============================== */
-  const cancelNextClick = useRef(false);
-  const pRef = useRef<{
-    id: number | null;
-    startX: number;
-    startY: number;
-    moved: boolean;
-    target: HTMLElement | null;
-  }>({ id: null, startX: 0, startY: 0, moved: false, target: null });
-
   const SLOP = 12; // px – superata => è swipe, non tap
 
   const onRootPointerDownCapture = useCallback((e: React.PointerEvent) => {
