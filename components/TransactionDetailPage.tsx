@@ -21,7 +21,6 @@ interface TransactionDetailPageProps {
   dateError: boolean;
 }
 
-/* ---------------- helpers ---------------- */
 const toYYYYMMDD = (date: Date) => {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -46,8 +45,8 @@ const recurrenceLabels = {
 } as const;
 
 const daysOfWeekLabels = { 0: 'Dom', 1: 'Lun', 2: 'Mar', 3: 'Mer', 4: 'Gio', 5: 'Ven', 6: 'Sab' } as const;
-const dayOfWeekNames = ['domenica', 'lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato'];
-const ordinalSuffixes = ['primo', 'secondo', 'terzo', 'quarto', 'ultimo'];
+const dayOfWeekNames = ['domenica','lunedì','martedì','mercoledì','giovedì','venerdì','sabato'];
+const ordinalSuffixes = ['primo','secondo','terzo','quarto','ultimo'];
 
 const formatShortDate = (s?: string) => {
   const d = parseLocalYYYYMMDD(s);
@@ -73,13 +72,13 @@ const getRecurrenceSummary = (e: Partial<Expense>) => {
 
   let s = '';
   if (recurrenceInterval === 1) {
-    s = recurrenceLabels[recurrence as keyof typeof recurrenceLabels];
+    s = recurrenceLabels[recurrence];
   } else {
     s =
-      recurrence === 'daily' ? `Ogni ${recurrenceInterval} giorni` :
-      recurrence === 'weekly' ? `Ogni ${recurrenceInterval} sett.` :
+      recurrence === 'daily'   ? `Ogni ${recurrenceInterval} giorni` :
+      recurrence === 'weekly'  ? `Ogni ${recurrenceInterval} sett.` :
       recurrence === 'monthly' ? `Ogni ${recurrenceInterval} mesi` :
-      `Ogni ${recurrenceInterval} anni`;
+                                 `Ogni ${recurrenceInterval} anni`;
   }
 
   if (recurrence === 'weekly' && recurrenceDays?.length) {
@@ -96,7 +95,7 @@ const getRecurrenceSummary = (e: Partial<Expense>) => {
       const dom = d.getDate();
       const dow = d.getDay();
       const wom = Math.floor((dom - 1) / 7);
-      s += ` (${ordinalSuffixes[wom]} ${dayOfWeekNames[dow].slice(0, 3)}.)`;
+      s += ` (${ordinalSuffixes[wom]} ${dayOfWeekNames[dow].slice(0,3)}.)`;
     }
   }
 
@@ -109,16 +108,61 @@ const getRecurrenceSummary = (e: Partial<Expense>) => {
   return s;
 };
 
-/* ---- stop propagation helper (senza bloccare lo scroll verticale interno) ---- */
-const STOP_PROP = (e: any) => {
-  if (e?.stopPropagation) e.stopPropagation();
-  const ne = e?.nativeEvent;
-  if (ne && typeof ne.stopImmediatePropagation === 'function') {
-    ne.stopImmediatePropagation();
+const getIntervalLabel = (
+  recurrence?: 'daily'|'weekly'|'monthly'|'yearly',
+  n?: number
+) => {
+  const c = n || 1;
+  switch (recurrence) {
+    case 'daily':   return c === 1 ? 'giorno'     : 'giorni';
+    case 'weekly':  return c === 1 ? 'settimana'  : 'settimane';
+    case 'monthly': return c === 1 ? 'mese'       : 'mesi';
+    case 'yearly':  return c === 1 ? 'anno'       : 'anni';
+    default:        return 'mese';
   }
 };
 
-/* ---------------- component ---------------- */
+const daysOfWeekForPicker = [
+  { label: 'Lun', value: 1 }, { label: 'Mar', value: 2 }, { label: 'Mer', value: 3 },
+  { label: 'Gio', value: 4 }, { label: 'Ven', value: 5 }, { label: 'Sab', value: 6 },
+  { label: 'Dom', value: 0 },
+];
+
+/* ======= focus helpers ======= */
+const isFocusable = (el: HTMLElement | null) =>
+  !!el && (
+    el.tagName === 'INPUT' ||
+    el.tagName === 'TEXTAREA' ||
+    el.tagName === 'SELECT' ||
+    el.isContentEditable
+  );
+
+const findFocusTarget = (start: HTMLElement, root: HTMLElement) => {
+  const sel = 'input, textarea, select, [contenteditable=""], [contenteditable="true"]';
+
+  if (start.matches(sel)) return start;
+
+  const viaLabel = start.closest('label');
+  if (viaLabel) {
+    const forId = viaLabel.getAttribute('for');
+    if (forId) {
+      const byId = root.querySelector<HTMLElement>(`#${CSS.escape(forId)}`);
+      if (byId) return byId;
+    }
+    const nested = viaLabel.querySelector<HTMLElement>(sel);
+    if (nested) return nested;
+  }
+
+  const container = start.closest<HTMLElement>('.relative, .input-wrapper, .field');
+  if (container) {
+    const nested = container.querySelector<HTMLElement>(sel);
+    if (nested) return nested;
+  }
+
+  return start.closest<HTMLElement>(sel);
+};
+/* ============================= */
+
 const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
   formData,
   onFormChange,
@@ -130,83 +174,154 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
   dateError,
 }) => {
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const amountInputRef = useRef<HTMLInputElement>(null);
+  const descriptionInputRef = useRef<HTMLInputElement>(null);
 
   const [activeMenu, setActiveMenu] = useState<'account' | null>(null);
-
-  // Importo: fonte unica = input locale
   const [amountStr, setAmountStr] = useState('');
   const [isAmountFocused, setIsAmountFocused] = useState(false);
 
-  // Inizializza UNA volta dall’eventuale valore parent
-  useEffect(() => {
-    const parent = formData.amount ?? 0;
-    setAmountStr(parent === 0 ? '' : String(parent).replace('.', ','));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const [isFrequencyModalOpen, setIsFrequencyModalOpen] = useState(false);
+  const [isFrequencyModalAnimating, setIsFrequencyModalAnimating] = useState(false);
 
-  // Scrivi verso il parent ogni volta che cambia la stringa locale
+  const [isRecurrenceModalOpen, setIsRecurrenceModalOpen] = useState(false);
+  const [isRecurrenceModalAnimating, setIsRecurrenceModalAnimating] = useState(false);
+  const [isRecurrenceOptionsOpen, setIsRecurrenceOptionsOpen] = useState(false);
+  const [isRecurrenceEndOptionsOpen, setIsRecurrenceEndOptionsOpen] = useState(false);
+
+  const [tempRecurrence, setTempRecurrence] = useState(formData.recurrence);
+  const [tempRecurrenceInterval, setTempRecurrenceInterval] = useState<number | undefined>(formData.recurrenceInterval);
+  const [tempRecurrenceDays, setTempRecurrenceDays] = useState<number[] | undefined>(formData.recurrenceDays);
+  const [tempMonthlyRecurrenceType, setTempMonthlyRecurrenceType] = useState(formData.monthlyRecurrenceType);
+
+  const isSingleRecurring =
+    formData.frequency === 'recurring' &&
+    formData.recurrenceEndType === 'count' &&
+    formData.recurrenceCount === 1;
+
+  // disabilita swipe container quando modali/menu aperti
+  useEffect(() => {
+    const anyOpen = !!(activeMenu || isFrequencyModalOpen || isRecurrenceModalOpen);
+    onMenuStateChange(anyOpen);
+  }, [activeMenu, isFrequencyModalOpen, isRecurrenceModalOpen, onMenuStateChange]);
+
+  // animazioni modali
+  useEffect(() => {
+    if (isFrequencyModalOpen) {
+      const t = setTimeout(() => setIsFrequencyModalAnimating(true), 10);
+      return () => clearTimeout(t);
+    } else setIsFrequencyModalAnimating(false);
+  }, [isFrequencyModalOpen]);
+
+  useEffect(() => {
+    if (isRecurrenceModalOpen) {
+      setTempRecurrence(formData.recurrence || 'monthly');
+      setTempRecurrenceInterval(formData.recurrenceInterval || 1);
+      setTempRecurrenceDays(formData.recurrenceDays || []);
+      setTempMonthlyRecurrenceType(formData.monthlyRecurrenceType || 'dayOfMonth');
+      setIsRecurrenceOptionsOpen(false);
+      const t = setTimeout(() => setIsRecurrenceModalAnimating(true), 10);
+      return () => clearTimeout(t);
+    } else setIsRecurrenceModalAnimating(false);
+  }, [isRecurrenceModalOpen, formData.recurrence, formData.recurrenceInterval, formData.recurrenceDays, formData.monthlyRecurrenceType]);
+
+  // sync amount string <- parent
+  useEffect(() => {
+    if (!isAmountFocused) {
+      const parent = formData.amount ?? 0;
+      const local = parseFloat((amountStr || '0').replace(',', '.')) || 0;
+      if (Math.abs(parent - local) > 1e-9) {
+        setAmountStr(parent === 0 ? '' : String(parent).replace('.', ','));
+      }
+    }
+  }, [formData.amount, isAmountFocused, amountStr]);
+
+  // sync parent <- amount string
   useEffect(() => {
     const num = parseFloat((amountStr || '').replace(',', '.'));
     const next = isNaN(num) ? 0 : num;
     if (next !== formData.amount) onFormChange({ amount: next });
   }, [amountStr, formData.amount, onFormChange]);
 
-  // Blocca swipe del pager per tutta la durata di questa pagina
-  useEffect(() => {
-    onMenuStateChange(true);
-    return () => onMenuStateChange(false);
-  }, [onMenuStateChange]);
+  /* ==============================
+     TAP vs SWIPE GESTURE GUARD
+     ============================== */
+  const cancelNextClick = useRef(false);
+  const pRef = useRef<{
+    id: number | null;
+    startX: number;
+    startY: number;
+    moved: boolean;
+    target: HTMLElement | null;
+  }>({ id: null, startX: 0, startY: 0, moved: false, target: null });
 
-  /* --------- CATTURA EVENTI in capture per non farli salire al pager / calcolatrice --------- */
-  const onPointerDownCapture = useCallback((e: React.PointerEvent) => {
-    STOP_PROP(e);
-    // Focus immediato: niente “primo tap a vuoto”
+  const SLOP = 12; // px – superata => è swipe, non tap
+
+  const onRootPointerDownCapture = useCallback((e: React.PointerEvent) => {
     const root = rootRef.current;
     if (!root) return;
-    const t = e.target as HTMLElement;
 
-    // se tocchi un label, sposta focus al suo input
-    const viaLabel = t.closest('label');
-    if (viaLabel) {
-      const forId = viaLabel.getAttribute('for');
-      if (forId) {
-        const byId = root.querySelector<HTMLElement>('#' + CSS.escape(forId));
-        byId?.focus?.({ preventScroll: true });
-        if (byId instanceof HTMLInputElement && (byId.type === 'text' || byId.type === 'number')) {
-          requestAnimationFrame(() => byId.select?.());
-        }
-        return;
-      }
-    }
-    if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement) {
-      t.focus({ preventScroll: true });
-      if (t instanceof HTMLInputElement && (t.type === 'text' || t.type === 'number')) {
-        requestAnimationFrame(() => t.select?.());
-      }
+    // se il focus è fuori pagina, blur immediato per non “agganciarsi” all’altra view
+    const ae = document.activeElement as HTMLElement | null;
+    if (ae && !root.contains(ae)) ae.blur();
+
+    pRef.current = {
+      id: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      moved: false,
+      target: e.target as HTMLElement,
+    };
+  }, []);
+
+  const onRootPointerMoveCapture = useCallback((e: React.PointerEvent) => {
+    const p = pRef.current;
+    if (p.id !== e.pointerId) return;
+
+    const dx = e.clientX - p.startX;
+    const dy = e.clientY - p.startY;
+
+    if (!p.moved && Math.abs(dx) > SLOP && Math.abs(dx) > Math.abs(dy)) {
+      // gesto orizzontale: probabilmente swipe di pagina → annulla il click successivo
+      p.moved = true;
+      cancelNextClick.current = true;
     }
   }, []);
-  const onPointerMoveCapture   = useCallback(STOP_PROP, []);
-  const onPointerUpCapture     = useCallback(STOP_PROP, []);
-  const onPointerCancelCapture = useCallback(STOP_PROP, []);
-  const onTouchStartCapture    = useCallback(STOP_PROP, []);
-  const onTouchMoveCapture     = useCallback(STOP_PROP, []);
-  const onWheelCapture         = useCallback(STOP_PROP, []);
-  const onClickCapture         = useCallback(STOP_PROP, []);
-  const onKeyDownCapture = useCallback((e: React.KeyboardEvent) => {
-    // Impedisci che i tasti vadano a handler globali (calcolatrice/pager)
-    if (
-      /[0-9,.]/.test(e.key) ||
-      e.key === 'Backspace' ||
-      e.key === 'Delete' ||
-      e.key === 'Enter' ||
-      e.key === 'Escape' ||
-      e.key === 'Tab' ||
-      e.key === 'ArrowLeft' || e.key === 'ArrowRight'
-    ) {
-      STOP_PROP(e);
+
+  const onRootPointerUpCapture = useCallback((e: React.PointerEvent) => {
+    const root = rootRef.current;
+    const p = pRef.current;
+    if (!root || p.id !== e.pointerId) return;
+
+    const wasSwipe = p.moved;
+
+    if (!wasSwipe && p.target) {
+      // TAP: mettiamo focus sull’input toccato (risolve primo tap a vuoto)
+      const focusEl = findFocusTarget(p.target, root);
+      if (focusEl && isFocusable(focusEl) && focusEl !== document.activeElement) {
+        requestAnimationFrame(() => {
+          (focusEl as HTMLElement).focus({ preventScroll: true });
+          if ((focusEl as HTMLInputElement).type === 'date' || (focusEl as HTMLInputElement).type === 'time') {
+            (focusEl as HTMLInputElement).click?.();
+          }
+        });
+      }
+    }
+
+    // reset rapida del flag “annulla click”
+    setTimeout(() => { cancelNextClick.current = false; }, 0);
+    pRef.current.id = null;
+  }, []);
+
+  // blocca il click quando abbiamo rilevato uno swipe (prima che il container cambi pagina)
+  const onRootClickCapture = useCallback((e: React.MouseEvent) => {
+    if (cancelNextClick.current) {
+      e.preventDefault();
+      e.stopPropagation();
+      cancelNextClick.current = false;
     }
   }, []);
-  /* ------------------------------------------------------------------------------------------ */
+  /* ============================== */
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -270,52 +385,6 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     setIsFrequencyModalAnimating(false);
   };
 
-  /* ======= gestione modali Frequenza / Ricorrenza (come le avevi) ======= */
-  const [isFrequencyModalOpen, setIsFrequencyModalOpen] = useState(false);
-  const [isFrequencyModalAnimating, setIsFrequencyModalAnimating] = useState(false);
-
-  const [isRecurrenceModalOpen, setIsRecurrenceModalOpen] = useState(false);
-  const [isRecurrenceModalAnimating, setIsRecurrenceModalAnimating] = useState(false);
-  const [isRecurrenceOptionsOpen, setIsRecurrenceOptionsOpen] = useState(false);
-  const [isRecurrenceEndOptionsOpen, setIsRecurrenceEndOptionsOpen] = useState(false);
-
-  const [tempRecurrence, setTempRecurrence] = useState(formData.recurrence);
-  const [tempRecurrenceInterval, setTempRecurrenceInterval] = useState<number | undefined>(formData.recurrenceInterval);
-  const [tempRecurrenceDays, setTempRecurrenceDays] = useState<number[] | undefined>(formData.recurrenceDays);
-  const [tempMonthlyRecurrenceType, setTempMonthlyRecurrenceType] = useState(formData.monthlyRecurrenceType);
-
-  useEffect(() => {
-    const anyOpen = !!(activeMenu || isFrequencyModalOpen || isRecurrenceModalOpen);
-    // già blocchiamo tutto con onMenuStateChange(true) al mount,
-    // ma teniamo il segnale per coerenza (non danneggia).
-    onMenuStateChange(anyOpen || true);
-  }, [activeMenu, isFrequencyModalOpen, isRecurrenceModalOpen, onMenuStateChange]);
-
-  useEffect(() => {
-    if (isFrequencyModalOpen) {
-      const t = setTimeout(() => setIsFrequencyModalAnimating(true), 10);
-      return () => clearTimeout(t);
-    } else setIsFrequencyModalAnimating(false);
-  }, [isFrequencyModalOpen]);
-
-  useEffect(() => {
-    if (isRecurrenceModalOpen) {
-      setTempRecurrence(formData.recurrence || 'monthly');
-      setTempRecurrenceInterval(formData.recurrenceInterval || 1);
-      setTempRecurrenceDays(formData.recurrenceDays || []);
-      setTempMonthlyRecurrenceType(formData.monthlyRecurrenceType || 'dayOfMonth');
-      setIsRecurrenceOptionsOpen(false);
-      const t = setTimeout(() => setIsRecurrenceModalAnimating(true), 10);
-      return () => clearTimeout(t);
-    } else setIsRecurrenceModalAnimating(false);
-  }, [
-    isRecurrenceModalOpen,
-    formData.recurrence,
-    formData.recurrenceInterval,
-    formData.recurrenceDays,
-    formData.monthlyRecurrenceType
-  ]);
-
   const handleApplyRecurrence = () => {
     onFormChange({
       recurrence: tempRecurrence as any,
@@ -327,11 +396,46 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     setIsRecurrenceModalAnimating(false);
   };
 
-  const isSingleRecurring =
-    formData.frequency === 'recurring' &&
-    formData.recurrenceEndType === 'count' &&
-    formData.recurrenceCount === 1;
+  const dynamicMonthlyDayOfWeekLabel = useMemo(() => {
+    const ds = formData.date;
+    if (!ds) return 'Seleziona una data di inizio valida';
+    const d = parseLocalYYYYMMDD(ds);
+    if (!d) return 'Data non valida';
+    const dom = d.getDate();
+    const dow = d.getDay();
+    const wom = Math.floor((dom - 1) / 7);
+    return `Ogni ${ordinalSuffixes[wom]} ${dayOfWeekNames[dow]} del mese`;
+  }, [formData.date]);
 
+  const getRecurrenceEndLabel = () => {
+    const t = formData.recurrenceEndType;
+    if (!t || t === 'forever') return 'Per sempre';
+    if (t === 'date') return 'Fino a';
+    if (t === 'count') return 'Numero di volte';
+    return 'Per sempre';
+  };
+
+  if (typeof formData.amount !== 'number') {
+    return (
+      <div
+        ref={rootRef}
+        tabIndex={-1}
+        className="flex flex-col h-full bg-slate-100 items-center justify-center p-4"
+      >
+        <header className="p-4 flex items-center gap-4 text-slate-800 bg-white shadow-sm absolute top-0 left-0 right-0 z-10">
+          {!isDesktop && (
+            <button onClick={onClose} className="p-2 rounded-full hover:bg-slate-200" aria-label="Torna alla calcolatrice">
+              <ArrowLeftIcon className="w-6 h-6" />
+            </button>
+          )}
+          <h2 className="text-xl font-bold">Aggiungi Dettagli</h2>
+        </header>
+        <p className="text-slate-500 text-center">Nessun dato dall'importo. Torna indietro e inserisci una spesa.</p>
+      </div>
+    );
+  }
+
+  const isFrequencySet = !!formData.frequency;
   const selectedAccountLabel = accounts.find(a => a.id === formData.accountId)?.name;
   const accountOptions = accounts.map(a => ({ value: a.id, label: a.name }));
 
@@ -387,16 +491,11 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
       ref={rootRef}
       tabIndex={-1}
       className="flex flex-col h-full bg-slate-100 focus:outline-none"
-      style={{ touchAction: 'pan-y', overscrollBehavior: 'contain' }}
-      onPointerDownCapture={onPointerDownCapture}
-      onPointerMoveCapture={onPointerMoveCapture}
-      onPointerUpCapture={onPointerUpCapture}
-      onPointerCancelCapture={onPointerCancelCapture}
-      onTouchStartCapture={onTouchStartCapture}
-      onTouchMoveCapture={onTouchMoveCapture}
-      onWheelCapture={onWheelCapture}
-      onClickCapture={onClickCapture}
-      onKeyDownCapture={onKeyDownCapture}
+      style={{ touchAction: 'pan-y' }}
+      onPointerDownCapture={onRootPointerDownCapture}
+      onPointerMoveCapture={onRootPointerMoveCapture}
+      onPointerUpCapture={onRootPointerUpCapture}
+      onClickCapture={onRootClickCapture}
     >
       <header className="p-4 flex items-center justify-between gap-4 text-slate-800 bg-white shadow-sm sticky top-0 z-10">
         <div className="flex items-center gap-4">
@@ -419,18 +518,13 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
                 <CurrencyEuroIcon className="h-5 w-5 text-slate-400" />
               </div>
               <input
+                ref={amountInputRef}
                 id="amount"
                 name="amount"
                 type="text"
                 inputMode="decimal"
                 value={amountStr}
-                onChange={(e) => {
-                  let s = e.target.value.replace(/[^0-9,]/g, '');
-                  const parts = s.split(',');
-                  if (parts.length > 2) s = parts[0] + ',' + parts.slice(1).join('');
-                  if (parts[1]?.length > 2) s = parts[0] + ',' + parts[1].slice(0, 2);
-                  setAmountStr(s);
-                }}
+                onChange={handleInputChange}
                 onFocus={() => setIsAmountFocused(true)}
                 onBlur={() => setIsAmountFocused(false)}
                 className="block w-full rounded-md border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-base text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
@@ -448,6 +542,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
                 <DocumentTextIcon className="h-5 w-5 text-slate-400" />
               </div>
               <input
+                ref={descriptionInputRef}
                 id="description"
                 name="description"
                 type="text"
@@ -465,10 +560,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
             <label className="block text-base font-medium text-slate-700 mb-1">Conto</label>
             <button
               type="button"
-              onClick={() => {
-                (document.activeElement as HTMLElement | null)?.blur?.();
-                setActiveMenu('account');
-              }}
+              onClick={() => setActiveMenu('account')}
               className="w-full flex items-center text-left gap-2 px-3 py-2.5 text-base rounded-lg border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors bg-white border-slate-300 text-slate-800 hover:bg-slate-50"
             >
               <CreditCardIcon className="h-5 w-5 text-slate-400" />
@@ -477,43 +569,35 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
             </button>
           </div>
 
-          {!formData.frequency && DateTimeInputs}
+          {!isFrequencySet && DateTimeInputs}
 
           <div className="bg-white p-4 rounded-lg border border-slate-200 space-y-4">
             <div>
               <label className="block text-base font-medium text-slate-700 mb-1">Frequenza</label>
               <button
                 type="button"
-                onClick={() => {
-                  (document.activeElement as HTMLElement | null)?.blur?.();
-                  setIsFrequencyModalOpen(true);
-                }}
+                onClick={() => setIsFrequencyModalOpen(true)}
                 className={`w-full flex items-center justify-between text-left gap-2 px-3 py-2.5 text-base rounded-lg border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors ${
-                  formData.frequency
+                  isFrequencySet
                     ? 'bg-white border-slate-300 text-slate-800 hover:bg-slate-50'
                     : 'bg-slate-100 border-slate-200 text-slate-500 hover:bg-slate-200'
                 }`}
               >
                 <span className="truncate flex-1 capitalize">
-                  {formData.frequency === 'recurring'
-                    ? (formData.recurrenceEndType === 'count' && formData.recurrenceCount === 1 ? 'Singolo' : 'Ricorrente')
-                    : 'Nessuna'}
+                  {isSingleRecurring ? 'Singolo' : formData.frequency === 'recurring' ? 'Ricorrente' : 'Nessuna'}
                 </span>
                 <ChevronDownIcon className="w-5 h-5 text-slate-500" />
               </button>
             </div>
 
-            {formData.frequency && DateTimeInputs}
+            {isFrequencySet && DateTimeInputs}
 
-            {formData.frequency === 'recurring' && !(formData.recurrenceEndType === 'count' && formData.recurrenceCount === 1) && (
+            {formData.frequency === 'recurring' && !isSingleRecurring && (
               <div>
                 <label className="block text-base font-medium text-slate-700 mb-1">Ricorrenza</label>
                 <button
                   type="button"
-                  onClick={() => {
-                    (document.activeElement as HTMLElement | null)?.blur?.();
-                    setIsRecurrenceModalOpen(true);
-                  }}
+                  onClick={() => setIsRecurrenceModalOpen(true)}
                   className="w-full flex items-center justify-between text-left gap-2 px-3 py-2.5 text-base rounded-lg border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors bg-white border-slate-300 text-slate-800 hover:bg-slate-50"
                 >
                   <span className="truncate flex-1">{getRecurrenceSummary(formData)}</span>
@@ -545,7 +629,6 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
         onSelect={handleAccountSelect}
       />
 
-      {/* MODALE FREQUENZA */}
       {isFrequencyModalOpen && (
         <div
           className={`absolute inset-0 z-[60] flex justify-center items-center p-4 transition-opacity duration-300 ${isFrequencyModalAnimating ? 'opacity-100' : 'opacity-0'} bg-slate-900/60 backdrop-blur-sm`}
@@ -572,7 +655,6 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
         </div>
       )}
 
-      {/* MODALE RICORRENZA */}
       {isRecurrenceModalOpen && (
         <div
           className={`absolute inset-0 z-[60] flex justify-center items-center p-4 transition-opacity duration-300 ${isRecurrenceModalAnimating ? 'opacity-100' : 'opacity-0'} bg-slate-900/60 backdrop-blur-sm`}
@@ -636,25 +718,14 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
                     className="w-12 text-center text-lg font-bold text-slate-800 bg-transparent border-0 border-b-2 border-slate-400 focus:ring-0 focus:outline-none focus:border-indigo-600 p-0"
                     min={1}
                   />
-                  <span className="text-base text-slate-700">
-                    {(() => {
-                      const c = tempRecurrenceInterval || 1;
-                      switch (tempRecurrence) {
-                        case 'daily': return c === 1 ? 'giorno' : 'giorni';
-                        case 'weekly': return c === 1 ? 'settimana' : 'settimane';
-                        case 'monthly': return c === 1 ? 'mese' : 'mesi';
-                        case 'yearly': return c === 1 ? 'anno' : 'anni';
-                        default: return 'mese';
-                      }
-                    })()}
-                  </span>
+                  <span className="text-base text-slate-700">{getIntervalLabel(tempRecurrence as any, tempRecurrenceInterval)}</span>
                 </div>
               </div>
 
               {tempRecurrence === 'weekly' && (
                 <div className="pt-2">
                   <div className="flex flex-wrap justify-center gap-2">
-                    {[{label:'Lun',value:1},{label:'Mar',value:2},{label:'Mer',value:3},{label:'Gio',value:4},{label:'Ven',value:5},{label:'Sab',value:6},{label:'Dom',value:0}].map(d => (
+                    {daysOfWeekForPicker.map(d => (
                       <button
                         key={d.value}
                         onClick={() => {
@@ -702,15 +773,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
                     <div className="w-5 h-5 rounded-full border-2 border-slate-400 flex items-center justify-center">
                       {tempMonthlyRecurrenceType === 'dayOfWeek' && <div className="w-2.5 h-2.5 bg-indigo-600 rounded-full" />}
                     </div>
-                    <span className="text-sm font-medium text-slate-700">
-                      {(() => {
-                        const d = parseLocalYYYYMMDD(formData.date || '') || new Date();
-                        const dom = d.getDate();
-                        const dow = d.getDay();
-                        const wom = Math.floor((dom - 1) / 7);
-                        return `Ogni ${ordinalSuffixes[wom]} ${dayOfWeekNames[dow]}`;
-                      })()}
-                    </span>
+                    <span className="text-sm font-medium text-slate-700">{`Ogni ${ordinalSuffixes[Math.floor(((parseLocalYYYYMMDD(formData.date||'')||new Date()).getDate()-1)/7)]} ${dayOfWeekNames[(parseLocalYYYYMMDD(formData.date||'')||new Date()).getDay()]}`}</span>
                   </div>
                 </div>
               )}
@@ -725,7 +788,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
                     >
                       <span className="truncate flex-1 capitalize">
                         {(!formData.recurrenceEndType || formData.recurrenceEndType === 'forever') ? 'Per sempre' :
-                          formData.recurrenceEndType === 'date' ? 'Fino a' : 'Numero di volte'}
+                         formData.recurrenceEndType === 'date' ? 'Fino a' : 'Numero di volte'}
                       </span>
                       <ChevronDownIcon className={`w-5 h-5 text-slate-500 transition-transform ${isRecurrenceEndOptionsOpen ? 'rotate-180' : ''}`} />
                     </button>
