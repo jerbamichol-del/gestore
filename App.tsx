@@ -266,8 +266,8 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     },
     {
       enabled: !isCalculatorContainerOpen && !isDateModalOpen && !isRecurringScreenOpen,
-      threshold: 32,
-      slop: 30, // Increased slop to make page swipe less sensitive than item swipe
+      threshold: 40,
+      slop: 40, // Increased slop to make page swipe less sensitive than item swipe
       ignoreSelector: '[data-no-page-swipe]',
     }
   );
