@@ -72,7 +72,7 @@ const getRecurrenceSummary = (e: Partial<Expense>) => {
 
   let s = '';
   if (recurrenceInterval === 1) {
-    s = recurrenceLabels[recurrence];
+    s = recurrenceLabels[recurrence as keyof typeof recurrenceLabels];
   } else {
     s =
       recurrence === 'daily'   ? `Ogni ${recurrenceInterval} giorni` :
@@ -178,9 +178,41 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
   const descriptionInputRef = useRef<HTMLInputElement>(null);
 
   const [activeMenu, setActiveMenu] = useState<'account' | null>(null);
+
+  // ---- IMPORTO: fonte unica = input locale (blocca update esterni della calcolatrice) ----
   const [amountStr, setAmountStr] = useState('');
   const [isAmountFocused, setIsAmountFocused] = useState(false);
+  const [hasLocalAmountEdit, setHasLocalAmountEdit] = useState(false); // blocca override esterni
 
+  // inizializza importo da parent solo una volta all’apertura
+  const didInitAmount = useRef(false);
+  useEffect(() => {
+    if (!didInitAmount.current) {
+      const parent = formData.amount ?? 0;
+      setAmountStr(parent === 0 ? '' : String(parent).replace('.', ','));
+      didInitAmount.current = true;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // non sovrascrivere amountStr se l’utente ha iniziato a scrivere o l’input è a fuoco
+  useEffect(() => {
+    if (isAmountFocused || hasLocalAmountEdit) return;
+    const parent = formData.amount ?? 0;
+    const local = parseFloat((amountStr || '0').replace(',', '.')) || 0;
+    if (Math.abs(parent - local) > 1e-9) {
+      setAmountStr(parent === 0 ? '' : String(parent).replace('.', ','));
+    }
+  }, [formData.amount, isAmountFocused, hasLocalAmountEdit, amountStr]);
+
+  // sincronizza il valore numerico verso il parent (solo da locale → parent)
+  useEffect(() => {
+    const num = parseFloat((amountStr || '').replace(',', '.'));
+    const next = isNaN(num) ? 0 : num;
+    if (next !== formData.amount) onFormChange({ amount: next });
+  }, [amountStr, formData.amount, onFormChange]);
+
+  // ---- MODALI FREQUENZA/RICORRENZA ----
   const [isFrequencyModalOpen, setIsFrequencyModalOpen] = useState(false);
   const [isFrequencyModalAnimating, setIsFrequencyModalAnimating] = useState(false);
 
@@ -194,69 +226,33 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
   const [tempRecurrenceDays, setTempRecurrenceDays] = useState<number[] | undefined>(formData.recurrenceDays);
   const [tempMonthlyRecurrenceType, setTempMonthlyRecurrenceType] = useState(formData.monthlyRecurrenceType);
 
-  // tastiera virtuale (serve per bloccare swipe verso calcolatrice)
-  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
-
-  const menusOpen = !!(activeMenu || isFrequencyModalOpen || isRecurrenceModalOpen);
-  const guardActive = menusOpen || isKeyboardOpen;
-
   const isSingleRecurring =
     formData.frequency === 'recurring' &&
     formData.recurrenceEndType === 'count' &&
     formData.recurrenceCount === 1;
 
-  // --- utility per chiudere focus sugli input quando apriamo menu/modali
-  const blurActiveEditable = useCallback(() => {
-    const el = document.activeElement as HTMLElement | null;
-    if (!el) return;
-    if (
-      el.tagName === 'INPUT' ||
-      el.tagName === 'TEXTAREA' ||
-      el.isContentEditable
-    ) el.blur();
-  }, []);
-
-  // disabilita swipe container quando modali/menu **o tastiera** sono aperti
+  // disabilita swipe/gesti globali SEMPRE mentre Dettagli è aperta (ferma anche la calcolatrice “globale” se ascolta keydown)
   useEffect(() => {
-    onMenuStateChange(guardActive);
-  }, [guardActive, onMenuStateChange]);
+    onMenuStateChange(true);
+    return () => onMenuStateChange(false);
+  }, [onMenuStateChange]);
 
-  // rilevazione tastiera via visualViewport + focusin/focusout
+  // Blocca tasti numerici/backspace/enter in capture per non farli arrivare alla calcolatrice
   useEffect(() => {
-    const vv = (window as any).visualViewport as VisualViewport | undefined;
-
-    const fromViewport = () => {
-      if (!vv) return;
-      const shrink = window.innerHeight - vv.height;
-      setIsKeyboardOpen(shrink > 120);
-    };
-    vv?.addEventListener('resize', fromViewport);
-    fromViewport();
-
-    const onFocusIn = (e: Event) => {
-      const t = e.target as HTMLElement;
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) {
-        setIsKeyboardOpen(true);
+    const onWinKeyDownCapture = (e: KeyboardEvent) => {
+      const k = e.key;
+      const isDigit = k.length === 1 && /[0-9,.]/.test(k);
+      if (isDigit || k === 'Backspace' || k === 'Delete' || k === 'Enter') {
+        // Non bloccare se il focus è dentro un input di Dettagli (servono all’utente)
+        const root = rootRef.current;
+        if (root && root.contains(document.activeElement)) {
+          return; // lascia passare per l’input locale
+        }
+        e.stopPropagation();
       }
     };
-    const onFocusOut = () => {
-      setTimeout(() => {
-        const el = document.activeElement as HTMLElement | null;
-        if (!el) setIsKeyboardOpen(false);
-        else if (
-          !(el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)
-        ) setIsKeyboardOpen(false);
-      }, 0);
-    };
-
-    document.addEventListener('focusin', onFocusIn);
-    document.addEventListener('focusout', onFocusOut);
-
-    return () => {
-      vv?.removeEventListener('resize', fromViewport);
-      document.removeEventListener('focusin', onFocusIn);
-      document.removeEventListener('focusout', onFocusOut);
-    };
+    window.addEventListener('keydown', onWinKeyDownCapture, true);
+    return () => window.removeEventListener('keydown', onWinKeyDownCapture, true);
   }, []);
 
   // animazioni modali
@@ -279,26 +275,8 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     } else setIsRecurrenceModalAnimating(false);
   }, [isRecurrenceModalOpen, formData.recurrence, formData.recurrenceInterval, formData.recurrenceDays, formData.monthlyRecurrenceType]);
 
-  // sync amount string <- parent
-  useEffect(() => {
-    if (!isAmountFocused) {
-      const parent = formData.amount ?? 0;
-      const local = parseFloat((amountStr || '0').replace(',', '.')) || 0;
-      if (Math.abs(parent - local) > 1e-9) {
-        setAmountStr(parent === 0 ? '' : String(parent).replace('.', ','));
-      }
-    }
-  }, [formData.amount, isAmountFocused, amountStr]);
-
-  // sync parent <- amount string
-  useEffect(() => {
-    const num = parseFloat((amountStr || '').replace(',', '.'));
-    const next = isNaN(num) ? 0 : num;
-    if (next !== formData.amount) onFormChange({ amount: next });
-  }, [amountStr, formData.amount, onFormChange]);
-
   /* ==============================
-     TAP vs SWIPE GUARD (e niente “tap focus” su trigger menu)
+     TAP vs SWIPE GESTURE GUARD + FOCUS FIX
      ============================== */
   const cancelNextClick = useRef(false);
   const pRef = useRef<{
@@ -309,13 +287,13 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     target: HTMLElement | null;
   }>({ id: null, startX: 0, startY: 0, moved: false, target: null });
 
-  const SLOP = 12;
+  const SLOP = 12; // px
 
   const onRootPointerDownCapture = useCallback((e: React.PointerEvent) => {
     const root = rootRef.current;
     if (!root) return;
 
-    // se il focus è fuori pagina, blur immediato
+    // blur se il focus è altrove (evita “primo tap a vuoto” per focus perso)
     const ae = document.activeElement as HTMLElement | null;
     if (ae && !root.contains(ae)) ae.blur();
 
@@ -326,6 +304,19 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
       moved: false,
       target: e.target as HTMLElement,
     };
+
+    // focus immediato se si tocca direttamente un input/select/textarea (risolve primo tap a vuoto)
+    const target = e.target as HTMLElement;
+    const isDirectEditable = target.matches('input, textarea, select');
+    if (isDirectEditable) {
+      const el = target as HTMLElement;
+      el.focus({ preventScroll: true });
+      // Se è numerico o testo, seleziona comodamente
+      const input = el as HTMLInputElement;
+      if (input && (input.type === 'text' || input.type === 'number')) {
+        requestAnimationFrame(() => input.select?.());
+      }
+    }
   }, []);
 
   const onRootPointerMoveCapture = useCallback((e: React.PointerEvent) => {
@@ -348,19 +339,15 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
 
     const wasSwipe = p.moved;
 
-    // Se il tap avviene su un trigger menu o con menu/modali aperti, non forzare focus su input
-    const skipTapFocus =
-      !!p.target?.closest('[data-no-tap-focus]') ||
-      menusOpen ||
-      !!p.target?.closest('[role="dialog"]');
-
-    if (!wasSwipe && !skipTapFocus && p.target) {
+    if (!wasSwipe && p.target) {
       const focusEl = findFocusTarget(p.target, root);
       if (focusEl && isFocusable(focusEl) && focusEl !== document.activeElement) {
         requestAnimationFrame(() => {
           (focusEl as HTMLElement).focus({ preventScroll: true });
-          if ((focusEl as HTMLInputElement).type === 'date' || (focusEl as HTMLInputElement).type === 'time') {
-            (focusEl as HTMLInputElement).click?.();
+          // apri i picker nativi quando serve
+          const asInput = focusEl as HTMLInputElement;
+          if (asInput && (asInput.type === 'date' || asInput.type === 'time')) {
+            asInput.click?.();
           }
         });
       }
@@ -368,13 +355,27 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
 
     setTimeout(() => { cancelNextClick.current = false; }, 0);
     pRef.current.id = null;
-  }, [menusOpen]);
+  }, []);
 
   const onRootClickCapture = useCallback((e: React.MouseEvent) => {
     if (cancelNextClick.current) {
       e.preventDefault();
       e.stopPropagation();
       cancelNextClick.current = false;
+    }
+  }, []);
+
+  // blocca propagazione tasti alla calcolatrice, ma lascia passare all’input di Dettagli
+  const onRootKeyDownCapture = useCallback((e: React.KeyboardEvent) => {
+    const k = e.key;
+    const isDigit = k.length === 1 && /[0-9,.]/.test(k);
+    if (isDigit || k === 'Backspace' || k === 'Delete' || k === 'Enter') {
+      // Se il target è un input interno, non bloccare
+      const root = rootRef.current;
+      if (root && root.contains(e.target as Node)) {
+        return;
+      }
+      e.stopPropagation();
     }
   }, []);
   /* ============================== */
@@ -392,6 +393,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
       return;
     }
     if (name === 'amount') {
+      setHasLocalAmountEdit(true); // da qui in poi l’input è la fonte
       let s = value.replace(/[^0-9,]/g, '');
       const parts = s.split(',');
       if (parts.length > 2) s = parts[0] + ',' + parts.slice(1).join('');
@@ -405,13 +407,6 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
   const handleAccountSelect = (accountId: string) => {
     onFormChange({ accountId });
     setActiveMenu(null);
-  };
-
-  const handleOpenAccountMenu = (e?: React.PointerEvent | React.MouseEvent) => {
-    e?.preventDefault();
-    e?.stopPropagation();
-    blurActiveEditable(); // evita apertura tastiera
-    setTimeout(() => setActiveMenu('account'), 0);
   };
 
   const handleFrequencySelect = (frequency: 'none' | 'single' | 'recurring') => {
@@ -446,13 +441,6 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     onFormChange(up);
     setIsFrequencyModalOpen(false);
     setIsFrequencyModalAnimating(false);
-  };
-
-  const handleOpenFrequency = (e?: React.PointerEvent | React.MouseEvent) => {
-    e?.preventDefault();
-    e?.stopPropagation();
-    blurActiveEditable();
-    setTimeout(() => setIsFrequencyModalOpen(true), 0);
   };
 
   const handleApplyRecurrence = () => {
@@ -561,12 +549,12 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
       ref={rootRef}
       tabIndex={-1}
       className="flex flex-col h-full bg-slate-100 focus:outline-none"
-      data-no-page-swipe={guardActive ? 'true' : undefined}
-      style={{ touchAction: guardActive ? 'pan-y' : 'auto' }}
+      style={{ touchAction: 'pan-y' }}
       onPointerDownCapture={onRootPointerDownCapture}
       onPointerMoveCapture={onRootPointerMoveCapture}
       onPointerUpCapture={onRootPointerUpCapture}
       onClickCapture={onRootClickCapture}
+      onKeyDownCapture={onRootKeyDownCapture}
     >
       <header className="p-4 flex items-center justify-between gap-4 text-slate-800 bg-white shadow-sm sticky top-0 z-10">
         <div className="flex items-center gap-4">
@@ -593,12 +581,11 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
                 id="amount"
                 name="amount"
                 type="text"
-                inputMode={menusOpen ? 'none' : 'decimal'}
-                readOnly={menusOpen}
+                inputMode="decimal"
                 value={amountStr}
                 onChange={handleInputChange}
-                onFocus={() => setIsAmountFocused(true)}
-                onBlur={() => setIsAmountFocused(false)}
+                onFocus={() => { setIsAmountFocused(true); }}
+                onBlur={() => { setIsAmountFocused(false); }}
                 className="block w-full rounded-md border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-base text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                 placeholder="0,00"
                 enterKeyHint="done"
@@ -618,7 +605,6 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
                 id="description"
                 name="description"
                 type="text"
-                readOnly={menusOpen}
                 value={formData.description || ''}
                 onChange={handleInputChange}
                 className="block w-full rounded-md border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-base text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
@@ -633,9 +619,10 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
             <label className="block text-base font-medium text-slate-700 mb-1">Conto</label>
             <button
               type="button"
-              data-no-tap-focus
-              onPointerUp={handleOpenAccountMenu}
-              onClick={(e) => e.preventDefault()}
+              onClick={() => {
+                (document.activeElement as HTMLElement | null)?.blur?.(); // evita apertura tastiera
+                setActiveMenu('account');
+              }}
               className="w-full flex items-center text-left gap-2 px-3 py-2.5 text-base rounded-lg border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors bg-white border-slate-300 text-slate-800 hover:bg-slate-50"
             >
               <CreditCardIcon className="h-5 w-5 text-slate-400" />
@@ -651,9 +638,10 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
               <label className="block text-base font-medium text-slate-700 mb-1">Frequenza</label>
               <button
                 type="button"
-                data-no-tap-focus
-                onPointerUp={handleOpenFrequency}
-                onClick={(e) => e.preventDefault()}
+                onClick={() => {
+                  (document.activeElement as HTMLElement | null)?.blur?.();
+                  setIsFrequencyModalOpen(true);
+                }}
                 className={`w-full flex items-center justify-between text-left gap-2 px-3 py-2.5 text-base rounded-lg border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors ${
                   isFrequencySet
                     ? 'bg-white border-slate-300 text-slate-800 hover:bg-slate-50'
@@ -674,9 +662,10 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
                 <label className="block text-base font-medium text-slate-700 mb-1">Ricorrenza</label>
                 <button
                   type="button"
-                  data-no-tap-focus
-                  onPointerUp={(e) => { e.preventDefault(); e.stopPropagation(); blurActiveEditable(); setTimeout(() => setIsRecurrenceModalOpen(true), 0); }}
-                  onClick={(e) => e.preventDefault()}
+                  onClick={() => {
+                    (document.activeElement as HTMLElement | null)?.blur?.();
+                    setIsRecurrenceModalOpen(true);
+                  }}
                   className="w-full flex items-center justify-between text-left gap-2 px-3 py-2.5 text-base rounded-lg border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors bg-white border-slate-300 text-slate-800 hover:bg-slate-50"
                 >
                   <span className="truncate flex-1">{getRecurrenceSummary(formData)}</span>
@@ -711,7 +700,6 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
       {isFrequencyModalOpen && (
         <div
           className={`absolute inset-0 z-[60] flex justify-center items-center p-4 transition-opacity duration-300 ${isFrequencyModalAnimating ? 'opacity-100' : 'opacity-0'} bg-slate-900/60 backdrop-blur-sm`}
-          data-no-page-swipe="true"
           onClick={() => { setIsFrequencyModalOpen(false); setIsFrequencyModalAnimating(false); }}
           aria-modal="true"
           role="dialog"
@@ -738,7 +726,6 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
       {isRecurrenceModalOpen && (
         <div
           className={`absolute inset-0 z-[60] flex justify-center items-center p-4 transition-opacity duration-300 ${isRecurrenceModalAnimating ? 'opacity-100' : 'opacity-0'} bg-slate-900/60 backdrop-blur-sm`}
-          data-no-page-swipe="true"
           onClick={() => { setIsRecurrenceModalOpen(false); setIsRecurrenceModalAnimating(false); }}
           aria-modal="true"
           role="dialog"
@@ -854,7 +841,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
                     <div className="w-5 h-5 rounded-full border-2 border-slate-400 flex items-center justify-center">
                       {tempMonthlyRecurrenceType === 'dayOfWeek' && <div className="w-2.5 h-2.5 bg-indigo-600 rounded-full" />}
                     </div>
-                    <span className="text-sm font-medium text-slate-700">{`Ogni ${ordinalSuffixes[Math.floor(((parseLocalYYYYMMDD(formData.date||'')||new Date()).getDate()-1)/7)]} ${dayOfWeekNames[(parseLocalYYYYMMDD(formData.date||'')||new Date()).getDay()]}`}</span>
+                    <span className="text-sm font-medium text-slate-700">{dynamicMonthlyDayOfWeekLabel}</span>
                   </div>
                 </div>
               )}
