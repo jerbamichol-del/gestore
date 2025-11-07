@@ -72,18 +72,15 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
           ae.blur();
         }
 
-        // Piccolo delay per assicurarsi che tutti gli stati siano puliti
-        requestAnimationFrame(() => {
-          // Forza la sincronizzazione dal parent quando si torna alla calcolatrice
-          // (il valore potrebbe essere stato modificato nella pagina dettagli)
-          const parentAmount = formData.amount || 0;
-          const currentDisplayAmount = parseAmountString(currentValue);
-          if (Math.abs(parentAmount - currentDisplayAmount) > 1e-9) {
-            setCurrentValue(String(parentAmount).replace('.', ','));
-          }
-          setShouldResetCurrentValue(false);
-          setJustCalculated(false);
-        });
+        // Forza la sincronizzazione dal parent quando si torna alla calcolatrice
+        // (il valore potrebbe essere stato modificato nella pagina dettagli)
+        const parentAmount = formData.amount || 0;
+        const currentDisplayAmount = parseAmountString(currentValue);
+        if (Math.abs(parentAmount - currentDisplayAmount) > 1e-9) {
+          setCurrentValue(String(parentAmount).replace('.', ','));
+        }
+        setShouldResetCurrentValue(false);
+        setJustCalculated(false);
       }
     };
     window.addEventListener('page-activated', onActivated as EventListener);
