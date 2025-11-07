@@ -78,7 +78,26 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   const calculatorPageRef = useRef<HTMLDivElement>(null);
   const detailsPageRef = useRef<HTMLDivElement>(null);
 
-  const { progress, isSwiping, stateRef } = useSwipe(
+  const navigateTo = (targetView: 'calculator' | 'details') => {
+    if (view === targetView) return;
+  
+    const activeElement = document.activeElement as HTMLElement | null;
+    if (activeElement && typeof activeElement.blur === 'function') {
+      activeElement.blur();
+    }
+  
+    // Immediately focus the main container when navigating back to the calculator
+    // to prevent a "focus black hole" while the keyboard is hiding.
+    if (targetView === 'calculator') {
+      containerRef.current?.focus({ preventScroll: true });
+    }
+  
+    setView(targetView);
+    window.dispatchEvent(new Event('numPad:cancelLongPress'));
+    window.dispatchEvent(new CustomEvent('page-activated', { detail: targetView }));
+  };
+
+  const { progress, isSwiping, stateRef: swipeStateRef } = useSwipe(
     containerRef,
     {
       onSwipeLeft: view === 'calculator' ? () => navigateTo('details') : undefined,
@@ -87,11 +106,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
     {
       enabled: !isDesktop && isOpen && !isMenuOpen,
       threshold: 32,
-      slop: 6,
-      // swipe ovunque: non ignorare nessun target
-      ignoreSelector: '',
-      // se supportato dall’hook, utile per evitare click fantasma dopo uno swipe:
-      // cancelClickOnSwipe: true,
+      slop: 24,
     }
   );
 
@@ -135,24 +150,6 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
     onSubmit(submittedData);
   };
 
-  const navigateTo = (targetView: 'calculator' | 'details') => {
-    if (view !== targetView) {
-      setView(targetView);
-      window.dispatchEvent(new Event('numPad:cancelLongPress'));
-      window.dispatchEvent(new CustomEvent('page-activated', { detail: targetView }));
-
-      setTimeout(() => {
-        const activeElement = document.activeElement as HTMLElement | null;
-        activeElement?.blur?.();
-      }, 50);
-
-      requestAnimationFrame(() => {
-        const node = targetView === 'details' ? detailsPageRef.current : calculatorPageRef.current;
-        node?.focus?.({ preventScroll: true });
-      });
-    }
-  };
-
   if (!isOpen) return null;
 
   const translateX = (view === 'calculator' ? 0 : -50) + progress * 50;
@@ -170,7 +167,8 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
     >
       <div
         ref={containerRef}
-        className="relative h-full w-full overflow-hidden"
+        tabIndex={-1}
+        className="relative h-full w-full overflow-hidden focus:outline-none"
         // pan-y = lascia allo user-agent lo scroll verticale,
         // ma consente all’app di gestire pan orizzontali per lo swipe
         style={{ touchAction: 'pan-y' }}
@@ -200,7 +198,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
               onNavigateToDetails={() => navigateTo('details')}
               onMenuStateChange={setIsMenuOpen}
               isDesktop={isDesktop}
-              swipeStateRef={stateRef}
+              swipeStateRef={swipeStateRef}
             />
           </div>
 
@@ -220,6 +218,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
               isDesktop={isDesktop}
               onMenuStateChange={setIsMenuOpen}
               dateError={dateError}
+              isActive={isDetailsActive}
             />
           </div>
         </div>
