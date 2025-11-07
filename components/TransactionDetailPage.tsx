@@ -190,6 +190,8 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
   const [activeMenu, setActiveMenu] = useState<'account' | null>(null);
   const [amountStr, setAmountStr] = useState('');
   const [isAmountFocused, setIsAmountFocused] = useState(false);
+  const isPageActiveRef = useRef(false);
+  const isSyncingFromParent = useRef(false);
 
   const [isFrequencyModalOpen, setIsFrequencyModalOpen] = useState(false);
   const [isFrequencyModalAnimating, setIsFrequencyModalAnimating] = useState(false);
@@ -208,6 +210,27 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
     formData.frequency === 'recurring' &&
     formData.recurrenceEndType === 'count' &&
     formData.recurrenceCount === 1;
+
+  // Traccia quando la pagina diventa attiva e sincronizza l'importo
+  useEffect(() => {
+    const onActivated = (e: Event) => {
+      const ce = e as CustomEvent;
+      if (ce.detail === 'details') {
+        isPageActiveRef.current = true;
+        // Sincronizza l'importo quando la pagina diventa attiva
+        const parent = formData.amount ?? 0;
+        const local = parseAmountString(amountStr || '0');
+        if (Math.abs(parent - local) > 1e-9) {
+          isSyncingFromParent.current = true;
+          setAmountStr(parent === 0 ? '' : String(parent).replace('.', ','));
+        }
+      } else {
+        isPageActiveRef.current = false;
+      }
+    };
+    window.addEventListener('page-activated', onActivated as EventListener);
+    return () => window.removeEventListener('page-activated', onActivated as EventListener);
+  }, [formData.amount, amountStr]);
 
   // disabilita swipe container quando modali/menu aperti
   useEffect(() => {
@@ -235,21 +258,19 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
     } else setIsRecurrenceModalAnimating(false);
   }, [isRecurrenceModalOpen, formData.recurrence, formData.recurrenceInterval, formData.recurrenceDays, formData.monthlyRecurrenceType]);
 
-  // sync amount string <- parent
+  // sync parent <- amount string (solo quando l'utente digita)
   useEffect(() => {
-    if (!isAmountFocused) {
-      const parent = formData.amount ?? 0;
-      const local = parseAmountString(amountStr || '0');
-      if (Math.abs(parent - local) > 1e-9) {
-        setAmountStr(parent === 0 ? '' : String(parent).replace('.', ','));
+    if (isSyncingFromParent.current) {
+      isSyncingFromParent.current = false;
+      return;
+    }
+    // Aggiorna il parent solo se siamo nella pagina attiva e l'utente sta digitando
+    if (isPageActiveRef.current) {
+      const next = parseAmountString(amountStr || '');
+      if (Math.abs(next - (formData.amount || 0)) > 1e-9) {
+        onFormChange({ amount: next });
       }
     }
-  }, [formData.amount, isAmountFocused, amountStr]);
-
-  // sync parent <- amount string
-  useEffect(() => {
-    const next = parseAmountString(amountStr || '');
-    if (next !== formData.amount) onFormChange({ amount: next });
   }, [amountStr, formData.amount, onFormChange]);
 
   /* ==============================
