@@ -150,6 +150,11 @@ const findFocusTarget = (start: HTMLElement, root: HTMLElement) => {
 
   if (start.matches(sel)) return start;
 
+  // Se l'elemento toccato è un button, non cercare input
+  if (start.tagName === 'BUTTON' || start.getAttribute('role') === 'button') {
+    return null;
+  }
+
   const viaLabel = start.closest('label');
   if (viaLabel) {
     const forId = viaLabel.getAttribute('for');
@@ -161,7 +166,8 @@ const findFocusTarget = (start: HTMLElement, root: HTMLElement) => {
     if (nested) return nested;
   }
 
-  const container = start.closest<HTMLElement>('.relative, .input-wrapper, .field');
+  // Cerca solo in container con classe specifica per input, non in tutti i .relative
+  const container = start.closest<HTMLElement>('.input-wrapper, .field');
   if (container) {
     const nested = container.querySelector<HTMLElement>(sel);
     if (nested) return nested;
