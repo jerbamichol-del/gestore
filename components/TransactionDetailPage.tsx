@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+
+import React, { useState, useEffect, useRef, useMemo, useCallback, useImperativeHandle } from 'react';
 import { Expense, Account } from '../types';
 import { ArrowLeftIcon } from './icons/ArrowLeftIcon';
 import { DocumentTextIcon } from './icons/DocumentTextIcon';
@@ -163,7 +164,8 @@ const findFocusTarget = (start: HTMLElement, root: HTMLElement) => {
 };
 /* ============================= */
 
-const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
+// FIX: Convert to a forwardRef component to accept a ref from the parent.
+const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetailPageProps>(({
   formData,
   onFormChange,
   accounts,
@@ -172,8 +174,9 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
   isDesktop,
   onMenuStateChange,
   dateError,
-}) => {
+}, ref) => {
   const rootRef = useRef<HTMLDivElement | null>(null);
+  useImperativeHandle(ref, () => rootRef.current as HTMLDivElement);
   const amountInputRef = useRef<HTMLInputElement>(null);
   const descriptionInputRef = useRef<HTMLInputElement>(null);
 
@@ -863,6 +866,8 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
       )}
     </div>
   );
-};
+});
+
+TransactionDetailPage.displayName = 'TransactionDetailPage';
 
 export default TransactionDetailPage;

@@ -562,7 +562,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
         )}
       </div>
 
-      <div data-no-page-swipe>
+      <div data-no-page-swipe className="relative z-20">
         <HistoryFilterCard
           isActive={isActive}
           onSelectQuickFilter={(value) => {
