@@ -198,6 +198,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
   const [isAmountFocused, setIsAmountFocused] = useState(false);
   const isPageActiveRef = useRef(false);
   const isSyncingFromParent = useRef(false);
+  const [ghostOverlayActive, setGhostOverlayActive] = useState(false);
 
   // Tap/swipe gesture detection refs
   const cancelNextClick = useRef(false);
@@ -233,6 +234,15 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
       const ce = e as CustomEvent;
       if (ce.detail === 'details') {
         isPageActiveRef.current = true;
+
+        // Attiva overlay anti-ghost IMMEDIATAMENTE
+        setGhostOverlayActive(true);
+
+        // Disattiva dopo 150ms
+        const timer = setTimeout(() => {
+          setGhostOverlayActive(false);
+        }, 150);
+
         // Sincronizza l'importo quando la pagina diventa attiva
         const parent = formData.amount ?? 0;
         const local = parseAmountString(amountStr || '0');
@@ -240,6 +250,8 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
           isSyncingFromParent.current = true;
           setAmountStr(parent === 0 ? '' : String(parent).replace('.', ','));
         }
+
+        return () => clearTimeout(timer);
       } else {
         // Quando la pagina diventa inattiva, reset completo dello stato
         isPageActiveRef.current = false;
@@ -553,13 +565,33 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
     <div
       ref={rootRef}
       tabIndex={-1}
-      className="flex flex-col h-full bg-slate-100 focus:outline-none"
+      className="flex flex-col h-full bg-slate-100 focus:outline-none relative"
       style={{ touchAction: 'pan-y' }}
       onPointerDownCapture={onRootPointerDownCapture}
       onPointerMoveCapture={onRootPointerMoveCapture}
       onPointerUpCapture={onRootPointerUpCapture}
       onClickCapture={onRootClickCapture}
     >
+      {/* Overlay anti-ghost: cattura TUTTI i click per 150ms dopo attivazione pagina */}
+      {ghostOverlayActive && (
+        <div
+          className="absolute inset-0 z-50"
+          style={{
+            pointerEvents: 'auto',
+            background: 'transparent',
+            touchAction: 'none'
+          }}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          onPointerDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          aria-hidden="true"
+        />
+      )}
       <header className="p-4 flex items-center justify-between gap-4 text-slate-800 bg-white shadow-sm sticky top-0 z-10">
         <div className="flex items-center gap-4">
           {!isDesktop && (
