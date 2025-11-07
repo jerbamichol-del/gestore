@@ -20,6 +20,7 @@ interface TransactionDetailPageProps {
   isDesktop: boolean;
   onMenuStateChange: (isOpen: boolean) => void;
   dateError: boolean;
+  isSwiping: boolean;
 }
 
 const parseAmountString = (str: string): number => {
@@ -187,6 +188,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
   isDesktop,
   onMenuStateChange,
   dateError,
+  isSwiping,
 }, ref) => {
   const rootRef = useRef<HTMLDivElement | null>(null);
   useImperativeHandle(ref, () => rootRef.current as HTMLDivElement);
@@ -199,6 +201,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
   const isPageActiveRef = useRef(false);
   const isSyncingFromParent = useRef(false);
   const [ghostOverlayActive, setGhostOverlayActive] = useState(false);
+  const [swipeEndedRecently, setSwipeEndedRecently] = useState(false);
 
   // Tap/swipe gesture detection refs
   const cancelNextClick = useRef(false);
@@ -228,20 +231,29 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
     formData.recurrenceEndType === 'count' &&
     formData.recurrenceCount === 1;
 
+  // Attiva overlay quando swipe è in corso o appena terminato
+  useEffect(() => {
+    if (isSwiping) {
+      // Swipe in corso - attiva IMMEDIATAMENTE
+      setGhostOverlayActive(true);
+      setSwipeEndedRecently(false);
+    } else if (ghostOverlayActive) {
+      // Swipe appena terminato - mantieni attivo per 200ms
+      setSwipeEndedRecently(true);
+      const timer = setTimeout(() => {
+        setGhostOverlayActive(false);
+        setSwipeEndedRecently(false);
+      }, 200);
+      return () => clearTimeout(timer);
+    }
+  }, [isSwiping, ghostOverlayActive]);
+
   // Traccia quando la pagina diventa attiva e sincronizza l'importo
   useEffect(() => {
     const onActivated = (e: Event) => {
       const ce = e as CustomEvent;
       if (ce.detail === 'details') {
         isPageActiveRef.current = true;
-
-        // Attiva overlay anti-ghost IMMEDIATAMENTE
-        setGhostOverlayActive(true);
-
-        // Disattiva dopo 150ms
-        const timer = setTimeout(() => {
-          setGhostOverlayActive(false);
-        }, 150);
 
         // Sincronizza l'importo quando la pagina diventa attiva
         const parent = formData.amount ?? 0;
@@ -250,8 +262,6 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
           isSyncingFromParent.current = true;
           setAmountStr(parent === 0 ? '' : String(parent).replace('.', ','));
         }
-
-        return () => clearTimeout(timer);
       } else {
         // Quando la pagina diventa inattiva, reset completo dello stato
         isPageActiveRef.current = false;

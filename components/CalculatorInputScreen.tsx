@@ -17,6 +17,7 @@ interface CalculatorInputScreenProps {
   onFormChange: (newData: Partial<Omit<Expense, 'id'>>) => void;
   onMenuStateChange: (isOpen: boolean) => void;
   isDesktop: boolean;
+  isSwiping: boolean;
 }
 
 const parseAmountString = (str: string): number => {
@@ -46,7 +47,7 @@ const getAmountFontSize = (value: string): string => {
 
 const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputScreenProps>(({
   onClose, onSubmit, accounts, onNavigateToDetails,
-  formData, onFormChange, onMenuStateChange, isDesktop
+  formData, onFormChange, onMenuStateChange, isDesktop, isSwiping
 }, ref) => {
   const [currentValue, setCurrentValue] = useState('0');
   const [previousValue, setPreviousValue] = useState<string | null>(null);
@@ -58,10 +59,28 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
   const isSyncingFromParent = useRef(false);
   const typingSinceActivationRef = useRef(false);
   const [ghostOverlayActive, setGhostOverlayActive] = useState(false);
+  const [swipeEndedRecently, setSwipeEndedRecently] = useState(false);
 
   useEffect(() => {
     onMenuStateChange(activeMenu !== null);
   }, [activeMenu, onMenuStateChange]);
+
+  // Attiva overlay quando swipe è in corso o appena terminato
+  useEffect(() => {
+    if (isSwiping) {
+      // Swipe in corso - attiva IMMEDIATAMENTE
+      setGhostOverlayActive(true);
+      setSwipeEndedRecently(false);
+    } else if (ghostOverlayActive) {
+      // Swipe appena terminato - mantieni attivo per 200ms
+      setSwipeEndedRecently(true);
+      const timer = setTimeout(() => {
+        setGhostOverlayActive(false);
+        setSwipeEndedRecently(false);
+      }, 200);
+      return () => clearTimeout(timer);
+    }
+  }, [isSwiping, ghostOverlayActive]);
 
   useEffect(() => {
     const onActivated = (e: Event) => {
@@ -73,14 +92,6 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
           ae.blur();
         }
 
-        // Attiva overlay anti-ghost IMMEDIATAMENTE
-        setGhostOverlayActive(true);
-
-        // Disattiva dopo 150ms (tempo sufficiente per consumare eventi fantasma)
-        const timer = setTimeout(() => {
-          setGhostOverlayActive(false);
-        }, 150);
-
         // Forza la sincronizzazione dal parent quando si torna alla calcolatrice
         // (il valore potrebbe essere stato modificato nella pagina dettagli)
         const parentAmount = formData.amount || 0;
@@ -90,8 +101,6 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
         }
         setShouldResetCurrentValue(false);
         setJustCalculated(false);
-
-        return () => clearTimeout(timer);
       }
     };
     window.addEventListener('page-activated', onActivated as EventListener);
