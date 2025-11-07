@@ -68,6 +68,9 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
   }, [isPageSwiping, onInteractionChange, setTranslateX]);
 
   const handlePointerDown = (e: React.PointerEvent) => {
+    // Evita che il parent armi il page-swipe
+    e.stopPropagation();
+
     if ((e.target as HTMLElement).closest('button') || !itemRef.current) return;
 
     itemRef.current.style.transition = 'none';
@@ -98,14 +101,16 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
     const dy = e.clientY - ds.startY;
 
     if (!ds.isLocked) {
-      const SLOP = 8;
+      const SLOP = 8; // reattivo
       if (Math.abs(dx) <= SLOP && Math.abs(dy) <= SLOP) return;
 
       const horizontal = Math.abs(dx) > Math.abs(dy) * 2;
 
       if (!horizontal) {
         ds.isDragging = false;
-        if (ds.pointerId !== null) itemRef.current?.releasePointerCapture(ds.pointerId);
+        if (ds.pointerId !== null) {
+          itemRef.current?.releasePointerCapture(ds.pointerId);
+        }
         ds.pointerId = null;
         return;
       }
@@ -113,7 +118,9 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
       const wasOpen = ds.initialTranslateX < -1 || isOpen;
       if (dx > 0 && !wasOpen) {
         ds.isDragging = false;
-        if (ds.pointerId !== null) itemRef.current?.releasePointerCapture(ds.pointerId);
+        if (ds.pointerId !== null) {
+          itemRef.current?.releasePointerCapture(ds.pointerId);
+        }
         ds.pointerId = null;
         return;
       }
@@ -122,11 +129,17 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
       onInteractionChange(true);
     }
 
+    // Se lo swipe è dell’item, non farlo salire al parent
+    e.stopPropagation();
     if (e.cancelable) e.preventDefault();
 
     let x = ds.initialTranslateX + dx;
-    if (x > 0) x = Math.tanh(x / 50) * 25;
-    if (x < -ACTION_WIDTH) x = -ACTION_WIDTH - Math.tanh((Math.abs(x) - ACTION_WIDTH) / 50) * 25;
+    if (x > 0) {
+      x = Math.tanh(x / 50) * 25;
+    }
+    if (x < -ACTION_WIDTH) {
+      x = -ACTION_WIDTH - Math.tanh((Math.abs(x) - ACTION_WIDTH) / 50) * 25;
+    }
     setTranslateX(x, false);
   };
 
@@ -134,7 +147,12 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
     const ds = dragState.current;
     if (!ds.isDragging || e.pointerId !== ds.pointerId) return;
 
-    if (ds.pointerId !== null) itemRef.current?.releasePointerCapture(ds.pointerId);
+    // Se l'item aveva lockato lo swipe, non propagare l'UP
+    if (ds.isLocked) e.stopPropagation();
+
+    if (ds.pointerId !== null) {
+      itemRef.current?.releasePointerCapture(ds.pointerId);
+    }
 
     const wasLocked = ds.isLocked;
 
@@ -143,17 +161,22 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
     const dist = Math.hypot(dx, dy);
     const duration = performance.now() - ds.startTime;
 
-    const isTap = dist < 10 && duration < 250;
+    const isTap = dist < 10 && duration < 250; // tap sensibile
 
     ds.isDragging = false;
     ds.isLocked = false;
     ds.pointerId = null;
-    if (wasLocked) onInteractionChange(false);
+    if (wasLocked) {
+      onInteractionChange(false);
+    }
 
     if (isTap) {
       setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
-      if (isOpen) onOpen('');
-      else onEdit(expense);
+      if (isOpen) {
+        onOpen('');
+      } else {
+        onEdit(expense);
+      }
       return;
     }
 
@@ -173,15 +196,16 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
     const ds = dragState.current;
     if (!ds.isDragging || e.pointerId !== ds.pointerId) return;
 
-    if (ds.pointerId !== null) itemRef.current?.releasePointerCapture(ds.pointerId);
+    if (ds.isLocked) e.stopPropagation();
 
-    const wasLocked = ds.isLocked;
+    if (ds.pointerId !== null) {
+      itemRef.current?.releasePointerCapture(ds.pointerId);
+    }
 
     ds.isDragging = false;
     ds.isLocked = false;
     ds.pointerId = null;
-    if (wasLocked) onInteractionChange(false);
-
+    onInteractionChange(false);
     setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
   };
 
@@ -196,8 +220,14 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
       {/* layer azioni */}
       <div className="absolute top-0 right-0 h-full flex items-center z-0">
         <button
-          onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
-          onPointerUp={(e) => { e.stopPropagation(); onDelete(expense.id); }}
+          onPointerDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          onPointerUp={(e) => {
+            e.stopPropagation();
+            onDelete(expense.id);
+          }}
           className="w-[72px] h-full flex flex-col items-center justify-center bg-red-500 text-white hover:bg-red-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white"
           aria-label="Elimina spesa"
         >
@@ -209,10 +239,15 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
       {/* contenuto swipeable */}
       <div
         ref={itemRef}
+        data-no-page-swipe="true"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}
+        // doppia rete: blocca in capture se l'item sta gestendo il gesto
+        onPointerDownCapture={(e) => e.stopPropagation()}
+        onPointerMoveCapture={(e) => { if (dragState.current.isLocked) e.stopPropagation(); }}
+        onPointerUpCapture={(e) => { if (dragState.current.isLocked) e.stopPropagation(); }}
         className="relative flex items-center gap-4 py-3 px-4 bg-white z-10 cursor-pointer"
         style={{ touchAction: 'pan-y' }}
       >
@@ -317,8 +352,11 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
   });
 
   const onPDcap = (e: React.PointerEvent) => {
-    // Se un item sta già gestendo orizzontale, è aperto, o lo swipe parte da un'area da ignorare, non fare nulla.
-    if (isInteracting || openItemId || (e.target as HTMLElement).closest('[data-no-page-swipe], [role="dialog"], button, input, select, textarea')) {
+    if (
+      isInteracting ||
+      openItemId ||
+      (e.target as HTMLElement).closest('[data-no-page-swipe], [role="dialog"], button, input, select, textarea')
+    ) {
       return;
     }
     pageDrag.current = {
@@ -338,10 +376,10 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
     const dy = e.clientY - pg.startY;
 
     if (!pg.locked) {
-      const SLOP = 15; // evitare attivazioni accidentali
+      const SLOP = 15;
       if (Math.abs(dx) <= SLOP && Math.abs(dy) <= SLOP) return;
 
-      const horizontal = Math.abs(dx) > Math.abs(dy) * 1.5; // più stringente
+      const horizontal = Math.abs(dx) > Math.abs(dy) * 1.5;
       if (!horizontal) {
         pg.active = false;
         pg.pointerId = null;
@@ -349,9 +387,9 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
       }
 
       pg.locked = true;
-      try { pageRef.current?.setPointerCapture(e.pointerId); } catch {}
-      // 👇 PATCH MINIMALE: chiudi eventuali menu/modali dei filtri
-      window.dispatchEvent(new Event('history:close-menus-request'));
+      try {
+        pageRef.current?.setPointerCapture(e.pointerId);
+      } catch {}
     }
   };
 
@@ -360,7 +398,9 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
     if (!pg.active || pg.pointerId !== e.pointerId) return;
 
     if (pg.locked) {
-      try { pageRef.current?.releasePointerCapture(e.pointerId); } catch {}
+      try {
+        pageRef.current?.releasePointerCapture(e.pointerId);
+      } catch {}
     }
 
     const wasLocked = pg.locked;
@@ -385,7 +425,9 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
     if (!pg.active || pg.pointerId !== e.pointerId) return;
 
     if (pg.locked) {
-      try { pageRef.current?.releasePointerCapture(e.pointerId); } catch {}
+      try {
+        pageRef.current?.releasePointerCapture(e.pointerId);
+      } catch {}
     }
 
     pg.active = false;
@@ -428,7 +470,8 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
       end.setHours(23, 59, 59, 999);
 
       switch (periodType) {
-        case 'day': break;
+        case 'day':
+          break;
         case 'week': {
           const day = start.getDay();
           const diff = start.getDate() - day + (day === 0 ? -6 : 1);
@@ -476,10 +519,18 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
     const startDate = new Date();
     startDate.setHours(0, 0, 0, 0);
     switch (dateFilter) {
-      case '7d': startDate.setDate(startDate.getDate() - 6); break;
-      case '30d': startDate.setDate(startDate.getDate() - 29); break;
-      case '6m': startDate.setMonth(startDate.getMonth() - 6); break;
-      case '1y': startDate.setFullYear(startDate.getFullYear() - 1); break;
+      case '7d':
+        startDate.setDate(startDate.getDate() - 6);
+        break;
+      case '30d':
+        startDate.setDate(startDate.getDate() - 29);
+        break;
+      case '6m':
+        startDate.setMonth(startDate.getMonth() - 6);
+        break;
+      case '1y':
+        startDate.setFullYear(startDate.getFullYear() - 1);
+        break;
     }
     const t0 = startDate.getTime();
 
@@ -493,8 +544,14 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
     const sorted = [...filteredExpenses].sort((a, b) => {
       const db = parseLocalYYYYMMDD(b.date);
       const da = parseLocalYYYYMMDD(a.date);
-      if (b.time) { const [h, m] = b.time.split(':').map(Number); if (!isNaN(h) && !isNaN(m)) db.setHours(h, m); }
-      if (a.time) { const [h, m] = a.time.split(':').map(Number); if (!isNaN(h) && !isNaN(m)) da.setHours(h, m); }
+      if (b.time) {
+        const [h, m] = b.time.split(':').map(Number);
+        if (!isNaN(h) && !isNaN(m)) db.setHours(h, m);
+      }
+      if (a.time) {
+        const [h, m] = a.time.split(':').map(Number);
+        if (!isNaN(h) && !isNaN(m)) da.setHours(h, m);
+      }
       return db.getTime() - da.getTime();
     });
 
