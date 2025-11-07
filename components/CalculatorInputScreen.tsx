@@ -66,15 +66,24 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
     const onActivated = (e: Event) => {
       const ce = e as CustomEvent;
       if (ce.detail === 'calculator') {
-        // Forza la sincronizzazione dal parent quando si torna alla calcolatrice
-        // (il valore potrebbe essere stato modificato nella pagina dettagli)
-        const parentAmount = formData.amount || 0;
-        const currentDisplayAmount = parseAmountString(currentValue);
-        if (Math.abs(parentAmount - currentDisplayAmount) > 1e-9) {
-          setCurrentValue(String(parentAmount).replace('.', ','));
+        // Blur forzato di qualsiasi elemento attivo (potrebbe essere dalla pagina dettagli)
+        const ae = document.activeElement as HTMLElement | null;
+        if (ae && typeof ae.blur === 'function') {
+          ae.blur();
         }
-        setShouldResetCurrentValue(false);
-        setJustCalculated(false);
+
+        // Piccolo delay per assicurarsi che tutti gli stati siano puliti
+        requestAnimationFrame(() => {
+          // Forza la sincronizzazione dal parent quando si torna alla calcolatrice
+          // (il valore potrebbe essere stato modificato nella pagina dettagli)
+          const parentAmount = formData.amount || 0;
+          const currentDisplayAmount = parseAmountString(currentValue);
+          if (Math.abs(parentAmount - currentDisplayAmount) > 1e-9) {
+            setCurrentValue(String(parentAmount).replace('.', ','));
+          }
+          setShouldResetCurrentValue(false);
+          setJustCalculated(false);
+        });
       }
     };
     window.addEventListener('page-activated', onActivated as EventListener);
