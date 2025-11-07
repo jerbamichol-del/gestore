@@ -310,7 +310,10 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
     const root = rootRef.current;
     if (!root) return;
 
-    // se il focus è fuori pagina, blur immediato per non “agganciarsi” all’altra view
+    // Ignora eventi se la pagina non è attiva
+    if (!isPageActiveRef.current) return;
+
+    // se il focus è fuori pagina, blur immediato per non "agganciarsi" all'altra view
     const ae = document.activeElement as HTMLElement | null;
     if (ae && !root.contains(ae)) ae.blur();
 
@@ -324,6 +327,9 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
   }, []);
 
   const onRootPointerMoveCapture = useCallback((e: React.PointerEvent) => {
+    // Ignora eventi se la pagina non è attiva
+    if (!isPageActiveRef.current) return;
+
     const p = pRef.current;
     if (p.id !== e.pointerId) return;
 
@@ -340,12 +346,20 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
   const onRootPointerUpCapture = useCallback((e: React.PointerEvent) => {
     const root = rootRef.current;
     const p = pRef.current;
+
+    // Se la pagina non è attiva, reset e ignora
+    if (!isPageActiveRef.current) {
+      pRef.current = { id: null, startX: 0, startY: 0, moved: false, target: null };
+      cancelNextClick.current = false;
+      return;
+    }
+
     if (!root || p.id !== e.pointerId) return;
 
     const wasSwipe = p.moved;
 
     if (!wasSwipe && p.target) {
-      // TAP: mettiamo focus sull’input toccato (risolve primo tap a vuoto)
+      // TAP: mettiamo focus sull'input toccato (risolve primo tap a vuoto)
       const focusEl = findFocusTarget(p.target, root);
       if (focusEl && isFocusable(focusEl) && focusEl !== document.activeElement) {
         requestAnimationFrame(() => {
@@ -357,7 +371,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
       }
     }
 
-    // reset rapida del flag “annulla click”
+    // reset rapida del flag "annulla click"
     setTimeout(() => { cancelNextClick.current = false; }, 0);
     pRef.current.id = null;
   }, []);
