@@ -1,8 +1,7 @@
 import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { Expense, Account } from '../types';
 import { getCategoryStyle } from '../utils/categoryStyles';
-import { formatCurrency, formatDate } from '../components/icons/formatters';
-import { PencilSquareIcon } from '../components/icons/PencilSquareIcon';
+import { formatCurrency } from '../components/icons/formatters';
 import { TrashIcon } from '../components/icons/TrashIcon';
 import { HistoryFilterCard } from '../components/HistoryFilterCard';
 
@@ -56,7 +55,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
     itemRef.current.style.transform = `translateX(${x}px)`;
   }, []);
 
-  // Se il pager prende lo swipe, resettiamo
+  // Se il pager prende lo swipe, resettiamo il gesto dell'item
   useEffect(() => {
     if (isPageSwiping && dragState.current.isDragging) {
       dragState.current.isDragging = false;
@@ -68,12 +67,18 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
   }, [isPageSwiping, onInteractionChange, setTranslateX]);
 
   const handlePointerDown = (e: React.PointerEvent) => {
+    // Non armare lo swipe di pagina
+    e.stopPropagation();
+
     if ((e.target as HTMLElement).closest('button') || !itemRef.current) return;
-    
+
     itemRef.current.style.transition = 'none';
 
-    const m = new DOMMatrixReadOnly(window.getComputedStyle(itemRef.current).transform);
-    const currentX = m.m41;
+    let currentX = 0;
+    const t = window.getComputedStyle(itemRef.current).transform;
+    if (t && t !== 'none') {
+      try { currentX = new DOMMatrixReadOnly(t).m41 || 0; } catch {}
+    }
 
     dragState.current = {
       isDragging: true,
@@ -84,12 +89,8 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
       initialTranslateX: currentX,
       pointerId: e.pointerId,
     };
-    
-    try {
-      itemRef.current.setPointerCapture(e.pointerId);
-    } catch (err) {
-      console.warn("Could not capture pointer: ", err);
-    }
+
+    try { itemRef.current.setPointerCapture(e.pointerId); } catch {}
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
@@ -100,16 +101,13 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
     const dy = e.clientY - ds.startY;
 
     if (!ds.isLocked) {
-      const SLOP = 8; // Ridotto per rendere più reattivo
+      const SLOP = 8;
       if (Math.abs(dx) <= SLOP && Math.abs(dy) <= SLOP) return;
-      
-      const horizontal = Math.abs(dx) > Math.abs(dy) * 2;
 
+      const horizontal = Math.abs(dx) > Math.abs(dy) * 2;
       if (!horizontal) {
         ds.isDragging = false;
-        if (ds.pointerId !== null) {
-          itemRef.current?.releasePointerCapture(ds.pointerId);
-        }
+        if (ds.pointerId !== null) itemRef.current?.releasePointerCapture(ds.pointerId);
         ds.pointerId = null;
         return;
       }
@@ -117,91 +115,90 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
       const wasOpen = ds.initialTranslateX < -1 || isOpen;
       if (dx > 0 && !wasOpen) {
         ds.isDragging = false;
-        if (ds.pointerId !== null) {
-          itemRef.current?.releasePointerCapture(ds.pointerId);
-        }
+        if (ds.pointerId !== null) itemRef.current?.releasePointerCapture(ds.pointerId);
         ds.pointerId = null;
         return;
       }
-      
+
       ds.isLocked = true;
       onInteractionChange(true);
     }
-    
+
+    // L’item ha preso il gesto → blocca bubbling e click sintetico
+    e.stopPropagation();
     if (e.cancelable) e.preventDefault();
 
     let x = ds.initialTranslateX + dx;
-    if (x > 0) {
-      x = Math.tanh(x / 50) * 25;
-    }
-    if (x < -ACTION_WIDTH) {
-      x = -ACTION_WIDTH - Math.tanh((Math.abs(x) - ACTION_WIDTH) / 50) * 25;
-    }
+    if (x > 0) x = Math.tanh(x / 50) * 25;
+    if (x < -ACTION_WIDTH) x = -ACTION_WIDTH - Math.tanh((Math.abs(x) - ACTION_WIDTH) / 50) * 25;
     setTranslateX(x, false);
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
     const ds = dragState.current;
     if (!ds.isDragging || e.pointerId !== ds.pointerId) return;
-    
-    if (ds.pointerId !== null) {
-        itemRef.current?.releasePointerCapture(ds.pointerId);
+
+    // Se il gesto era lockato (swipe), blocca propagazione/click sintetico
+    if (ds.isLocked) {
+      e.stopPropagation();
+      if (e.cancelable) e.preventDefault();
     }
 
-    const wasLocked = ds.isLocked;
+    if (ds.pointerId !== null) itemRef.current?.releasePointerCapture(ds.pointerId);
 
     const dx = e.clientX - ds.startX;
-    const dy = e.clientY - ds.startY;
-    const dist = Math.hypot(dx, dy);
     const duration = performance.now() - ds.startTime;
+    const dist = Math.abs(dx);
+    const wasLocked = ds.isLocked;
 
-    const isTap = dist < 10 && duration < 250; // Ridotte le soglie per tap più sensibili
-    
-    ds.isDragging = false;
-    ds.isLocked = false;
-    ds.pointerId = null;
-    if (wasLocked) {
-      onInteractionChange(false);
-    }
+    // reset stato gesto
+    dragState.current.isDragging = false;
+    dragState.current.isLocked = false;
+    dragState.current.pointerId = null;
+    if (wasLocked) onInteractionChange(false);
 
+    // TAP solo se non c'è stato drag lockato
+    const isTap = !wasLocked && dist < 10 && duration < 250;
     if (isTap) {
       setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
-      if (isOpen) {
-        onOpen('');
-      } else {
-        onEdit(expense);
-      }
+      if (isOpen) onOpen('');
+      else onEdit(expense);
       return;
     }
-    
+
     if (wasLocked) {
-        const endX = new DOMMatrixReadOnly(window.getComputedStyle(itemRef.current!).transform).m41;
-        const velocity = dx / (duration || 1);
-        
-        const shouldOpen = (endX < -ACTION_WIDTH / 2) || (velocity < -0.3 && dx < -20);
-        
-        onOpen(shouldOpen ? expense.id : '');
-        setTranslateX(shouldOpen ? -ACTION_WIDTH : 0, true);
+      // Usa la posizione finale del gesto (non il computedStyle)
+      let finalX = dragState.current.initialTranslateX + dx;
+      if (finalX > 0) finalX = Math.tanh(finalX / 50) * 25;
+      if (finalX < -ACTION_WIDTH) finalX = -ACTION_WIDTH;
+
+      const velocity = dx / (duration || 1);
+      const shouldOpen =
+        finalX <= -ACTION_WIDTH * 0.4 ||         // soglia 40%
+        (velocity < -0.25 && dx < -18);          // fling verso sinistra
+
+      onOpen(shouldOpen ? expense.id : '');
+      requestAnimationFrame(() => setTranslateX(shouldOpen ? -ACTION_WIDTH : 0, true));
     } else {
-        setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
+      setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
     }
   };
-  
+
   const handlePointerCancel = (e: React.PointerEvent) => {
     const ds = dragState.current;
     if (!ds.isDragging || e.pointerId !== ds.pointerId) return;
 
-    if (ds.pointerId !== null) {
-      itemRef.current?.releasePointerCapture(ds.pointerId);
+    if (ds.isLocked) {
+      e.stopPropagation();
+      if (e.cancelable) e.preventDefault();
     }
 
-    ds.isDragging = false;
-    ds.isLocked = false;
-    ds.pointerId = null;
-    if (ds.isLocked) {
-      onInteractionChange(false);
-    }
-    
+    if (ds.pointerId !== null) itemRef.current?.releasePointerCapture(ds.pointerId);
+
+    dragState.current.isDragging = false;
+    dragState.current.isLocked = false;
+    dragState.current.pointerId = null;
+    onInteractionChange(false);
     setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
   };
 
@@ -216,14 +213,8 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
       {/* layer azioni */}
       <div className="absolute top-0 right-0 h-full flex items-center z-0">
         <button
-          onPointerDown={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-          }}
-          onPointerUp={(e) => {
-            e.stopPropagation();
-            onDelete(expense.id);
-          }}
+          onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+          onPointerUp={(e) => { e.stopPropagation(); onDelete(expense.id); }}
           className="w-[72px] h-full flex flex-col items-center justify-center bg-red-500 text-white hover:bg-red-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white"
           aria-label="Elimina spesa"
         >
@@ -235,6 +226,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
       {/* contenuto swipeable */}
       <div
         ref={itemRef}
+        data-no-page-swipe="true"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -343,8 +335,11 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
   });
 
   const onPDcap = (e: React.PointerEvent) => {
-    // Se un item sta già gestendo orizzontale, è aperto, o lo swipe parte da un'area da ignorare, non fare nulla.
-    if (isInteracting || openItemId || (e.target as HTMLElement).closest('[data-no-page-swipe], [role="dialog"], button, input, select, textarea')) {
+    if (
+      isInteracting ||
+      openItemId ||
+      (e.target as HTMLElement).closest('[data-no-page-swipe], [role="dialog"], button, input, select, textarea')
+    ) {
       return;
     }
     pageDrag.current = {
@@ -364,18 +359,20 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
     const dy = e.clientY - pg.startY;
 
     if (!pg.locked) {
-      const SLOP = 15; // Aumentato per evitare attivazioni accidentali
+      const SLOP = 15;
       if (Math.abs(dx) <= SLOP && Math.abs(dy) <= SLOP) return;
 
-      const horizontal = Math.abs(dx) > Math.abs(dy) * 1.5; // Reso più stringente
+      const horizontal = Math.abs(dx) > Math.abs(dy) * 1.5;
       if (!horizontal) {
         pg.active = false;
         pg.pointerId = null;
         return;
       }
-      
+
       pg.locked = true;
       try { pageRef.current?.setPointerCapture(e.pointerId); } catch {}
+      // chiudi eventuali menu del filtro periodo per non "trasportarli" in Home
+      window.dispatchEvent(new Event('history:close-menus-request'));
     }
   };
 
@@ -384,23 +381,23 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
     if (!pg.active || pg.pointerId !== e.pointerId) return;
 
     if (pg.locked) {
-        try { pageRef.current?.releasePointerCapture(e.pointerId); } catch {}
+      try { pageRef.current?.releasePointerCapture(e.pointerId); } catch {}
     }
-    
+
     const wasLocked = pg.locked;
-    
+
     pg.active = false;
     pg.locked = false;
     pg.pointerId = null;
-    
+
     if (wasLocked) {
-        const dx = e.clientX - pg.startX;
-        const dy = e.clientY - pg.startY;
-        
-        const THRESH = 100; // Aumentata la soglia per swipe più deliberato
-        if (Math.abs(dx) > Math.abs(dy) && dx > THRESH && !isInteracting && !openItemId) {
-          onNavigateHome();
-        }
+      const dx = e.clientX - pg.startX;
+      const dy = e.clientY - pg.startY;
+
+      const THRESH = 100;
+      if (Math.abs(dx) > Math.abs(dy) && dx > THRESH && !isInteracting && !openItemId) {
+        onNavigateHome();
+      }
     }
   };
 
@@ -409,9 +406,9 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
     if (!pg.active || pg.pointerId !== e.pointerId) return;
 
     if (pg.locked) {
-        try { pageRef.current?.releasePointerCapture(e.pointerId); } catch {}
+      try { pageRef.current?.releasePointerCapture(e.pointerId); } catch {}
     }
-    
+
     pg.active = false;
     pg.locked = false;
     pg.pointerId = null;
@@ -622,3 +619,4 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
 };
 
 export default HistoryScreen;
+
