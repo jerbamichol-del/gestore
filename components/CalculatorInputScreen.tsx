@@ -57,7 +57,7 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
 
   const isSyncingFromParent = useRef(false);
   const typingSinceActivationRef = useRef(false);
-  const ghostTapCatcherRef = useRef<HTMLDivElement>(null); // Area invisibile per catturare tap fantasma
+  const [ghostOverlayActive, setGhostOverlayActive] = useState(false);
 
   useEffect(() => {
     onMenuStateChange(activeMenu !== null);
@@ -73,13 +73,13 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
           ae.blur();
         }
 
-        // Simula un tap automatico su area vuota per "consumare" evento fantasma
-        // Questo deve essere fatto con un piccolo delay per catturare l'evento pendente
-        setTimeout(() => {
-          if (ghostTapCatcherRef.current) {
-            ghostTapCatcherRef.current.click();
-          }
-        }, 10);
+        // Attiva overlay anti-ghost IMMEDIATAMENTE
+        setGhostOverlayActive(true);
+
+        // Disattiva dopo 150ms (tempo sufficiente per consumare eventi fantasma)
+        const timer = setTimeout(() => {
+          setGhostOverlayActive(false);
+        }, 150);
 
         // Forza la sincronizzazione dal parent quando si torna alla calcolatrice
         // (il valore potrebbe essere stato modificato nella pagina dettagli)
@@ -90,6 +90,8 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
         }
         setShouldResetCurrentValue(false);
         setJustCalculated(false);
+
+        return () => clearTimeout(timer);
       }
     };
     window.addEventListener('page-activated', onActivated as EventListener);
@@ -346,14 +348,26 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
 
   return (
     <div ref={ref} tabIndex={-1} className="bg-slate-100 w-full h-full flex flex-col focus:outline-none relative">
-      {/* Elemento invisibile per catturare tap fantasma dopo swipe */}
-      <div
-        ref={ghostTapCatcherRef}
-        className="absolute inset-0 pointer-events-auto"
-        style={{ opacity: 0, zIndex: -1 }}
-        onClick={() => {/* Consuma evento fantasma senza fare nulla */}}
-        aria-hidden="true"
-      />
+      {/* Overlay anti-ghost: cattura TUTTI i click per 150ms dopo attivazione pagina */}
+      {ghostOverlayActive && (
+        <div
+          className="absolute inset-0 z-50"
+          style={{
+            pointerEvents: 'auto',
+            background: 'transparent',
+            touchAction: 'none'
+          }}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          onPointerDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          aria-hidden="true"
+        />
+      )}
       <div className="flex-1 flex flex-col">
         <header className={`flex items-center justify-between p-4 flex-shrink-0`}>
           <button
