@@ -184,7 +184,7 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
     };
 
     const onDelContextMenu: React.MouseEventHandler<HTMLDivElement> = e => e.preventDefault();
-    const onDelSelectStart: React.ReactEventHandler<HTMLDivElement> = e => e.preventDefault();
+// FIX: Removed onDelSelectStart handler as it's redundant with the `select-none` CSS class and causes a TypeScript error.
 
     useEffect(() => {
       const cancel = () => clearDelTimer();
@@ -299,28 +299,38 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
     const fontSizeClass = getAmountFontSize(displayValue);
 
     // FIX: Refactor KeypadButton to handle all HTML attributes via props, resolving potential duplicate attribute issues and typing errors.
-    type KeypadButtonProps = {
+    type KeypadButtonProps = React.HTMLAttributes<HTMLDivElement> & {
       children: React.ReactNode;
-      className?: string;
-    } & React.HTMLAttributes<HTMLDivElement>;
+    };
 
-    const KeypadButton: React.FC<KeypadButtonProps> = ({ children, className = '', ...props }) => (
-      <div
-        role="button"
-        tabIndex={0}
-        onClick={(e) => e.preventDefault()}
-        className={`flex items-center justify-center text-5xl font-light focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 transition-colors duration-150 select-none cursor-pointer ${className}`}
-        style={{
-          WebkitTapHighlightColor: 'transparent',
-          WebkitTouchCallout: 'none',
-          touchAction: 'manipulation',
-        } as React.CSSProperties}
-        {...props}
-      >
-        <span className="pointer-events-none">{children}</span>
-      </div>
-    );
-
+    const KeypadButton: React.FC<KeypadButtonProps> = (props) => {
+      const {
+        children,
+        className = '',
+        onClick,
+        role,
+        tabIndex,
+        style,
+        ...rest
+      } = props;
+      return (
+        <div
+          role={role ?? 'button'}
+          tabIndex={tabIndex ?? 0}
+          onClick={onClick ?? ((e) => e.preventDefault())}
+          className={`flex items-center justify-center text-5xl font-light focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 transition-colors duration-150 select-none cursor-pointer ${className}`}
+          style={{
+            WebkitTapHighlightColor: 'transparent',
+            WebkitTouchCallout: 'none',
+            touchAction: 'manipulation',
+            ...style,
+          } as React.CSSProperties}
+          {...rest}
+        >
+          <span className="pointer-events-none">{children}</span>
+        </div>
+      );
+    };
     type OperatorButtonProps = {
       children: React.ReactNode;
       onPointerUp: (e: React.PointerEvent) => void;
@@ -481,9 +491,9 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
                 onPointerDownCapture={onDelPointerDownCapture}
                 onPointerMoveCapture={onDelPointerMoveCapture}
                 onPointerUpCapture={onDelPointerUpCapture}
-                onPointerCancel={onDelPointerCancelCapture}
+                onPointerCancelCapture={onDelPointerCancelCapture}
                 onContextMenu={onDelContextMenu}
-                onSelectStart={onDelSelectStart}
+                onSelectStart={(e) => e.preventDefault()}
               >
                 <BackspaceIcon className="w-8 h-8" />
               </KeypadButton>

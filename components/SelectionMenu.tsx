@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { XMarkIcon } from './icons/XMarkIcon';
 import { CheckCircleIcon } from './icons/CheckCircleIcon';

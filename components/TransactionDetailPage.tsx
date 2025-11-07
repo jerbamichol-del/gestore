@@ -163,7 +163,7 @@ const findFocusTarget = (start: HTMLElement, root: HTMLElement) => {
 };
 /* ============================= */
 
-const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
+const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetailPageProps>(({
   formData,
   onFormChange,
   accounts,
@@ -172,7 +172,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
   isDesktop,
   onMenuStateChange,
   dateError,
-}) => {
+}, ref) => {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const amountInputRef = useRef<HTMLInputElement>(null);
   const descriptionInputRef = useRef<HTMLInputElement>(null);
@@ -488,7 +488,14 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
 
   return (
     <div
-      ref={rootRef}
+      ref={(el) => {
+        rootRef.current = el;
+        if (typeof ref === 'function') {
+          ref(el);
+        } else if (ref) {
+          ref.current = el;
+        }
+      }}
       tabIndex={-1}
       className="flex flex-col h-full bg-slate-100 focus:outline-none"
       style={{ touchAction: 'pan-y' }}
@@ -863,6 +870,8 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
       )}
     </div>
   );
-};
+});
+
+TransactionDetailPage.displayName = "TransactionDetailPage";
 
 export default TransactionDetailPage;
