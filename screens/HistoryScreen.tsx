@@ -2,7 +2,6 @@ import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react'
 import { Expense, Account } from '../types';
 import { getCategoryStyle } from '../utils/categoryStyles';
 import { formatCurrency } from '../components/icons/formatters';
-import { TrashIcon } from '../components/icons/TrashIcon';
 import { HistoryFilterCard } from '../components/HistoryFilterCard';
 
 type DateFilter = 'all' | '7d' | '30d' | '6m' | '1y';
@@ -17,6 +16,8 @@ interface ExpenseItemProps {
   isOpen: boolean;
   onOpen: (id: string) => void;
   onInteractionChange: (isInteracting: boolean) => void;
+  onNavigateHome: () => void;
+  isPageSwiping: boolean;
 }
 
 const ACTION_WIDTH = 72;
@@ -30,6 +31,8 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
   isOpen,
   onOpen,
   onInteractionChange,
+  onNavigateHome,
+  isPageSwiping,
 }) => {
   const style = getCategoryStyle(expense.category);
   const accountName = accounts.find(a => a.id === expense.accountId)?.name || 'Sconosciuto';
@@ -47,25 +50,24 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
 
   const setTranslateX = useCallback((x: number, animated: boolean) => {
     if (!itemRef.current) return;
-    itemRef.current.style.transition = animated ? 'transform 0.18s cubic-bezier(.22,.61,.36,1)' : 'none';
+    itemRef.current.style.transition = animated ? 'transform 0.2s cubic-bezier(0.22,0.61,0.36,1)' : 'none';
     itemRef.current.style.transform = `translateX(${x}px)`;
   }, []);
 
-  // sincronizza apertura/chiusura da stato parent
   useEffect(() => {
-    if (!dragState.current.isDragging) {
-      setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
+    if (isPageSwiping && dragState.current.isDragging) {
+      dragState.current.isDragging = false;
+      dragState.current.isLocked = false;
+      dragState.current.pointerId = null;
+      setTranslateX(0, true);
+      onInteractionChange(false);
     }
-  }, [isOpen, setTranslateX]);
+  }, [isPageSwiping, onInteractionChange, setTranslateX]);
 
   const handlePointerDown = (e: React.PointerEvent) => {
-    // blocca il pager a monte
-    e.stopPropagation();
-
     if ((e.target as HTMLElement).closest('button') || !itemRef.current) return;
 
     itemRef.current.style.transition = 'none';
-
     const m = new DOMMatrixReadOnly(window.getComputedStyle(itemRef.current).transform);
     const currentX = m.m41;
 
@@ -90,15 +92,13 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
     const dy = e.clientY - ds.startY;
 
     if (!ds.isLocked) {
-      const SLOP = 12;
+      const SLOP = 8;
       if (Math.abs(dx) <= SLOP && Math.abs(dy) <= SLOP) return;
 
-      const horizontal = Math.abs(dx) > Math.abs(dy) * 1.5;
+      const horizontal = Math.abs(dx) > Math.abs(dy) * 2;
       if (!horizontal) {
         ds.isDragging = false;
-        if (ds.pointerId !== null) {
-          itemRef.current?.releasePointerCapture(ds.pointerId);
-        }
+        if (ds.pointerId !== null) itemRef.current?.releasePointerCapture(ds.pointerId);
         ds.pointerId = null;
         return;
       }
@@ -106,9 +106,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
       const wasOpen = ds.initialTranslateX < -1 || isOpen;
       if (dx > 0 && !wasOpen) {
         ds.isDragging = false;
-        if (ds.pointerId !== null) {
-          itemRef.current?.releasePointerCapture(ds.pointerId);
-        }
+        if (ds.pointerId !== null) itemRef.current?.releasePointerCapture(ds.pointerId);
         ds.pointerId = null;
         return;
       }
@@ -117,9 +115,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
       onInteractionChange(true);
     }
 
-    // gestiamo pan-x → blocca lo scroll verticale
     if (e.cancelable) e.preventDefault();
-    e.stopPropagation();
 
     let x = ds.initialTranslateX + dx;
     if (x > 0) x = Math.tanh(x / 50) * 25;
@@ -131,12 +127,9 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
     const ds = dragState.current;
     if (!ds.isDragging || e.pointerId !== ds.pointerId) return;
 
-    if (ds.pointerId !== null) {
-      itemRef.current?.releasePointerCapture(ds.pointerId);
-    }
+    if (ds.pointerId !== null) itemRef.current?.releasePointerCapture(ds.pointerId);
 
     const wasLocked = ds.isLocked;
-
     const dx = e.clientX - ds.startX;
     const dy = e.clientY - ds.startY;
     const dist = Math.hypot(dx, dy);
@@ -148,59 +141,57 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
     ds.pointerId = null;
     if (wasLocked) onInteractionChange(false);
 
-    e.stopPropagation();
-
-    if (isTap && !wasLocked) {
-      // tap: se aperto chiude, altrimenti entra in edit
-      if (isOpen) {
-        onOpen('');
-        setTranslateX(0, true);
-      } else {
-        onEdit(expense);
-      }
+    if (isTap) {
+      setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
+      if (isOpen) onOpen('');
+      else onEdit(expense);
       return;
     }
 
-    // swipe: decidi stato finale
-    const endX = (() => {
-      const m = new DOMMatrixReadOnly(window.getComputedStyle(itemRef.current!).transform);
-      return m.m41;
-    })();
-    const shouldOpen = endX < -ACTION_WIDTH / 2 || dx < -40;
-    onOpen(shouldOpen ? expense.id : '');
-    setTranslateX(shouldOpen ? -ACTION_WIDTH : 0, true);
+    if (wasLocked) {
+      const endX = new DOMMatrixReadOnly(window.getComputedStyle(itemRef.current!).transform).m41;
+      const velocity = dx / (duration || 1);
+      const shouldOpen = (endX < -ACTION_WIDTH / 2) || (velocity < -0.3 && dx < -20);
+      onOpen(shouldOpen ? expense.id : '');
+      setTranslateX(shouldOpen ? -ACTION_WIDTH : 0, true);
+    } else {
+      setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
+    }
   };
 
   const handlePointerCancel = (e: React.PointerEvent) => {
     const ds = dragState.current;
     if (!ds.isDragging || e.pointerId !== ds.pointerId) return;
 
-    if (ds.pointerId !== null) {
-      itemRef.current?.releasePointerCapture(ds.pointerId);
-    }
+    if (ds.pointerId !== null) itemRef.current?.releasePointerCapture(ds.pointerId);
+    const wasLocked = ds.isLocked;
+
     ds.isDragging = false;
     ds.isLocked = false;
     ds.pointerId = null;
-    onInteractionChange(false);
+    if (wasLocked) onInteractionChange(false);
+
     setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
   };
 
+  useEffect(() => {
+    if (!dragState.current.isDragging) setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
+  }, [isOpen, setTranslateX]);
+
   return (
-    <div className="relative bg-white overflow-hidden" data-no-page-swipe>
-      {/* layer azioni */}
+    <div className="relative bg-white overflow-hidden">
       <div className="absolute top-0 right-0 h-full flex items-center z-0">
         <button
           onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
           onPointerUp={(e) => { e.stopPropagation(); onDelete(expense.id); }}
-          className="w-[72px] h-full flex flex-col items-center justify-center bg-red-500 text-white hover:bg-red-600 transition-colors focus:outline-none"
+          className="w-[72px] h-full flex flex-col items-center justify-center bg-red-500 text-white hover:bg-red-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white"
           aria-label="Elimina spesa"
         >
-          <TrashIcon className="w-6 h-6" />
-          <span className="text-xs mt-1">Elimina</span>
+          {/* icona/trash qui se vuoi */}
+          Elimina
         </button>
       </div>
 
-      {/* contenuto swipeable */}
       <div
         ref={itemRef}
         onPointerDown={handlePointerDown}
@@ -214,7 +205,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
           <style.Icon className={`w-6 h-6 ${style.color}`} />
         </span>
         <div className="flex-grow min-w-0">
-          <p className="font-semibold text-slate-8 00 truncate">
+          <p className="font-semibold text-slate-800 truncate">
             {expense.subcategory || style.label} • {accountName}
           </p>
           <p className="text-sm text-slate-500 truncate" title={expense.description}>
@@ -240,6 +231,7 @@ interface HistoryScreenProps {
   onNavigateHome: () => void;
   isActive: boolean;
   onDateModalStateChange: (isOpen: boolean) => void;
+  isPageSwiping: boolean;
 }
 
 interface ExpenseGroup {
@@ -282,6 +274,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
   onNavigateHome,
   isActive,
   onDateModalStateChange,
+  isPageSwiping,
 }) => {
   const [activeFilterMode, setActiveFilterMode] = useState<ActiveFilterMode>('quick');
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
@@ -298,6 +291,11 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
   const [isInteracting, setIsInteracting] = useState(false);
   const autoCloseTimerRef = useRef<number | null>(null);
 
+  // >>>>> NEW: controllo menu filtro (periodo) per chiudere durante lo swipe
+  const filterMenusCloseRef = useRef<(() => void) | null>(null);
+  const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
+  // <<<<<
+
   // ===== FULL-SURFACE PAGE SWIPE (capture phase) =====
   const pageRef = useRef<HTMLDivElement>(null);
   const pageDrag = useRef({
@@ -309,10 +307,15 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
   });
 
   const onPDcap = (e: React.PointerEvent) => {
-    const t = e.target as HTMLElement;
-    if (isInteracting || openItemId || t.closest('[data-no-page-swipe], [role="dialog"], button, input, select, textarea')) {
+    // Se un item sta già gestendo orizzontale, è aperto, o lo swipe parte da un'area da ignorare, non fare nulla.
+    if (
+      isInteracting ||
+      openItemId ||
+      (e.target as HTMLElement).closest('[data-no-page-swipe], [role="dialog"], button, input, select, textarea')
+    ) {
       return;
     }
+
     pageDrag.current = {
       active: true,
       locked: false,
@@ -341,6 +344,14 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
       }
 
       pg.locked = true;
+
+      // >>>>> NEW: se sto per navigare con swipe, chiudo subito eventuali menu del filtro
+      if (isFilterMenuOpen) {
+        filterMenusCloseRef.current?.();
+        setIsFilterMenuOpen(false);
+      }
+      // <<<<<
+
       try { pageRef.current?.setPointerCapture(e.pointerId); } catch {}
     }
   };
@@ -405,7 +416,9 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
     if (openItemId && !isEditingOrDeleting) {
       autoCloseTimerRef.current = window.setTimeout(() => setOpenItemId(null), 5000);
     }
-    return () => { if (autoCloseTimerRef.current) clearTimeout(autoCloseTimerRef.current); };
+    return () => {
+      if (autoCloseTimerRef.current) clearTimeout(autoCloseTimerRef.current);
+    };
   }, [openItemId, isEditingOrDeleting]);
 
   const filteredExpenses = useMemo(() => {
@@ -486,7 +499,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
       return db.getTime() - da.getTime();
     });
 
-    return sorted.reduce<Record<string, ExpenseGroup>>((acc, e) => {
+    return sorted.reduce<Record<string, { year: number; week: number; label: string; expenses: Expense[] }>>((acc, e) => {
       const d = parseLocalYYYYMMDD(e.date);
       if (isNaN(d.getTime())) return acc;
       const [y, w] = getISOWeek(d);
@@ -497,7 +510,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
     }, {});
   }, [filteredExpenses]);
 
-  const expenseGroups = (Object.values(groupedExpenses) as ExpenseGroup[]).sort((a, b) => {
+  const expenseGroups = Object.values(groupedExpenses).sort((a, b) => {
     if (a.year !== b.year) return b.year - a.year;
     return b.week - a.week;
   });
@@ -522,8 +535,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
               <h2 className="font-bold text-slate-800 text-lg px-4 py-2 sticky top-0 bg-slate-100/80 backdrop-blur-sm z-10">
                 {group.label}
               </h2>
-              {/* blocchiamo lo swipe di pagina sulla lista degli item */}
-              <div data-no-page-swipe className="bg-white rounded-xl shadow-md mx-2 overflow-hidden">
+              <div className="bg-white rounded-xl shadow-md mx-2 overflow-hidden">
                 {group.expenses.map((expense, index) => (
                   <React.Fragment key={expense.id}>
                     {index > 0 && <hr className="border-t border-slate-200 ml-16" />}
@@ -535,6 +547,8 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
                       isOpen={openItemId === expense.id}
                       onOpen={handleOpenItem}
                       onInteractionChange={handleInteractionChange}
+                      onNavigateHome={onNavigateHome}
+                      isPageSwiping={isPageSwiping}
                     />
                   </React.Fragment>
                 ))}
@@ -578,6 +592,11 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
           onSetPeriodDate={setPeriodDate}
           isPeriodFilterActive={activeFilterMode === 'period'}
           onActivatePeriodFilter={() => setActiveFilterMode('period')}
+
+          // >>>>> NEW: wiring per chiudere menu quando swippi
+          onAnyMenuStateChange={setIsFilterMenuOpen}
+          closeMenusRef={filterMenusCloseRef}
+          // <<<<<
         />
       </div>
     </div>

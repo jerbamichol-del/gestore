@@ -1,286 +1,389 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { DateRangePickerModal } from './DateRangePickerModal';
-import { ChevronLeftIcon } from './icons/ChevronLeftIcon';
-import { ChevronRightIcon } from './icons/ChevronRightIcon';
-import { useSwipe } from '../hooks/useSwipe';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 type DateFilter = 'all' | '7d' | '30d' | '6m' | '1y';
 type PeriodType = 'day' | 'week' | 'month' | 'year';
 
-interface HistoryFilterCardProps {
+export interface HistoryFilterCardProps {
+  // Stato della pagina (usato solo per eventuali ottimizzazioni UI)
+  isActive: boolean;
+
+  // QUICK FILTER (chip tipo 7d/30d/6m/1y/all)
   onSelectQuickFilter: (value: DateFilter) => void;
   currentQuickFilter: DateFilter;
-  onCustomRangeChange: (range: { start: string | null, end: string | null }) => void;
-  currentCustomRange: { start: string | null, end: string | null };
+
+  // CUSTOM RANGE (start/end stringhe 'YYYY-MM-DD')
+  onCustomRangeChange: (range: { start: string | null; end: string | null }) => void;
+  currentCustomRange: { start: string | null; end: string | null };
   isCustomRangeActive: boolean;
+
+  // Notifica al parent quando un date-modal/popup si apre o si chiude
   onDateModalStateChange: (isOpen: boolean) => void;
-  isActive: boolean;
-  // Period filter props
+
+  // PERIODO CENTRALE (freccia sx, selettore periodo, freccia dx)
+  periodType: PeriodType;
+  periodDate: Date;
   onSelectPeriodType: (type: PeriodType) => void;
   onSetPeriodDate: (date: Date) => void;
-  periodType: PeriodType;
-  periodDate: Date;
-  onActivatePeriodFilter: () => void;
   isPeriodFilterActive: boolean;
+  onActivatePeriodFilter: () => void;
+
+  // NEW: wiring per chiudere i menu quando lo swipe di pagina parte
+  onAnyMenuStateChange?: (isOpen: boolean) => void;
+  closeMenusRef?: React.MutableRefObject<(() => void) | null>;
 }
 
-const QuickFilterControl: React.FC<{
-  onSelect: (value: DateFilter) => void;
-  currentValue: DateFilter;
-  isActive: boolean;
-}> = ({ onSelect, currentValue, isActive }) => {
-  const filters: { value: DateFilter; label: string }[] = [
-    { value: '7d', label: '7G' },
-    { value: '30d', label: '30G' },
-    { value: '6m', label: '6M' },
-    { value: '1y', label: '1A' },
+/* -------------------- Util -------------------- */
+const toYMD = (d: Date) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+const parseYMD = (s: string | null): Date | null => {
+  if (!s) return null;
+  const [y, m, d] = s.split('-').map(Number);
+  const dt = new Date(y, (m || 1) - 1, d || 1);
+  return isNaN(dt.getTime()) ? null : dt;
+};
+
+const getWeekBounds = (base: Date) => {
+  // Settimana ISO-like: lunedì (1) — domenica (7)
+  const d = new Date(base);
+  d.setHours(0, 0, 0, 0);
+  const day = d.getDay(); // 0 = domenica
+  const diffToMonday = (day === 0 ? -6 : 1 - day);
+  const start = new Date(d);
+  start.setDate(d.getDate() + diffToMonday);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  return { start, end };
+};
+
+const formatPeriodLabel = (type: PeriodType, date: Date) => {
+  const fmtDay = new Intl.DateTimeFormat('it-IT', { day: '2-digit', month: 'short', year: 'numeric' });
+  const fmtMonth = new Intl.DateTimeFormat('it-IT', { month: 'long', year: 'numeric' });
+
+  switch (type) {
+    case 'day':
+      return fmtDay.format(date).replace('.', '');
+    case 'week': {
+      const { start, end } = getWeekBounds(date);
+      const fmtShort = new Intl.DateTimeFormat('it-IT', { day: '2-digit', month: 'short' });
+      const year = date.getFullYear();
+      return `${fmtShort.format(start).replace('.', '')} — ${fmtShort.format(end).replace('.', '')} ${year}`;
+    }
+    case 'month':
+      return fmtMonth.format(date);
+    case 'year':
+      return String(date.getFullYear());
+  }
+};
+
+const shiftPeriod = (type: PeriodType, date: Date, delta: number) => {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  switch (type) {
+    case 'day':
+      d.setDate(d.getDate() + delta);
+      break;
+    case 'week':
+      d.setDate(d.getDate() + delta * 7);
+      break;
+    case 'month':
+      d.setMonth(d.getMonth() + delta);
+      break;
+    case 'year':
+      d.setFullYear(d.getFullYear() + delta);
+      break;
+  }
+  return d;
+};
+
+/* -------------------- Component -------------------- */
+export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = ({
+  isActive,
+
+  onSelectQuickFilter,
+  currentQuickFilter,
+
+  onCustomRangeChange,
+  currentCustomRange,
+  isCustomRangeActive,
+
+  onDateModalStateChange,
+
+  periodType,
+  periodDate,
+  onSelectPeriodType,
+  onSetPeriodDate,
+  isPeriodFilterActive,
+  onActivatePeriodFilter,
+
+  onAnyMenuStateChange,
+  closeMenusRef,
+}) => {
+  // Stato interni dei popup/menù della card
+  const [isPeriodMenuOpen, setIsPeriodMenuOpen] = useState(false);
+  const [isRangePopupOpen, setIsRangePopupOpen] = useState(false);
+
+  // Effetto: esponi al parent una funzione che chiude *tutti* i popup
+  useEffect(() => {
+    if (!closeMenusRef) return;
+
+    const closeAll = () => {
+      setIsPeriodMenuOpen(false);
+      setIsRangePopupOpen(false);
+      onAnyMenuStateChange?.(false);
+      onDateModalStateChange(false);
+    };
+
+    closeMenusRef.current = closeAll;
+    return () => {
+      if (closeMenusRef.current === closeAll) closeMenusRef.current = null;
+    };
+  }, [closeMenusRef, onAnyMenuStateChange, onDateModalStateChange]);
+
+  // Effetto: notifica al parent se *qualunque* menu è aperto
+  useEffect(() => {
+    const anyOpen = isPeriodMenuOpen || isRangePopupOpen;
+    onAnyMenuStateChange?.(anyOpen);
+  }, [isPeriodMenuOpen, isRangePopupOpen, onAnyMenuStateChange]);
+
+  // Effetto: tratta il popup range come “date modal” ai fini del parent
+  useEffect(() => {
+    onDateModalStateChange(isRangePopupOpen);
+  }, [isRangePopupOpen, onDateModalStateChange]);
+
+  const label = useMemo(() => formatPeriodLabel(periodType, periodDate), [periodType, periodDate]);
+
+  // Handler frecce periodo
+  const goPrev = () => onSetPeriodDate(shiftPeriod(periodType, periodDate, -1));
+  const goNext = () => onSetPeriodDate(shiftPeriod(periodType, periodDate, +1));
+
+  // Cambio tipo periodo dal menu => attivo anche la modalità "period"
+  const handleSelectPeriodType = (t: PeriodType) => {
+    onSelectPeriodType(t);
+    onActivatePeriodFilter();
+    setIsPeriodMenuOpen(false);
+    onAnyMenuStateChange?.(false);
+  };
+
+  // Toggle del menu periodo
+  const togglePeriodMenu = () => {
+    setIsPeriodMenuOpen(prev => {
+      const next = !prev;
+      onAnyMenuStateChange?.(next || isRangePopupOpen);
+      return next;
+    });
+  };
+
+  // Toggle popup range personalizzato
+  const toggleRangePopup = () => {
+    setIsRangePopupOpen(prev => {
+      const next = !prev;
+      // Consideriamo anche questo come “date modal”
+      onDateModalStateChange(next);
+      onAnyMenuStateChange?.(next || isPeriodMenuOpen);
+      return next;
+    });
+  };
+
+  const quickFilters: { key: DateFilter; label: string }[] = [
+    { key: '7d', label: '7g' },
+    { key: '30d', label: '30g' },
+    { key: '6m', label: '6m' },
+    { key: '1y', label: '1a' },
+    { key: 'all', label: 'Tutte' },
   ];
 
+  // UI
   return (
-    <div className={`w-full h-10 flex border rounded-lg overflow-hidden transition-colors ${isActive ? 'border-indigo-600' : 'border-slate-400'}`}>
-      {filters.map((filter, index) => {
-        const isButtonActive = isActive && currentValue === filter.value;
-        return (
-          <button
-            key={filter.value}
-            onClick={() => {
-              onSelect(currentValue === filter.value ? 'all' : filter.value);
-            }}
-            className={`flex-1 flex items-center justify-center px-2 text-center font-semibold text-sm transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500
-              ${index > 0 ? 'border-l' : ''}
-              ${isButtonActive ? 'bg-indigo-600 text-white border-indigo-600'
-                               : `bg-slate-100 text-slate-700 hover:bg-slate-200 ${isActive ? 'border-indigo-600' : 'border-slate-400'}`
-              }`}
-          >
-            {filter.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-};
+    <div className="bg-white border-t border-slate-200 pt-2 pb-3">
+      {/* Riga quick filters */}
+      <div className="px-3 flex gap-2 overflow-x-auto no-scrollbar">
+        {quickFilters.map(({ key, label }) => {
+          const active = currentQuickFilter === key && !isCustomRangeActive && !isPeriodFilterActive;
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => {
+                onSelectQuickFilter(key);
+                // Chiudi eventuali popup aperti
+                setIsPeriodMenuOpen(false);
+                setIsRangePopupOpen(false);
+                onAnyMenuStateChange?.(false);
+                onDateModalStateChange(false);
+              }}
+              className={
+                'px-3 py-1.5 rounded-full text-sm font-semibold transition-colors whitespace-nowrap ' +
+                (active
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-slate-100 text-slate-800 hover:bg-slate-200')
+              }
+            >
+              {label}
+            </button>
+          );
+        })}
 
-const formatDateForButton = (dateString: string): string => {
-    const parts = dateString.split('-').map(Number);
-    const date = new Date(parts[0], parts[1] - 1, parts[2]);
-    return new Intl.DateTimeFormat('it-IT', { day: '2-digit', month: 'short', year: '2-digit' }).format(date).replace('.', '');
-};
-
-const CustomDateRangeInputs: React.FC<{
-  onClick: () => void;
-  range: { start: string | null; end: string | null };
-  isActive: boolean;
-}> = ({ onClick, range, isActive }) => {
-  const hasRange = range.start && range.end;
-  const buttonText = hasRange
-    ? `${formatDateForButton(range.start!)} - ${formatDateForButton(range.end!)}`
-    : "Imposta periodo";
-  const ariaLabelText = hasRange ? `Attualmente: ${buttonText}` : 'Nessun intervallo impostato';
-
-  return (
-    <div className={`border h-10 transition-colors rounded-lg ${isActive ? 'border-indigo-600' : 'border-slate-400'}`}>
-      <button
-        onClick={onClick}
-        aria-label={`Seleziona intervallo di date. ${ariaLabelText}`}
-        className={`w-full h-full flex items-center justify-center gap-2 px-2 hover:bg-slate-200 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 rounded-lg ${isActive ? 'bg-indigo-100' : 'bg-slate-100'}`}
-      >
-        <span className={`text-sm font-semibold ${isActive ? 'text-indigo-700' : 'text-slate-700'}`}>
-          {buttonText}
-        </span>
-      </button>
-    </div>
-  );
-};
-
-const PeriodNavigator: React.FC<{
-  periodType: PeriodType;
-  periodDate: Date;
-  onTypeChange: (type: PeriodType) => void;
-  onDateChange: (date: Date) => void;
-  isActive: boolean;
-  onActivate: () => void;
-  isMenuOpen: boolean;
-  onMenuToggle: (isOpen: boolean) => void;
-}> = ({ periodType, periodDate, onTypeChange, onDateChange, isActive, onActivate, isMenuOpen, onMenuToggle }) => {
-  const wrapperRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
-        onMenuToggle(false);
-      }
-    };
-  
-    if (isMenuOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-  
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isMenuOpen, onMenuToggle]);
-  
-  const handlePrev = () => { onActivate(); const newDate = new Date(periodDate); switch (periodType) { case 'day': newDate.setDate(newDate.getDate() - 1); break; case 'week': newDate.setDate(newDate.getDate() - 7); break; case 'month': newDate.setMonth(newDate.getMonth() - 1); break; case 'year': newDate.setFullYear(newDate.getFullYear() - 1); break; } onDateChange(newDate); };
-  const handleNext = () => { onActivate(); const newDate = new Date(periodDate); switch (periodType) { case 'day': newDate.setDate(newDate.getDate() + 1); break; case 'week': newDate.setDate(newDate.getDate() + 7); break; case 'month': newDate.setMonth(newDate.getMonth() + 1); break; case 'year': newDate.setFullYear(newDate.getFullYear() + 1); break; } onDateChange(newDate); };
-  const handleTypeSelect = (type: PeriodType) => { onActivate(); onTypeChange(type); onMenuToggle(false); };
-  const toggleMenu = () => { if (!isActive) { onActivate(); } onMenuToggle(!isMenuOpen); };
-
-  const getLabel = () => {
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    const periodDateStart = new Date(periodDate); periodDateStart.setHours(0, 0, 0, 0);
-
-    switch (periodType) {
-      case 'day':
-        if (periodDateStart.getTime() === today.getTime()) return 'Oggi';
-        const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
-        if (periodDateStart.getTime() === yesterday.getTime()) return 'Ieri';
-        return periodDate.toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' }).replace('.', '');
-      case 'week':
-        const startOfWeek = new Date(periodDate); const day = startOfWeek.getDay(); const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1); startOfWeek.setDate(diff); startOfWeek.setHours(0,0,0,0);
-        const endOfWeek = new Date(startOfWeek); endOfWeek.setDate(startOfWeek.getDate() + 6);
-        const todayStartOfWeek = new Date(today); const todayDay = todayStartOfWeek.getDay(); const todayDiff = todayStartOfWeek.getDate() - todayDay + (todayDay === 0 ? -6:1); todayStartOfWeek.setDate(todayDiff); todayStartOfWeek.setHours(0,0,0,0);
-        if(startOfWeek.getTime() === todayStartOfWeek.getTime()) return 'Questa Settimana';
-        const lastWeekStart = new Date(todayStartOfWeek); lastWeekStart.setDate(todayStartOfWeek.getDate() - 7);
-        if(startOfWeek.getTime() === lastWeekStart.getTime()) return 'Settimana Scorsa';
-        return `${startOfWeek.toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })} - ${endOfWeek.toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' })}`;
-      case 'month':
-        const currentMonth = today.getMonth(); const currentYear = today.getFullYear();
-        if (periodDate.getMonth() === currentMonth && periodDate.getFullYear() === currentYear) return 'Questo Mese';
-        if (periodDate.getMonth() === (currentMonth === 0 ? 11 : currentMonth - 1) && periodDate.getFullYear() === (currentMonth === 0 ? currentYear - 1 : currentYear)) return 'Mese Scorso';
-        return periodDate.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
-      case 'year':
-        if (periodDate.getFullYear() === today.getFullYear()) return 'Quest\'Anno';
-        if (periodDate.getFullYear() === today.getFullYear() - 1) return 'Anno Scorso';
-        return periodDate.getFullYear().toString();
-    }
-  };
-  
-  const periodTypes: {value: PeriodType, label: string}[] = [ { value: 'day', label: 'Giorno' }, { value: 'week', label: 'Settimana' }, { value: 'month', label: 'Mese' }, { value: 'year', label: 'Anno' }, ];
-
-  return (
-    <div ref={wrapperRef} className={`w-full h-10 flex items-center justify-between border rounded-lg relative transition-colors bg-white ${isActive ? 'border-indigo-600' : 'border-slate-400'}`}>
-      <button onClick={handlePrev} className="h-full px-4 flex items-center justify-center bg-white hover:bg-slate-100 active:scale-95 transition-transform focus:outline-none rounded-l-lg [-webkit-tap-highlight-color:transparent]" aria-label="Periodo precedente"> <ChevronLeftIcon className="w-5 h-5 text-slate-700" /> </button>
-      <div className={`flex-1 text-center relative h-full ${isActive ? 'bg-indigo-100' : 'bg-slate-100'}`}>
-        <button onClick={toggleMenu} className={`w-full h-full flex items-center justify-center text-sm font-semibold transition-colors ${isActive ? 'text-indigo-700' : 'text-slate-700'} hover:bg-slate-200`}> {getLabel()} </button>
-        {isMenuOpen && ( <div className="absolute bottom-full mb-2 left-0 right-0 mx-auto w-40 bg-white border border-slate-200 shadow-lg rounded-lg z-20 p-2 space-y-1 animate-fade-in-down"> {periodTypes.map(p => ( <button key={p.value} onClick={() => handleTypeSelect(p.value)} className={`w-full text-left px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${periodType === p.value ? 'bg-indigo-100 text-indigo-800' : 'bg-slate-50 text-slate-800 hover:bg-slate-200'}`}> {p.label} </button> ))} </div> )}
+        {/* Intervallo personalizzato */}
+        <button
+          type="button"
+          onClick={toggleRangePopup}
+          className={
+            'ml-auto px-3 py-1.5 rounded-full text-sm font-semibold transition-colors ' +
+            (isCustomRangeActive
+              ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+              : 'bg-slate-100 text-slate-800 hover:bg-slate-200')
+          }
+        >
+          Intervallo
+        </button>
       </div>
-      <button onClick={handleNext} className="h-full px-4 flex items-center justify-center bg-white hover:bg-slate-100 active:scale-95 transition-transform focus:outline-none rounded-r-lg [-webkit-tap-highlight-color:transparent]" aria-label="Periodo successivo"> <ChevronRightIcon className="w-5 h-5 text-slate-700" /> </button>
-    </div>
-  );
-};
 
-export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = ({
-  onSelectQuickFilter, currentQuickFilter, onCustomRangeChange, currentCustomRange, isCustomRangeActive, onDateModalStateChange, isActive,
-  periodType, periodDate, onSelectPeriodType, onSetPeriodDate, isPeriodFilterActive, onActivatePeriodFilter
-}) => {
-  const [activeViewIndex, setActiveViewIndex] = useState(0); // 0: Rapidi, 1: Periodo, 2: Date
-  const [isDateModalOpen, setIsDateModalOpen] = useState(false);
-  const [isPeriodMenuOpen, setIsPeriodMenuOpen] = useState(false);
-  const swipeWrapperRef = useRef<HTMLDivElement>(null);
-
-  const handleViewChange = (newIndex: number) => {
-    setActiveViewIndex(newIndex);
-    if (newIndex === 0) {
-      onSelectQuickFilter(currentQuickFilter); // Re-asserts the current quick filter to activate the mode
-    } else if (newIndex === 1) {
-      onActivatePeriodFilter();
-    } else if (newIndex === 2) {
-      onCustomRangeChange(currentCustomRange); // Re-asserts the current range to activate the mode
-    }
-  };
-
-  const { progress, isSwiping } = useSwipe(swipeWrapperRef, {
-      onSwipeLeft: () => handleViewChange(Math.min(2, activeViewIndex + 1)),
-      onSwipeRight: () => handleViewChange(Math.max(0, activeViewIndex - 1)),
-  }, {
-      enabled: isActive && !isPeriodMenuOpen,
-      slop: 10,
-  });
-
-  useEffect(() => {
-    onDateModalStateChange(isDateModalOpen);
-  }, [isDateModalOpen, onDateModalStateChange]);
-
-  const translateX = -activeViewIndex * (100 / 3) + progress * (100 / 3);
-  const finalTransform = isPeriodMenuOpen ? `translateX(-${100/3}%)` : `translateX(${translateX}%)`;
-
-  const isQuickFilterActive = !isPeriodFilterActive && !isCustomRangeActive;
-  
-  return (
-    <>
-      <div 
-        data-no-page-swipe="true"
-        className="flex-shrink-0 z-30"
-      >
-        <div className="bg-white/95 backdrop-blur-sm shadow-[0_-8px_20px_-5px_rgba(0,0,0,0.08)]">
-            <div className="pt-2 rounded-t-2xl">
-              <div
-                ref={swipeWrapperRef}
-                className={`relative ${isPeriodMenuOpen ? 'overflow-visible' : 'overflow-x-hidden'}`}
-                style={{ touchAction: 'pan-y', overscrollBehaviorX: 'contain' }}
-              >
-                  <div
-                      className="w-[300%] flex"
-                      style={{
-                          transform: finalTransform,
-                          transition: isSwiping ? 'none' : 'transform 0.2s cubic-bezier(0.22, 0.61, 0.36, 1)',
-                          willChange: 'transform',
-                      }}
-                  >
-                      <div className="w-1/3 px-4 py-1">
-                        <QuickFilterControl
-                          onSelect={onSelectQuickFilter}
-                          currentValue={currentQuickFilter}
-                          isActive={isQuickFilterActive}
-                        />
-                      </div>
-                      <div className="w-1/3 px-4 py-1">
-                        <PeriodNavigator
-                          periodType={periodType}
-                          periodDate={periodDate}
-                          onTypeChange={onSelectPeriodType}
-                          onDateChange={onSetPeriodDate}
-                          isActive={isPeriodFilterActive}
-                          onActivate={onActivatePeriodFilter}
-                          isMenuOpen={isPeriodMenuOpen}
-                          onMenuToggle={setIsPeriodMenuOpen}
-                        />
-                      </div>
-                      <div className="w-1/3 px-4 py-1">
-                        <CustomDateRangeInputs
-                          onClick={() => {
-                            if (!isCustomRangeActive) onCustomRangeChange({start: null, end: null});
-                            setIsDateModalOpen(true);
-                          }}
-                          range={currentCustomRange}
-                          isActive={isCustomRangeActive}
-                        />
-                      </div>
-                  </div>
-              </div>
-              <div className="flex justify-center items-center pt-1 pb-2 gap-2">
-                {[0, 1, 2].map(i => (
-                    <button 
-                        key={i} 
-                        onClick={() => handleViewChange(i)} 
-                        className={`w-2.5 h-2.5 rounded-full transition-colors duration-200 ${activeViewIndex === i ? 'bg-indigo-600' : 'bg-slate-300 hover:bg-slate-400'}`} 
-                        aria-label={`Vai al filtro ${i === 0 ? 'Rapidi' : i === 1 ? 'Periodo' : 'Date'}`}
-                    />
-                ))}
-              </div>
+      {/* Popup intervallo */}
+      {isRangePopupOpen && (
+        <div
+          className="relative px-3 mt-2"
+          // Evita che i click chiudano/propaghino oltre
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="absolute left-3 right-3 z-20 bg-white border border-slate-200 rounded-xl shadow-lg p-3">
+            <div className="grid grid-cols-2 gap-3">
+              <label className="text-sm text-slate-600">
+                Dal
+                <input
+                  type="date"
+                  className="mt-1 block w-full rounded-md border border-slate-300 bg-white py-2 px-2 text-slate-900 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                  value={currentCustomRange.start || ''}
+                  onChange={(e) =>
+                    onCustomRangeChange({
+                      start: e.target.value || null,
+                      end: currentCustomRange.end || null,
+                    })
+                  }
+                />
+              </label>
+              <label className="text-sm text-slate-600">
+                Al
+                <input
+                  type="date"
+                  className="mt-1 block w-full rounded-md border border-slate-300 bg-white py-2 px-2 text-slate-900 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                  value={currentCustomRange.end || ''}
+                  onChange={(e) =>
+                    onCustomRangeChange({
+                      start: currentCustomRange.start || null,
+                      end: e.target.value || null,
+                    })
+                  }
+                />
+              </label>
             </div>
-          <div style={{ height: `env(safe-area-inset-bottom, 0px)` }} />
+
+            <div className="mt-3 flex justify-between">
+              <button
+                type="button"
+                onClick={() => {
+                  onCustomRangeChange({ start: null, end: null });
+                  setIsRangePopupOpen(false);
+                  onAnyMenuStateChange?.(isPeriodMenuOpen);
+                  onDateModalStateChange(false);
+                }}
+                className="px-3 py-1.5 rounded-md text-sm font-semibold text-slate-700 hover:bg-slate-100"
+              >
+                Annulla
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  // Attiva la modalità custom se valido (anche se lo stato attivo viene gestito dal parent)
+                  setIsRangePopupOpen(false);
+                  onAnyMenuStateChange?.(isPeriodMenuOpen);
+                  onDateModalStateChange(false);
+                }}
+                className="px-3 py-1.5 rounded-md text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700"
+              >
+                Applica
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Riga periodo centrale */}
+      <div className="px-3 mt-3">
+        <div className="flex items-stretch gap-2">
+          {/* Prev */}
+          <button
+            type="button"
+            onClick={goPrev}
+            className="px-3 rounded-lg border border-slate-300 bg-white text-slate-800 hover:bg-slate-50"
+            aria-label="Periodo precedente"
+          >
+            ‹
+          </button>
+
+          {/* Bottone periodo (apre menu tipi) */}
+          <div className="relative flex-1">
+            <button
+              type="button"
+              onClick={togglePeriodMenu}
+              className={
+                'w-full px-3 py-2 rounded-lg border text-left transition-colors ' +
+                (isPeriodFilterActive
+                  ? 'border-indigo-300 bg-indigo-50 text-indigo-800 hover:bg-indigo-100'
+                  : 'border-slate-300 bg-white text-slate-800 hover:bg-slate-50')
+              }
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-semibold truncate">{label}</span>
+                <span className="text-slate-500">▾</span>
+              </div>
+            </button>
+
+            {isPeriodMenuOpen && (
+              <div
+                className="absolute left-0 right-0 z-20 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {(['day', 'week', 'month', 'year'] as PeriodType[]).map((t) => {
+                  const active = t === periodType;
+                  return (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => handleSelectPeriodType(t)}
+                      className={
+                        'w-full text-left px-3 py-2 text-sm font-semibold transition-colors ' +
+                        (active
+                          ? 'bg-indigo-50 text-indigo-700'
+                          : 'bg-white text-slate-800 hover:bg-slate-50')
+                      }
+                    >
+                      {t === 'day' && 'Giorno'}
+                      {t === 'week' && 'Settimana'}
+                      {t === 'month' && 'Mese'}
+                      {t === 'year' && 'Anno'}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Next */}
+          <button
+            type="button"
+            onClick={goNext}
+            className="px-3 rounded-lg border border-slate-300 bg-white text-slate-800 hover:bg-slate-50"
+            aria-label="Periodo successivo"
+          >
+            ›
+          </button>
         </div>
       </div>
-      <DateRangePickerModal
-          isOpen={isDateModalOpen}
-          onClose={() => setIsDateModalOpen(false)}
-          initialRange={currentCustomRange}
-          onApply={(range) => {
-              onCustomRangeChange(range);
-              setIsDateModalOpen(false);
-          }}
-      />
-    </>
+    </div>
   );
 };
