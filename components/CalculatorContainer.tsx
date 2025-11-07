@@ -183,12 +183,19 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
       await waitForKeyboardClose();
     }
 
-    // 3) Cambia pagina
+    // 3) Cleanup/notify PRIMA di cambiare pagina
+    window.dispatchEvent(new Event('numPad:cancelLongPress'));
+
+    // 4) Piccolo delay per assicurarsi che tutti gli eventi siano processati
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    // 5) Cambia pagina
     setView(targetView);
 
-    // 4) Cleanup/notify
-    window.dispatchEvent(new Event('numPad:cancelLongPress'));
-    window.dispatchEvent(new CustomEvent('page-activated', { detail: targetView }));
+    // 6) Notifica cambio pagina con delay per dare tempo al DOM di aggiornarsi
+    requestAnimationFrame(() => {
+      window.dispatchEvent(new CustomEvent('page-activated', { detail: targetView }));
+    });
   };
 
   if (!isOpen) return null;
