@@ -58,29 +58,11 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
 
   const isSyncingFromParent = useRef(false);
   const typingSinceActivationRef = useRef(false);
-  const [ghostOverlayActive, setGhostOverlayActive] = useState(false);
-  const [swipeEndedRecently, setSwipeEndedRecently] = useState(false);
+  const lastPointerDownTime = useRef(0); // Ultimo pointerDown su questa pagina
 
   useEffect(() => {
     onMenuStateChange(activeMenu !== null);
   }, [activeMenu, onMenuStateChange]);
-
-  // Attiva overlay quando swipe è in corso o appena terminato
-  useEffect(() => {
-    if (isSwiping) {
-      // Swipe in corso - attiva IMMEDIATAMENTE
-      setGhostOverlayActive(true);
-      setSwipeEndedRecently(false);
-    } else if (ghostOverlayActive) {
-      // Swipe appena terminato - mantieni attivo per 200ms
-      setSwipeEndedRecently(true);
-      const timer = setTimeout(() => {
-        setGhostOverlayActive(false);
-        setSwipeEndedRecently(false);
-      }, 200);
-      return () => clearTimeout(timer);
-    }
-  }, [isSwiping, ghostOverlayActive]);
 
   useEffect(() => {
     const onActivated = (e: Event) => {
@@ -320,63 +302,67 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
     }
   };
 
-  const KeypadButton: React.FC<KeypadButtonProps> = ({ children, onClick, className = '', ...props }) => (
-    <div
-      role="button" tabIndex={0}
-      onClick={(e) => { onClick?.(); blurSelf(e.currentTarget); }}
-      onKeyDown={(e) => {
-        if ((e.key === 'Enter' || e.key === ' ') && onClick) { e.preventDefault(); onClick(); blurSelf(e.currentTarget); }
-      }}
-      onPointerUp={(e) => blurSelf(e.currentTarget)}
-      onMouseDown={(e) => e.preventDefault()} // evita focus "appiccicoso" su mobile
-      className={`flex items-center justify-center text-5xl font-light focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 transition-colors duration-150 select-none cursor-pointer ${className}`}
-      style={{
-        WebkitTapHighlightColor: 'transparent',
-        touchAction: 'manipulation',
-        WebkitTouchCallout: 'none'
-      } as React.CSSProperties}
-      {...props}
-    >
-      <span className="pointer-events-none">{children}</span>
-    </div>
-  );
+  const KeypadButton: React.FC<KeypadButtonProps> = ({ children, onClick, className = '', ...props }) => {
+    const handleClick = () => {
+      // Ignora click senza pointerDown recente (evento fantasma da swipe)
+      const timeSincePointerDown = Date.now() - lastPointerDownTime.current;
+      if (timeSincePointerDown > 500) {
+        return; // Click fantasma - nessun pointerDown recente
+      }
+      onClick?.();
+    };
 
-  const OperatorButton: React.FC<{ children: React.ReactNode; onClick: () => void }> = ({ children, onClick }) => (
-    <div
-      role="button" tabIndex={0}
-      onClick={(e) => { onClick(); blurSelf(e.currentTarget); }}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); blurSelf(e.currentTarget); } }}
-      onPointerUp={(e) => blurSelf(e.currentTarget)}
-      onMouseDown={(e) => e.preventDefault()}
-      className="flex-1 w-full text-5xl text-indigo-600 font-light active:bg-slate-300/80 transition-colors duration-150 flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 select-none cursor-pointer"
-      style={{ WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' } as React.CSSProperties}
-    >
-      <span className="pointer-events-none">{children}</span>
-    </div>
-  );
+    return (
+      <div
+        role="button" tabIndex={0}
+        onClick={(e) => { handleClick(); blurSelf(e.currentTarget); }}
+        onKeyDown={(e) => {
+          if ((e.key === 'Enter' || e.key === ' ') && onClick) { e.preventDefault(); handleClick(); blurSelf(e.currentTarget); }
+        }}
+        onPointerDown={() => { lastPointerDownTime.current = Date.now(); }}
+        onPointerUp={(e) => blurSelf(e.currentTarget)}
+        onMouseDown={(e) => e.preventDefault()} // evita focus "appiccicoso" su mobile
+        className={`flex items-center justify-center text-5xl font-light focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 transition-colors duration-150 select-none cursor-pointer ${className}`}
+        style={{
+          WebkitTapHighlightColor: 'transparent',
+          touchAction: 'manipulation',
+          WebkitTouchCallout: 'none'
+        } as React.CSSProperties}
+        {...props}
+      >
+        <span className="pointer-events-none">{children}</span>
+      </div>
+    );
+  };
+
+  const OperatorButton: React.FC<{ children: React.ReactNode; onClick: () => void }> = ({ children, onClick }) => {
+    const handleClick = () => {
+      // Ignora click senza pointerDown recente (evento fantasma da swipe)
+      const timeSincePointerDown = Date.now() - lastPointerDownTime.current;
+      if (timeSincePointerDown > 500) {
+        return; // Click fantasma - nessun pointerDown recente
+      }
+      onClick();
+    };
+
+    return (
+      <div
+        role="button" tabIndex={0}
+        onClick={(e) => { handleClick(); blurSelf(e.currentTarget); }}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick(); blurSelf(e.currentTarget); } }}
+        onPointerDown={() => { lastPointerDownTime.current = Date.now(); }}
+        onPointerUp={(e) => blurSelf(e.currentTarget)}
+        onMouseDown={(e) => e.preventDefault()}
+        className="flex-1 w-full text-5xl text-indigo-600 font-light active:bg-slate-300/80 transition-colors duration-150 flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 select-none cursor-pointer"
+        style={{ WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' } as React.CSSProperties}
+      >
+        <span className="pointer-events-none">{children}</span>
+      </div>
+    );
+  };
 
   return (
-    <div ref={ref} tabIndex={-1} className="bg-slate-100 w-full h-full flex flex-col focus:outline-none relative">
-      {/* Overlay anti-ghost: cattura TUTTI i click per 150ms dopo attivazione pagina */}
-      {ghostOverlayActive && (
-        <div
-          className="absolute inset-0 z-50"
-          style={{
-            pointerEvents: 'auto',
-            background: 'transparent',
-            touchAction: 'none'
-          }}
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-          }}
-          onPointerDown={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-          }}
-          aria-hidden="true"
-        />
-      )}
+    <div ref={ref} tabIndex={-1} className="bg-slate-100 w-full h-full flex flex-col focus:outline-none">
       <div className="flex-1 flex flex-col">
         <header className={`flex items-center justify-between p-4 flex-shrink-0`}>
           <button
