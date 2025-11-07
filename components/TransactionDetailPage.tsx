@@ -1,5 +1,4 @@
-// TransactionDetailPage.tsx
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Expense, Account } from '../types';
 import { ArrowLeftIcon } from './icons/ArrowLeftIcon';
 import { formatDate } from './icons/formatters';
@@ -16,12 +15,11 @@ interface TransactionDetailPageProps {
   formData: Partial<Omit<Expense, 'id'>>;
   onFormChange: (newData: Partial<Omit<Expense, 'id'>>) => void;
   accounts: Account[];
-  onClose: () => void; // Per tornare alla calcolatrice
+  onClose: () => void;
   onSubmit: (data: Omit<Expense, 'id'>) => void;
   isDesktop: boolean;
   onMenuStateChange: (isOpen: boolean) => void;
   dateError: boolean;
-  isActive: boolean;
 }
 
 const toYYYYMMDD = (date: Date) => {
@@ -37,7 +35,7 @@ const getCurrentTime = () =>
 const parseLocalYYYYMMDD = (dateString: string | null): Date | null => {
   if (!dateString) return null;
   const parts = dateString.split('-').map(Number);
-  return new Date(parts[0], parts[1] - 1, parts[2]); // locale 00:00
+  return new Date(parts[0], parts[1] - 1, parts[2]);
 };
 
 const recurrenceLabels = {
@@ -55,7 +53,8 @@ const daysOfWeekLabels = {
   4: 'Gio',
   5: 'Ven',
   6: 'Sab',
-};
+} as const;
+
 const dayOfWeekNames = ['domenica', 'lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato'];
 const ordinalSuffixes = ['primo', 'secondo', 'terzo', 'quarto', 'ultimo'];
 
@@ -108,8 +107,10 @@ const getRecurrenceSummary = (expense: Partial<Expense>): string => {
 
   // Part 2: Specific details
   if (recurrence === 'weekly' && recurrenceDays && recurrenceDays.length > 0) {
-    const orderedDays = [...recurrenceDays].sort((a, b) => (a === 0 ? 7 : a) - (b === 0 ? 7 : b));
-    const dayLabels = orderedDays.map(d => daysOfWeekLabels[d as keyof typeof daysOfWeekLabels]);
+    const orderedDays = [...recurrenceDays].sort(
+      (a, b) => (a === 0 ? 7 : a) - (b === 0 ? 7 : b) // <-- FIX: ternario completo per b
+    );
+    const dayLabels = orderedDays.map((d) => daysOfWeekLabels[d as keyof typeof daysOfWeekLabels]);
     summary += `: ${dayLabels.join(', ')}`;
   }
 
@@ -175,10 +176,44 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
       isDesktop,
       onMenuStateChange,
       dateError,
-      isActive,
     },
     ref
   ) => {
+    // ---------- FIX "primo tap a vuoto" (locale alla pagina) ----------
+    const rootRef = useRef<HTMLDivElement | null>(null);
+
+    const setRootRef = useCallback(
+      (node: HTMLDivElement | null) => {
+        rootRef.current = node;
+        if (typeof ref === 'function') ref(node);
+        else if (ref && 'current' in (ref as any))
+          (ref as React.MutableRefObject<HTMLDivElement | null>).current = node;
+      },
+      [ref]
+    );
+
+    const isFocusableLike = (el: HTMLElement) => {
+      const tag = el.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || (el as any).isContentEditable) return true;
+      if (el.getAttribute('role') === 'button') return true;
+      const ti = el.getAttribute('tabindex');
+      return ti !== null && parseInt(ti, 10) >= 0;
+    };
+
+    const onRootPointerDownCapture: React.PointerEventHandler<HTMLDivElement> = () => {
+      const ae = document.activeElement as HTMLElement | null;
+      const root = rootRef.current;
+      if (!ae || !root) return;
+      // Se il focus attuale NON appartiene a questa pagina, rimuovilo prima che il tap arrivi al target
+      if (!root.contains(ae) && isFocusableLike(ae)) {
+        ae.blur();
+        try {
+          window.getSelection?.()?.removeAllRanges?.();
+        } catch {}
+      }
+    };
+    // ------------------------------------------------------------------
+
     const [activeMenu, setActiveMenu] = useState<'account' | null>(null);
     const [amountStr, setAmountStr] = useState('');
     const [isAmountFocused, setIsAmountFocused] = useState(false);
@@ -191,6 +226,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
     const [isRecurrenceModalAnimating, setIsRecurrenceModalAnimating] = useState(false);
     const [isRecurrenceOptionsOpen, setIsRecurrenceOptionsOpen] = useState(false);
     const [isRecurrenceEndOptionsOpen, setIsRecurrenceEndOptionsOpen] = useState(false);
+
     const [tempRecurrence, setTempRecurrence] = useState(formData.recurrence);
     const [tempRecurrenceInterval, setTempRecurrenceInterval] = useState<number | undefined>(
       formData.recurrenceInterval
@@ -210,6 +246,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
       formData.recurrenceEndType === 'count' &&
       formData.recurrenceCount === 1;
 
+    // segnala apertura/chiusura menu/modal al container
     useEffect(() => {
       const isAnyMenuOpen =
         activeMenu !== null || isFrequencyModalOpen || isRecurrenceModalOpen;
@@ -245,7 +282,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
       formData.monthlyRecurrenceType,
     ]);
 
-    // Sync from parent -> local amount string
+    // Sync: parent -> local amountStr
     useEffect(() => {
       if (!isAmountFocused) {
         const parentAmount = formData.amount || 0;
@@ -257,7 +294,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
       }
     }, [formData.amount, isAmountFocused, amountStr]);
 
-    // Sync from local -> parent
+    // Sync: local -> parent amount
     useEffect(() => {
       if (isSyncingAmountFromParent.current) {
         isSyncingAmountFromParent.current = false;
@@ -278,7 +315,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
       }
       if (name === 'recurrenceCount') {
         const num = parseInt(value, 10);
-        onFormChange({ [name]: isNaN(num) || num <= 0 ? undefined : num });
+        onFormChange({ [name]: isNaN(num) || num <= 0 ? undefined : num } as any);
       } else if (name === 'amount') {
         let sanitized = value.replace(/[^0-9,]/g, '');
         const parts = sanitized.split(',');
@@ -290,7 +327,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
         }
         setAmountStr(sanitized);
       } else {
-        onFormChange({ [name]: value });
+        onFormChange({ [name]: value } as any);
       }
     };
 
@@ -349,7 +386,8 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
         recurrence: tempRecurrence as any,
         recurrenceInterval: tempRecurrenceInterval || 1,
         recurrenceDays: tempRecurrence === 'weekly' ? tempRecurrenceDays : undefined,
-        monthlyRecurrenceType: tempRecurrence === 'monthly' ? tempMonthlyRecurrenceType : undefined,
+        monthlyRecurrenceType:
+          tempRecurrence === 'monthly' ? tempMonthlyRecurrenceType : undefined,
       });
       handleCloseRecurrenceModal();
     };
@@ -371,10 +409,10 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
     };
 
     const handleToggleDay = (dayValue: number) => {
-      setTempRecurrenceDays(prevDays => {
+      setTempRecurrenceDays((prevDays) => {
         const currentDays = prevDays || [];
         const newDays = currentDays.includes(dayValue)
-          ? currentDays.filter(d => d !== dayValue)
+          ? currentDays.filter((d) => d !== dayValue)
           : [...currentDays, dayValue];
         return newDays.sort((a, b) => {
           const dayA = a === 0 ? 7 : a;
@@ -384,7 +422,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
       });
     };
 
-    const handleSubmit = () => {
+    const handleSubmitClick = () => {
       const dataToSubmit = {
         ...formData,
         category: formData.category || 'Altro',
@@ -392,8 +430,8 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
       onSubmit(dataToSubmit as Omit<Expense, 'id'>);
     };
 
-    const selectedAccountLabel = accounts.find(a => a.id === formData.accountId)?.name;
-    const accountOptions = accounts.map(acc => ({ value: acc.id, label: acc.name }));
+    const selectedAccountLabel = accounts.find((a) => a.id === formData.accountId)?.name;
+    const accountOptions = accounts.map((acc) => ({ value: acc.id, label: acc.name }));
 
     const dynamicMonthlyDayOfWeekLabel = useMemo(() => {
       const dateString = formData.date;
@@ -425,10 +463,10 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
     if (typeof formData.amount !== 'number') {
       return (
         <div
-          ref={ref}
+          ref={setRootRef}
+          onPointerDownCapture={onRootPointerDownCapture}
           tabIndex={-1}
           className="flex flex-col h-full bg-slate-100 items-center justify-center p-4"
-          style={{ touchAction: 'pan-y' }} // 💡 abilita swipe orizzontale mantenendo lo scroll verticale
         >
           <header className="p-4 flex items-center gap-4 text-slate-800 bg-white shadow-sm absolute top-0 left-0 right-0 z-10">
             {!isDesktop && (
@@ -517,13 +555,10 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
 
     return (
       <div
-        ref={ref}
+        ref={setRootRef}
+        onPointerDownCapture={onRootPointerDownCapture}
         tabIndex={-1}
         className="flex flex-col h-full bg-slate-100 focus:outline-none"
-        style={{
-          touchAction: 'pan-y', // ✅ lascia scorrere verticalmente, abilita pan X per lo swipe
-          overscrollBehaviorX: 'contain', // ✅ evita overscroll orizzontale del browser
-        }}
       >
         <header className="p-4 flex items-center justify-between gap-4 text-slate-800 bg-white shadow-sm sticky top-0 z-10">
           <div className="flex items-center gap-4">
@@ -541,13 +576,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
           <div className="w-11 h-11 flex items-center justify-center" />
         </header>
 
-        <main
-          className="flex-1 p-4 flex flex-col overflow-y-auto"
-          style={{
-            touchAction: 'pan-y', // ✅ fondamentale su Android: lo swipe orizzontale passa all’hook
-            overscrollBehaviorX: 'contain',
-          }}
-        >
+        <main className="flex-1 p-4 flex flex-col overflow-y-auto" style={{ touchAction: 'auto' }}>
           <div className="space-y-4">
             <div>
               <label htmlFor="amount" className="block text-base font-medium text-slate-700 mb-1">
@@ -613,7 +642,9 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
 
             <div className="bg-white p-4 rounded-lg border border-slate-200 space-y-4">
               <div>
-                <label className="block text-base font-medium text-slate-700 mb-1">Frequenza</label>
+                <label className="block text-base font-medium text-slate-700 mb-1">
+                  Frequenza
+                </label>
                 <button
                   type="button"
                   onClick={() => setIsFrequencyModalOpen(true)}
@@ -657,7 +688,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
           <div className="mt-auto pt-6">
             <button
               type="button"
-              onClick={handleSubmit}
+              onClick={handleSubmitClick}
               disabled={(formData.amount ?? 0) <= 0}
               className="w-full px-4 py-3 text-base font-semibold text-white bg-indigo-600 rounded-lg shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors disabled:bg-indigo-300 disabled:cursor-not-allowed"
             >
@@ -683,13 +714,12 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
             onClick={handleCloseFrequencyModal}
             aria-modal="true"
             role="dialog"
-            style={{ touchAction: 'pan-y' }} // non bloccare pan X sull’overlay
           >
             <div
               className={`bg-white rounded-lg shadow-xl w-full max-w-xs transform transition-all duration-300 ease-in-out ${
                 isFrequencyModalAnimating ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
               }`}
-              onClick={e => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
             >
               <div className="flex justify-between items-center p-4 border-b border-slate-200">
                 <h2 className="text-lg font-bold text-slate-800">Seleziona Frequenza</h2>
@@ -734,13 +764,12 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
             onClick={handleCloseRecurrenceModal}
             aria-modal="true"
             role="dialog"
-            style={{ touchAction: 'pan-y' }}
           >
             <div
               className={`bg-white rounded-lg shadow-xl w-full max-w-sm transform transition-all duration-300 ease-in-out ${
                 isRecurrenceModalAnimating ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
               }`}
-              onClick={e => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
             >
               <header className="flex justify-between items-center p-4 border-b border-slate-200">
                 <h2 className="text-lg font-bold text-slate-800">Imposta Ricorrenza</h2>
@@ -758,13 +787,15 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
                 <div className="relative">
                   <button
                     onClick={() => {
-                      setIsRecurrenceOptionsOpen(prev => !prev);
+                      setIsRecurrenceOptionsOpen((prev) => !prev);
                       setIsRecurrenceEndOptionsOpen(false);
                     }}
                     className="w-full flex items-center justify-between text-left gap-2 px-3 py-2.5 text-base rounded-lg border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors bg-white border-slate-300 text-slate-800 hover:bg-slate-50"
                   >
                     <span className="truncate flex-1 capitalize">
-                      {recurrenceLabels[tempRecurrence as keyof typeof recurrenceLabels] || 'Seleziona'}
+                      {recurrenceLabels[
+                        (tempRecurrence || 'monthly') as keyof typeof recurrenceLabels
+                      ] || 'Seleziona'}
                     </span>
                     <ChevronDownIcon
                       className={`w-5 h-5 text-slate-500 transition-transform ${
@@ -775,7 +806,9 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
 
                   {isRecurrenceOptionsOpen && (
                     <div className="absolute top-full mt-1 w-full bg-white border border-slate-200 shadow-lg rounded-lg z-20 p-2 space-y-1 animate-fade-in-down">
-                      {(Object.keys(recurrenceLabels) as Array<keyof typeof recurrenceLabels>).map(key => (
+                      {(Object.keys(recurrenceLabels) as Array<
+                        keyof typeof recurrenceLabels
+                      >).map((key) => (
                         <button
                           key={key}
                           onClick={() => {
@@ -797,7 +830,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
                     <input
                       type="number"
                       value={tempRecurrenceInterval || ''}
-                      onChange={e => {
+                      onChange={(e) => {
                         const val = e.target.value;
                         if (val === '') {
                           setTempRecurrenceInterval(undefined);
@@ -808,7 +841,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
                           }
                         }
                       }}
-                      onFocus={e => e.currentTarget.select()}
+                      onFocus={(e) => e.currentTarget.select()}
                       className="w-12 text-center text-lg font-bold text-slate-800 bg-transparent border-0 border-b-2 border-slate-400 focus:ring-0 focus:outline-none focus:border-indigo-600 p-0"
                       min="1"
                     />
@@ -821,7 +854,7 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
                 {tempRecurrence === 'weekly' && (
                   <div className="animate-fade-in-up pt-2">
                     <div className="flex flex-wrap justify-center gap-2">
-                      {daysOfWeekForPicker.map(day => (
+                      {daysOfWeekForPicker.map((day) => (
                         <button
                           key={day.value}
                           onClick={() => handleToggleDay(day.value)}
@@ -885,12 +918,14 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
                       <button
                         type="button"
                         onClick={() => {
-                          setIsRecurrenceEndOptionsOpen(prev => !prev);
+                          setIsRecurrenceEndOptionsOpen((prev) => !prev);
                           setIsRecurrenceOptionsOpen(false);
                         }}
                         className="w-full flex items-center justify-between text-left gap-2 px-3 py-2.5 text-base rounded-lg border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors bg-white border-slate-300 text-slate-800 hover:bg-slate-50"
                       >
-                        <span className="truncate flex-1 capitalize">{getRecurrenceEndLabel()}</span>
+                        <span className="truncate flex-1 capitalize">
+                          {getRecurrenceEndLabel()}
+                        </span>
                         <ChevronDownIcon
                           className={`w-5 h-5 text-slate-500 transition-transform ${
                             isRecurrenceEndOptionsOpen ? 'rotate-180' : ''
@@ -899,13 +934,17 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
                       </button>
                       {isRecurrenceEndOptionsOpen && (
                         <div className="absolute top-full mt-1 w-full bg-white border border-slate-200 shadow-lg rounded-lg z-10 p-2 space-y-1 animate-fade-in-down">
-                          {(['forever', 'date', 'count'] as const).map(key => (
+                          {(['forever', 'date', 'count'] as const).map((key) => (
                             <button
                               key={key}
                               onClick={() => handleRecurrenceEndTypeSelect(key)}
                               className="w-full text-left px-4 py-3 text-base font-semibold rounded-lg transition-colors bg-slate-50 text-slate-800 hover:bg-indigo-100 hover:text-indigo-800"
                             >
-                              {key === 'forever' ? 'Per sempre' : key === 'date' ? 'Fino a' : 'Numero di volte'}
+                              {key === 'forever'
+                                ? 'Per sempre'
+                                : key === 'date'
+                                ? 'Fino a'
+                                : 'Numero di volte'}
                             </button>
                           ))}
                         </div>
@@ -929,8 +968,11 @@ const TransactionDetailPage = React.forwardRef<HTMLDivElement, TransactionDetail
                             id="recurrence-end-date"
                             name="recurrenceEndDate"
                             value={formData.recurrenceEndDate || ''}
-                            onChange={e =>
-                              onFormChange({ recurrenceEndDate: e.target.value, recurrenceEndType: 'date' })
+                            onChange={(e) =>
+                              onFormChange({
+                                recurrenceEndDate: e.target.value,
+                                recurrenceEndType: 'date',
+                              })
                             }
                             className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
                           />
