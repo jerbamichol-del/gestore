@@ -44,35 +44,6 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
 }) => {
   const [isAnimating, setIsAnimating] = useState(false);
   const [view, setView] = useState<'calculator' | 'details'>('calculator');
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [dateError, setDateError] = useState(false);
-
-  // Tastiera aperta → disabilita swipe
-  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
-  const baselineVVH = useRef<number | null>(null);
-  useEffect(() => {
-    const vv = (window as any).visualViewport as VisualViewport | undefined;
-    if (!vv) return;
-    const setFlag = () => {
-      if (baselineVVH.current == null) baselineVVH.current = vv.height;
-      const delta = (baselineVVH.current || 0) - vv.height;
-      setIsKeyboardOpen(delta > 120);
-    };
-    setFlag();
-    vv.addEventListener('resize', setFlag);
-    return () => vv.removeEventListener('resize', setFlag);
-  }, []);
-
-  const isDesktop = useMediaQuery('(min-width: 768px)');
-
-  const containerRef = useRef<HTMLDivElement>(null);
-  const swipeableDivRef = useRef<HTMLDivElement>(null);
-  const calculatorPageRef = useRef<HTMLDivElement>(null);
-  const detailsPageRef = useRef<HTMLDivElement>(null);
-
-  // wrapper esterni delle due pagine (per gestire inert)
-  const calcWrapRef = useRef<HTMLDivElement>(null);
-  const detailsWrapRef = useRef<HTMLDivElement>(null);
 
   const resetFormData = useCallback(
     (): Partial<Omit<Expense, 'id'>> => ({
@@ -94,9 +65,77 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
     }),
     [accounts]
   );
-  const [formData, setFormData] = useState<Partial<Omit<Expense, 'id'>>>(resetFormData);
 
-  // Swipe globale del contenitore
+  const [formData, setFormData] = useState<Partial<Omit<Expense, 'id'>>>(resetFormData);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [dateError, setDateError] = useState(false);
+
+  const isDesktop = useMediaQuery('(min-width: 768px)');
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const swipeableDivRef = useRef<HTMLDivElement>(null);
+  const calculatorPageRef = useRef<HTMLDivElement>(null);
+  const detailsPageRef = useRef<HTMLDivElement>(null);
+
+  // --- Rilevazione apertura tastiera: disabilita swipe quando è aperta ---
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+  useEffect(() => {
+    const vv = (window as any).visualViewport as VisualViewport | undefined;
+    if (!vv) return;
+
+    let base = vv.height;
+    const onResize = () => {
+      const dh = base - vv.height;
+      // Se l’altezza cala di ~120px o più → tastiera presumibilmente aperta
+      if (dh > 120) {
+        setKeyboardOpen(true);
+      } else {
+        setKeyboardOpen(false);
+        // aggiorna la base solo quando la tastiera è chiusa per seguire rotazioni ecc.
+        base = vv.height;
+      }
+    };
+    vv.addEventListener('resize', onResize);
+    return () => vv.removeEventListener('resize', onResize);
+  }, []);
+
+  // --- Tap-fix: se navighi dopo che un input era a fuoco, il primo tap non va perso ---
+  const armNextTapFixRef = useRef<null | (() => void)>(null);
+  const armNextTapFix = useCallback(() => {
+    // rimuovi eventuale handler pendente
+    if (armNextTapFixRef.current) {
+      armNextTapFixRef.current();
+      armNextTapFixRef.current = null;
+    }
+    const handler = (ev: Event) => {
+      // una sola volta
+      document.removeEventListener('click', handler, true);
+      armNextTapFixRef.current = null;
+      // Trasforma il primo tap in un click reale sul target
+      const target = ev.target as HTMLElement | null;
+      if (target) {
+        ev.preventDefault();
+        (ev as any).stopImmediatePropagation?.();
+        // Dispatch dopo il repaint, così non si sovrappone al blur
+        setTimeout(() => {
+          // se è ancora in DOM
+          if (document.contains(target)) {
+            target.click();
+          }
+        }, 0);
+      }
+    };
+    document.addEventListener('click', handler, true);
+    // Failsafe: disarma dopo 600ms
+    armNextTapFixRef.current = () => document.removeEventListener('click', handler, true);
+    setTimeout(() => {
+      if (armNextTapFixRef.current) {
+        armNextTapFixRef.current();
+        armNextTapFixRef.current = null;
+      }
+    }, 600);
+  }, []);
+
   const { progress, isSwiping } = useSwipe(
     containerRef,
     {
@@ -104,31 +143,20 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
       onSwipeRight: view === 'details' ? () => navigateTo('calculator') : undefined,
     },
     {
-      enabled: !isDesktop && isOpen && !isMenuOpen && !isKeyboardOpen,
+      // aggiunto !keyboardOpen per bloccare lo swipe con tastiera aperta
+      enabled: !isDesktop && isOpen && !isMenuOpen && !keyboardOpen,
       threshold: 32,
-      slop: 10,
+      slop: 6,
+      // NOTA: lasciamo lo swipe attivo ovunque come in tua richiesta precedente
+      // (nessun ignoreSelector) per non cambiare UX.
     }
   );
-
-  // Imposta inert sulla pagina non attiva (evita focus/gesture fantasma)
-  useEffect(() => {
-    const calc = calcWrapRef.current;
-    const det = detailsWrapRef.current;
-    if (!calc || !det) return;
-    if (view === 'calculator') {
-      calc.removeAttribute('inert');
-      det.setAttribute('inert', '');
-    } else {
-      det.removeAttribute('inert');
-      calc.setAttribute('inert', '');
-    }
-  }, [view]);
 
   useEffect(() => {
     if (isOpen) {
       setView('calculator');
-      const t = setTimeout(() => setIsAnimating(true), 10);
-      return () => clearTimeout(t);
+      const timer = setTimeout(() => setIsAnimating(true), 10);
+      return () => clearTimeout(timer);
     } else {
       setIsAnimating(false);
       const t = window.setTimeout(() => {
@@ -139,10 +167,14 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
     }
   }, [isOpen, resetFormData]);
 
-  const handleClose = () => onClose();
+  const handleClose = () => {
+    onClose();
+  };
 
   const handleFormChange = (newData: Partial<Omit<Expense, 'id'>>) => {
-    if ('date' in newData && newData.date) setDateError(false);
+    if ('date' in newData && newData.date) {
+      setDateError(false);
+    }
     setFormData(prev => ({ ...prev, ...newData }));
   };
 
@@ -157,29 +189,35 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
     onSubmit(submittedData);
   };
 
-  const blurActiveElementNow = () => {
-    const ae = document.activeElement as HTMLElement | null;
-    if (!ae) return;
-    // blur immediato su input/textarea/contentEditable
-    const isEditable =
-      ae.tagName === 'INPUT' ||
-      ae.tagName === 'TEXTAREA' ||
-      (ae as any).isContentEditable;
-    if (isEditable && ae.blur) ae.blur();
-  };
-
   const navigateTo = (targetView: 'calculator' | 'details') => {
     if (view === targetView) return;
 
-    // 1) BLUR SUBITO (così la tastiera si chiude e il primo tap non viene “mangiato”)
-    blurActiveElementNow();
+    // 0) Se c'è un input a fuoco, prepara il “tap-fix” per non perdere il primo tap
+    const ae = document.activeElement as HTMLElement | null;
+    const wasEditing =
+      !!ae &&
+      (ae.tagName === 'INPUT' ||
+        ae.tagName === 'TEXTAREA' ||
+        ae.getAttribute('contenteditable') === 'true');
+    if (wasEditing) {
+      // blur immediato
+      ae.blur?.();
+      // arma il fix per il primo tap nella nuova pagina
+      armNextTapFix();
+    }
 
-    // 2) Notifica e cleanup long-press
+    // 1) Imposta subito la vista (parte la transizione)
+    setView(targetView);
+
+    // 2) Notifiche/cleanup esistenti
     window.dispatchEvent(new Event('numPad:cancelLongPress'));
     window.dispatchEvent(new CustomEvent('page-activated', { detail: targetView }));
 
-    // 3) Cambia vista (niente focus programmatico sul container: su mobile crea tap persi)
-    setView(targetView);
+    // 3) Dai un frame alla transizione e metti a fuoco il contenitore della nuova pagina
+    requestAnimationFrame(() => {
+      const node = targetView === 'details' ? detailsPageRef.current : calculatorPageRef.current;
+      node?.focus?.({ preventScroll: true });
+    });
   };
 
   if (!isOpen) return null;
@@ -187,20 +225,21 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   const translateX = (view === 'calculator' ? 0 : -50) + (progress * 50);
   const isCalculatorActive = view === 'calculator';
   const isDetailsActive = view === 'details';
+  const isClosing = !isOpen;
 
   return (
     <div
       className={`fixed inset-0 z-50 bg-slate-100 transform transition-transform duration-300 ease-in-out ${
         isAnimating ? 'translate-y-0' : 'translate-y-full'
-      }`}
+      } ${isClosing ? 'pointer-events-none' : ''}`}
       aria-modal="true"
       role="dialog"
     >
       <div
         ref={containerRef}
         className="relative h-full w-full overflow-hidden"
-        // Swipe orizzontale nostro + scroll verticale nativo
-        style={{ touchAction: isDesktop ? 'auto' : 'pan-y' }}
+        // aiuta su mobile a ridurre ambiguità di tap
+        style={{ touchAction: 'pan-y' }}
       >
         <div
           ref={swipeableDivRef}
@@ -212,7 +251,6 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
           }}
         >
           <div
-            ref={calcWrapRef}
             className={`w-1/2 md:w-auto h-full relative ${
               isCalculatorActive ? 'z-10' : 'z-0'
             } ${!isCalculatorActive ? 'pointer-events-none' : ''}`}
@@ -232,7 +270,6 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
           </div>
 
           <div
-            ref={detailsWrapRef}
             className={`w-1/2 md:w-auto h-full relative ${
               isDetailsActive ? 'z-10' : 'z-0'
             } ${!isDetailsActive ? 'pointer-events-none' : ''}`}
