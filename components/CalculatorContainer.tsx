@@ -44,10 +44,6 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
 }) => {
   const [isAnimating, setIsAnimating] = useState(false);
   const [view, setView] = useState<'calculator' | 'details'>('calculator');
-  
-  // FIX: Aggiungi stato per gestire le transizioni
-  const [isTransitioning, setIsTransitioning] = useState(false);
-  const transitionTimeoutRef = useRef<number | null>(null);
 
   const resetFormData = useCallback(
     (): Partial<Omit<Expense, 'id'>> => ({
@@ -155,15 +151,6 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
     }
   }, [isOpen, resetFormData]);
 
-  // FIX: Cleanup per il timeout di transizione
-  useEffect(() => {
-    return () => {
-      if (transitionTimeoutRef.current) {
-        clearTimeout(transitionTimeoutRef.current);
-      }
-    };
-  }, []);
-
   const handleClose = () => onClose();
 
   const handleFormChange = (newData: Partial<Omit<Expense, 'id'>>) => {
@@ -182,17 +169,16 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
     onSubmit(submittedData);
   };
 
-  // FIX: Funzione navigateTo modificata
   const navigateTo = async (targetView: 'calculator' | 'details') => {
     if (view === targetView) return;
 
-    // 1) SEMPRE blur dell'elemento attivo
+    // 1) SEMPRE blur dell'elemento attivo (anche se è un div role="button")
     const ae = document.activeElement as HTMLElement | null;
     if (ae && typeof ae.blur === 'function') {
       ae.blur();
     }
 
-    // 2) Se la tastiera è aperta, aspetta che si chiuda
+    // 2) Se la tastiera è aperta, aspetta che si chiuda (evita il primo tap a vuoto)
     if (keyboardOpenRef.current) {
       await waitForKeyboardClose();
     }
@@ -200,22 +186,10 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
     // 3) Cleanup eventi
     window.dispatchEvent(new Event('numPad:cancelLongPress'));
 
-    // 4) Inizia la transizione - IMPORTANTE: questo previene pointer-events-none immediato
-    setIsTransitioning(true);
-    
-    // 5) Cambia pagina immediatamente
+    // 4) Cambia pagina immediatamente (senza delay per evitare saltello)
     setView(targetView);
 
-    // 6) Rimuovi il flag di transizione dopo che l'animazione è completata
-    if (transitionTimeoutRef.current) {
-      clearTimeout(transitionTimeoutRef.current);
-    }
-    transitionTimeoutRef.current = window.setTimeout(() => {
-      setIsTransitioning(false);
-      transitionTimeoutRef.current = null;
-    }, 150); // Un po' più del tempo di transizione (120ms)
-
-    // 7) Notifica cambio pagina
+    // 5) Notifica cambio pagina - l'evento viene catturato dai componenti che fanno cleanup
     window.dispatchEvent(new CustomEvent('page-activated', { detail: targetView }));
   };
 
@@ -248,11 +222,10 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
             willChange: 'transform',
           }}
         >
-          {/* FIX: Condizione modificata per pointer-events-none */}
           <div
             className={`w-1/2 md:w-auto h-full relative ${
               isCalculatorActive ? 'z-10' : 'z-0'
-            } ${!isCalculatorActive && !isTransitioning ? 'pointer-events-none' : ''}`}
+            }`}
             aria-hidden={!isCalculatorActive}
           >
             <CalculatorInputScreen
@@ -269,11 +242,10 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
             />
           </div>
 
-          {/* FIX: Condizione modificata per pointer-events-none */}
           <div
             className={`w-1/2 md:w-auto h-full relative ${
               isDetailsActive ? 'z-10' : 'z-0'
-            } ${!isDetailsActive && !isTransitioning ? 'pointer-events-none' : ''}`}
+            }`}
             aria-hidden={!isDetailsActive}
           >
             <TransactionDetailPage
