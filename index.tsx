@@ -1,13 +1,13 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import AuthGate from './AuthGate';
+import App from './App';
 
-const rootElement = document.getElementById('root');
-if (!rootElement) {
-  throw new Error("Could not find root element to mount to");
-}
+// Fix globale: rimuove il focus "appiccicoso" prima del tap successivo
+import { installGlobalFirstTapFix } from './utils/mobileFocusFix';
+installGlobalFirstTapFix(document);
 
-const root = ReactDOM.createRoot(rootElement);
-root.render(
-  <AuthGate />
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
 );
