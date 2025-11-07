@@ -17,10 +17,11 @@ interface TransactionDetailPageProps {
   onClose: () => void;
   onSubmit: (data: Omit<Expense, 'id'>) => void;
   isDesktop: boolean;
-  onMenuStateChange: (isOpen: boolean) => void;
+  onMenuStateChange: (isOpen: boolean) => void; // mantiene compatibilità
   dateError: boolean;
 }
 
+/* ---------------- helpers ---------------- */
 const toYYYYMMDD = (date: Date) => {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -108,10 +109,7 @@ const getRecurrenceSummary = (e: Partial<Expense>) => {
   return s;
 };
 
-const getIntervalLabel = (
-  recurrence?: 'daily'|'weekly'|'monthly'|'yearly',
-  n?: number
-) => {
+const getIntervalLabel = (recurrence?: 'daily'|'weekly'|'monthly'|'yearly', n?: number) => {
   const c = n || 1;
   switch (recurrence) {
     case 'daily':   return c === 1 ? 'giorno'     : 'giorni';
@@ -128,41 +126,66 @@ const daysOfWeekForPicker = [
   { label: 'Dom', value: 0 },
 ];
 
-/* ======= focus helpers ======= */
-const isFocusable = (el: HTMLElement | null) =>
+/* ---------------- keyboard & gesture locks ---------------- */
+const isEditableEl = (el: Element | null) =>
   !!el && (
-    el.tagName === 'INPUT' ||
-    el.tagName === 'TEXTAREA' ||
-    el.tagName === 'SELECT' ||
-    el.isContentEditable
+    el instanceof HTMLInputElement ||
+    el instanceof HTMLTextAreaElement ||
+    el instanceof HTMLSelectElement ||
+    (el as HTMLElement).isContentEditable
   );
 
-const findFocusTarget = (start: HTMLElement, root: HTMLElement) => {
-  const sel = 'input, textarea, select, [contenteditable=""], [contenteditable="true"]';
+// Rileva apertura tastiera (mobile) usando visualViewport o fallback
+function useKeyboardOpen(): boolean {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const vv = (window as any).visualViewport as VisualViewport | undefined;
+    let base = (vv?.height ?? window.innerHeight);
+    const THRESH = 120; // px
 
-  if (start.matches(sel)) return start;
+    const onResize = () => {
+      const h = vv?.height ?? window.innerHeight;
+      setOpen(h < base - THRESH);
+    };
 
-  const viaLabel = start.closest('label');
-  if (viaLabel) {
-    const forId = viaLabel.getAttribute('for');
-    if (forId) {
-      const byId = root.querySelector<HTMLElement>(`#${CSS.escape(forId)}`);
-      if (byId) return byId;
-    }
-    const nested = viaLabel.querySelector<HTMLElement>(sel);
-    if (nested) return nested;
+    const onFocus = () => {
+      const a = document.activeElement;
+      setOpen(isEditableEl(a));
+    };
+    const onBlur = () => {
+      const a = document.activeElement;
+      if (!isEditableEl(a)) setOpen(false);
+    };
+
+    vv?.addEventListener('resize', onResize);
+    window.addEventListener('resize', onResize);
+    window.addEventListener('focusin', onFocus);
+    window.addEventListener('focusout', onBlur);
+
+    // ricalibra base dopo un attimo (evita valori sporchi al mount)
+    const t = setTimeout(() => { base = (vv?.height ?? window.innerHeight); }, 200);
+
+    return () => {
+      clearTimeout(t);
+      vv?.removeEventListener('resize', onResize);
+      window.removeEventListener('resize', onResize);
+      window.removeEventListener('focusin', onFocus);
+      window.removeEventListener('focusout', onBlur);
+    };
+  }, []);
+  return open;
+}
+
+const STOP = (e: any) => {
+  if (e?.preventDefault) e.preventDefault();
+  if (e?.stopPropagation) e.stopPropagation();
+  // stopImmediatePropagation per sicurezza su eventi nativi
+  if (e?.nativeEvent && typeof e.nativeEvent.stopImmediatePropagation === 'function') {
+    e.nativeEvent.stopImmediatePropagation();
   }
-
-  const container = start.closest<HTMLElement>('.relative, .input-wrapper, .field');
-  if (container) {
-    const nested = container.querySelector<HTMLElement>(sel);
-    if (nested) return nested;
-  }
-
-  return start.closest<HTMLElement>(sel);
 };
-/* ============================= */
 
+/* ---------------- component ---------------- */
 const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
   formData,
   onFormChange,
@@ -179,12 +202,11 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
 
   const [activeMenu, setActiveMenu] = useState<'account' | null>(null);
 
-  // ---- IMPORTO: fonte unica = input locale (blocca update esterni della calcolatrice) ----
+  // Importo: fonte unica = input locale
   const [amountStr, setAmountStr] = useState('');
   const [isAmountFocused, setIsAmountFocused] = useState(false);
-  const [hasLocalAmountEdit, setHasLocalAmountEdit] = useState(false); // blocca override esterni
+  const [hasLocalAmountEdit, setHasLocalAmountEdit] = useState(false);
 
-  // inizializza importo da parent solo una volta all’apertura
   const didInitAmount = useRef(false);
   useEffect(() => {
     if (!didInitAmount.current) {
@@ -192,10 +214,8 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
       setAmountStr(parent === 0 ? '' : String(parent).replace('.', ','));
       didInitAmount.current = true;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [formData.amount]);
 
-  // non sovrascrivere amountStr se l’utente ha iniziato a scrivere o l’input è a fuoco
   useEffect(() => {
     if (isAmountFocused || hasLocalAmountEdit) return;
     const parent = formData.amount ?? 0;
@@ -205,14 +225,13 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     }
   }, [formData.amount, isAmountFocused, hasLocalAmountEdit, amountStr]);
 
-  // sincronizza il valore numerico verso il parent (solo da locale → parent)
   useEffect(() => {
     const num = parseFloat((amountStr || '').replace(',', '.'));
     const next = isNaN(num) ? 0 : num;
     if (next !== formData.amount) onFormChange({ amount: next });
   }, [amountStr, formData.amount, onFormChange]);
 
-  // ---- MODALI FREQUENZA/RICORRENZA ----
+  // Modali
   const [isFrequencyModalOpen, setIsFrequencyModalOpen] = useState(false);
   const [isFrequencyModalAnimating, setIsFrequencyModalAnimating] = useState(false);
 
@@ -231,158 +250,162 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     formData.recurrenceEndType === 'count' &&
     formData.recurrenceCount === 1;
 
-  // disabilita swipe/gesti globali SEMPRE mentre Dettagli è aperta (ferma anche la calcolatrice “globale” se ascolta keydown)
-  useEffect(() => {
-    onMenuStateChange(true);
-    return () => onMenuStateChange(false);
-  }, [onMenuStateChange]);
+  // Tastiera aperta?
+  const keyboardOpen = useKeyboardOpen();
 
-  // Blocca tasti numerici/backspace/enter in capture per non farli arrivare alla calcolatrice
+  // Blocco gesti/swipe se: tastiera aperta, menu/modali aperti
+  const gesturesLocked =
+    keyboardOpen || !!activeMenu || isFrequencyModalOpen || isRecurrenceModalOpen;
+
+  // Notifica al parent che “c’è un menu aperto” (mantiene compatibilità con logica esistente)
+  useEffect(() => {
+    onMenuStateChange(gesturesLocked);
+  }, [gesturesLocked, onMenuStateChange]);
+
+  // DISATTIVA la calcolatrice finché Dettagli è montata (stop conflitti numeri).
+  useEffect(() => {
+    const send = (enabled: boolean) =>
+      window.dispatchEvent(new CustomEvent('gs:calc:enabled', { detail: enabled }));
+    send(false);
+    return () => send(true);
+  }, []);
+
+  // Blocca tasti numerici/backspace/enter DIRETTI alla calcolatrice via window (capture)
   useEffect(() => {
     const onWinKeyDownCapture = (e: KeyboardEvent) => {
       const k = e.key;
       const isDigit = k.length === 1 && /[0-9,.]/.test(k);
       if (isDigit || k === 'Backspace' || k === 'Delete' || k === 'Enter') {
-        // Non bloccare se il focus è dentro un input di Dettagli (servono all’utente)
+        // se l'evento nasce fuori dalla pagina, impedisci che vada al resto dell'app
         const root = rootRef.current;
-        if (root && root.contains(document.activeElement)) {
-          return; // lascia passare per l’input locale
+        const target = e.target as Node | null;
+        if (!root || !target) return;
+        if (!root.contains(target)) {
+          e.stopPropagation(); // ferma i listener globali (calcolatrice)
         }
-        e.stopPropagation();
       }
     };
     window.addEventListener('keydown', onWinKeyDownCapture, true);
     return () => window.removeEventListener('keydown', onWinKeyDownCapture, true);
   }, []);
 
-  // animazioni modali
-  useEffect(() => {
-    if (isFrequencyModalOpen) {
-      const t = setTimeout(() => setIsFrequencyModalAnimating(true), 10);
-      return () => clearTimeout(t);
-    } else setIsFrequencyModalAnimating(false);
-  }, [isFrequencyModalOpen]);
-
-  useEffect(() => {
-    if (isRecurrenceModalOpen) {
-      setTempRecurrence(formData.recurrence || 'monthly');
-      setTempRecurrenceInterval(formData.recurrenceInterval || 1);
-      setTempRecurrenceDays(formData.recurrenceDays || []);
-      setTempMonthlyRecurrenceType(formData.monthlyRecurrenceType || 'dayOfMonth');
-      setIsRecurrenceOptionsOpen(false);
-      const t = setTimeout(() => setIsRecurrenceModalAnimating(true), 10);
-      return () => clearTimeout(t);
-    } else setIsRecurrenceModalAnimating(false);
-  }, [isRecurrenceModalOpen, formData.recurrence, formData.recurrenceInterval, formData.recurrenceDays, formData.monthlyRecurrenceType]);
-
-  /* ==============================
-     TAP vs SWIPE GESTURE GUARD + FOCUS FIX
-     ============================== */
+  // Tap vs Swipe + focus immediato
   const cancelNextClick = useRef(false);
-  const pRef = useRef<{
-    id: number | null;
-    startX: number;
-    startY: number;
-    moved: boolean;
-    target: HTMLElement | null;
-  }>({ id: null, startX: 0, startY: 0, moved: false, target: null });
+  const pRef = useRef<{ id: number | null; startX: number; startY: number; moved: boolean; target: HTMLElement | null; }>({ id: null, startX: 0, startY: 0, moved: false, target: null });
+  const SLOP = 12;
 
-  const SLOP = 12; // px
+  const findFocusTarget = (start: HTMLElement, root: HTMLElement) => {
+    const sel = 'input, textarea, select, [contenteditable=""], [contenteditable="true"]';
+    if (start.matches(sel)) return start;
+    const viaLabel = start.closest('label');
+    if (viaLabel) {
+      const forId = viaLabel.getAttribute('for');
+      if (forId) {
+        const byId = root.querySelector<HTMLElement>(`#${CSS.escape(forId)}`);
+        if (byId) return byId;
+      }
+      const nested = viaLabel.querySelector<HTMLElement>(sel);
+      if (nested) return nested;
+    }
+    const container = start.closest<HTMLElement>('.relative, .input-wrapper, .field');
+    if (container) {
+      const nested = container.querySelector<HTMLElement>(sel);
+      if (nested) return nested;
+    }
+    return start.closest<HTMLElement>(sel);
+  };
 
   const onRootPointerDownCapture = useCallback((e: React.PointerEvent) => {
     const root = rootRef.current;
     if (!root) return;
 
-    // blur se il focus è altrove (evita “primo tap a vuoto” per focus perso)
+    if (gesturesLocked) {
+      STOP(e);
+    }
+
     const ae = document.activeElement as HTMLElement | null;
     if (ae && !root.contains(ae)) ae.blur();
 
-    pRef.current = {
-      id: e.pointerId,
-      startX: e.clientX,
-      startY: e.clientY,
-      moved: false,
-      target: e.target as HTMLElement,
-    };
+    pRef.current = { id: e.pointerId, startX: e.clientX, startY: e.clientY, moved: false, target: e.target as HTMLElement };
 
-    // focus immediato se si tocca direttamente un input/select/textarea (risolve primo tap a vuoto)
-    const target = e.target as HTMLElement;
-    const isDirectEditable = target.matches('input, textarea, select');
-    if (isDirectEditable) {
-      const el = target as HTMLElement;
-      el.focus({ preventScroll: true });
-      // Se è numerico o testo, seleziona comodamente
-      const input = el as HTMLInputElement;
-      if (input && (input.type === 'text' || input.type === 'number')) {
-        requestAnimationFrame(() => input.select?.());
+    // focus immediato sugli input
+    const t = e.target as HTMLElement;
+    if (t.matches('input, textarea, select')) {
+      t.focus({ preventScroll: true });
+      const asInput = t as HTMLInputElement;
+      if (asInput && (asInput.type === 'text' || asInput.type === 'number')) {
+        requestAnimationFrame(() => asInput.select?.());
       }
     }
-  }, []);
+  }, [gesturesLocked]);
 
   const onRootPointerMoveCapture = useCallback((e: React.PointerEvent) => {
+    if (gesturesLocked) {
+      STOP(e);
+      return;
+    }
     const p = pRef.current;
     if (p.id !== e.pointerId) return;
-
     const dx = e.clientX - p.startX;
     const dy = e.clientY - p.startY;
-
     if (!p.moved && Math.abs(dx) > SLOP && Math.abs(dx) > Math.abs(dy)) {
       p.moved = true;
       cancelNextClick.current = true;
     }
-  }, []);
+  }, [gesturesLocked]);
 
   const onRootPointerUpCapture = useCallback((e: React.PointerEvent) => {
+    if (gesturesLocked) {
+      STOP(e);
+      return;
+    }
     const root = rootRef.current;
     const p = pRef.current;
     if (!root || p.id !== e.pointerId) return;
 
     const wasSwipe = p.moved;
-
     if (!wasSwipe && p.target) {
       const focusEl = findFocusTarget(p.target, root);
-      if (focusEl && isFocusable(focusEl) && focusEl !== document.activeElement) {
+      if (focusEl && isEditableEl(focusEl) && focusEl !== document.activeElement) {
         requestAnimationFrame(() => {
           (focusEl as HTMLElement).focus({ preventScroll: true });
-          // apri i picker nativi quando serve
           const asInput = focusEl as HTMLInputElement;
-          if (asInput && (asInput.type === 'date' || asInput.type === 'time')) {
-            asInput.click?.();
-          }
+          if (asInput && (asInput.type === 'date' || asInput.type === 'time')) asInput.click?.();
         });
       }
     }
-
     setTimeout(() => { cancelNextClick.current = false; }, 0);
     pRef.current.id = null;
-  }, []);
+  }, [gesturesLocked]);
 
   const onRootClickCapture = useCallback((e: React.MouseEvent) => {
+    if (gesturesLocked) {
+      STOP(e);
+      return;
+    }
     if (cancelNextClick.current) {
       e.preventDefault();
       e.stopPropagation();
       cancelNextClick.current = false;
     }
-  }, []);
+  }, [gesturesLocked]);
 
-  // blocca propagazione tasti alla calcolatrice, ma lascia passare all’input di Dettagli
   const onRootKeyDownCapture = useCallback((e: React.KeyboardEvent) => {
+    // blocca propagazione verso il pager/calcolatrice quando Dettagli è montata
     const k = e.key;
-    const isDigit = k.length === 1 && /[0-9,.]/.test(k);
-    if (isDigit || k === 'Backspace' || k === 'Delete' || k === 'Enter') {
-      // Se il target è un input interno, non bloccare
+    if (/[0-9,.]/.test(k) || k === 'Backspace' || k === 'Delete' || k === 'Enter' || k === 'Escape' || k === 'Tab') {
+      // lascia passare ai campi interni; blocca il resto
       const root = rootRef.current;
-      if (root && root.contains(e.target as Node)) {
-        return;
+      if (!root) return;
+      const target = e.target as Node;
+      if (!root.contains(target)) {
+        e.stopPropagation();
       }
-      e.stopPropagation();
     }
   }, []);
-  /* ============================== */
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-
     if (name === 'recurrenceEndDate' && value === '') {
       onFormChange({ recurrenceEndType: 'forever', recurrenceEndDate: undefined });
       return;
@@ -393,7 +416,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
       return;
     }
     if (name === 'amount') {
-      setHasLocalAmountEdit(true); // da qui in poi l’input è la fonte
+      setHasLocalAmountEdit(true);
       let s = value.replace(/[^0-9,]/g, '');
       const parts = s.split(',');
       if (parts.length > 2) s = parts[0] + ',' + parts.slice(1).join('');
@@ -464,14 +487,6 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     const wom = Math.floor((dom - 1) / 7);
     return `Ogni ${ordinalSuffixes[wom]} ${dayOfWeekNames[dow]} del mese`;
   }, [formData.date]);
-
-  const getRecurrenceEndLabel = () => {
-    const t = formData.recurrenceEndType;
-    if (!t || t === 'forever') return 'Per sempre';
-    if (t === 'date') return 'Fino a';
-    if (t === 'count') return 'Numero di volte';
-    return 'Per sempre';
-  };
 
   if (typeof formData.amount !== 'number') {
     return (
@@ -553,6 +568,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
       onPointerDownCapture={onRootPointerDownCapture}
       onPointerMoveCapture={onRootPointerMoveCapture}
       onPointerUpCapture={onRootPointerUpCapture}
+      onPointerCancelCapture={(e) => { if (gesturesLocked) STOP(e); }}
       onClickCapture={onRootClickCapture}
       onKeyDownCapture={onRootKeyDownCapture}
     >
@@ -620,7 +636,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
             <button
               type="button"
               onClick={() => {
-                (document.activeElement as HTMLElement | null)?.blur?.(); // evita apertura tastiera
+                (document.activeElement as HTMLElement | null)?.blur?.();
                 setActiveMenu('account');
               }}
               className="w-full flex items-center text-left gap-2 px-3 py-2.5 text-base rounded-lg border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors bg-white border-slate-300 text-slate-800 hover:bg-slate-50"
@@ -841,7 +857,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
                     <div className="w-5 h-5 rounded-full border-2 border-slate-400 flex items-center justify-center">
                       {tempMonthlyRecurrenceType === 'dayOfWeek' && <div className="w-2.5 h-2.5 bg-indigo-600 rounded-full" />}
                     </div>
-                    <span className="text-sm font-medium text-slate-700">{dynamicMonthlyDayOfWeekLabel}</span>
+                    <span className="text-sm font-medium text-slate-700">{`Ogni ${ordinalSuffixes[Math.floor(((parseLocalYYYYMMDD(formData.date||'')||new Date()).getDate()-1)/7)]} ${dayOfWeekNames[(parseLocalYYYYMMDD(formData.date||'')||new Date()).getDay()]}`}</span>
                   </div>
                 </div>
               )}
