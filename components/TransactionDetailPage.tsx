@@ -128,7 +128,7 @@ const daysOfWeekForPicker = [
   { label: 'Dom', value: 0 },
 ];
 
-/* ========= helper focus ========= */
+/* ======= focus helpers ======= */
 const isFocusable = (el: HTMLElement | null) =>
   !!el && (
     el.tagName === 'INPUT' ||
@@ -161,7 +161,7 @@ const findFocusTarget = (start: HTMLElement, root: HTMLElement) => {
 
   return start.closest<HTMLElement>(sel);
 };
-/* ================================= */
+/* ============================= */
 
 const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
   formData,
@@ -199,7 +199,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     formData.recurrenceEndType === 'count' &&
     formData.recurrenceCount === 1;
 
-  // segnale al container esterno (disabilita swipe se modali aperte)
+  // disabilita swipe container quando modali/menu aperti
   useEffect(() => {
     const anyOpen = !!(activeMenu || isFrequencyModalOpen || isRecurrenceModalOpen);
     onMenuStateChange(anyOpen);
@@ -243,39 +243,85 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     if (next !== formData.amount) onFormChange({ amount: next });
   }, [amountStr, formData.amount, onFormChange]);
 
-  // ====== FIX TAP FANTASMA: blur esterno + focus mirato all'input toccato ======
+  /* ==============================
+     TAP vs SWIPE GESTURE GUARD
+     ============================== */
+  const cancelNextClick = useRef(false);
+  const pRef = useRef<{
+    id: number | null;
+    startX: number;
+    startY: number;
+    moved: boolean;
+    target: HTMLElement | null;
+  }>({ id: null, startX: 0, startY: 0, moved: false, target: null });
+
+  const SLOP = 12; // px – superata => è swipe, non tap
+
   const onRootPointerDownCapture = useCallback((e: React.PointerEvent) => {
     const root = rootRef.current;
     if (!root) return;
 
+    // se il focus è fuori pagina, blur immediato per non “agganciarsi” all’altra view
     const ae = document.activeElement as HTMLElement | null;
-    const target = e.target as HTMLElement;
-
-    // se il focus era su un elemento fuori dalla pagina, blur immediato
     if (ae && !root.contains(ae)) ae.blur();
 
-    // se ho toccato un input/textarea/select (o il suo label/container), forza il focus subito
-    const focusEl = findFocusTarget(target, root);
-    if (focusEl && isFocusable(focusEl) && focusEl !== document.activeElement) {
-      // defer di un frame per lasciare finire il blur senza perdere il tap
-      requestAnimationFrame(() => {
-        // Safari/Android: focus esplicito e caret in coda se input text
-        (focusEl as HTMLElement).focus({ preventScroll: true });
-        if (focusEl.tagName === 'INPUT') {
-          const it = focusEl as HTMLInputElement;
-          try {
-            const len = (it.value ?? '').length;
-            it.setSelectionRange?.(len, len);
-          } catch {}
-          // per date/time alcuni device aprono il picker solo su click
-          if (it.type === 'date' || it.type === 'time' || it.type === 'datetime-local') {
-            it.click?.();
-          }
-        }
-      });
+    pRef.current = {
+      id: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      moved: false,
+      target: e.target as HTMLElement,
+    };
+  }, []);
+
+  const onRootPointerMoveCapture = useCallback((e: React.PointerEvent) => {
+    const p = pRef.current;
+    if (p.id !== e.pointerId) return;
+
+    const dx = e.clientX - p.startX;
+    const dy = e.clientY - p.startY;
+
+    if (!p.moved && Math.abs(dx) > SLOP && Math.abs(dx) > Math.abs(dy)) {
+      // gesto orizzontale: probabilmente swipe di pagina → annulla il click successivo
+      p.moved = true;
+      cancelNextClick.current = true;
     }
   }, []);
-  // ============================================================================
+
+  const onRootPointerUpCapture = useCallback((e: React.PointerEvent) => {
+    const root = rootRef.current;
+    const p = pRef.current;
+    if (!root || p.id !== e.pointerId) return;
+
+    const wasSwipe = p.moved;
+
+    if (!wasSwipe && p.target) {
+      // TAP: mettiamo focus sull’input toccato (risolve primo tap a vuoto)
+      const focusEl = findFocusTarget(p.target, root);
+      if (focusEl && isFocusable(focusEl) && focusEl !== document.activeElement) {
+        requestAnimationFrame(() => {
+          (focusEl as HTMLElement).focus({ preventScroll: true });
+          if ((focusEl as HTMLInputElement).type === 'date' || (focusEl as HTMLInputElement).type === 'time') {
+            (focusEl as HTMLInputElement).click?.();
+          }
+        });
+      }
+    }
+
+    // reset rapida del flag “annulla click”
+    setTimeout(() => { cancelNextClick.current = false; }, 0);
+    pRef.current.id = null;
+  }, []);
+
+  // blocca il click quando abbiamo rilevato uno swipe (prima che il container cambi pagina)
+  const onRootClickCapture = useCallback((e: React.MouseEvent) => {
+    if (cancelNextClick.current) {
+      e.preventDefault();
+      e.stopPropagation();
+      cancelNextClick.current = false;
+    }
+  }, []);
+  /* ============================== */
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -447,6 +493,9 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
       className="flex flex-col h-full bg-slate-100 focus:outline-none"
       style={{ touchAction: 'pan-y' }}
       onPointerDownCapture={onRootPointerDownCapture}
+      onPointerMoveCapture={onRootPointerMoveCapture}
+      onPointerUpCapture={onRootPointerUpCapture}
+      onClickCapture={onRootClickCapture}
     >
       <header className="p-4 flex items-center justify-between gap-4 text-slate-800 bg-white shadow-sm sticky top-0 z-10">
         <div className="flex items-center gap-4">
@@ -724,12 +773,12 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
                     <div className="w-5 h-5 rounded-full border-2 border-slate-400 flex items-center justify-center">
                       {tempMonthlyRecurrenceType === 'dayOfWeek' && <div className="w-2.5 h-2.5 bg-indigo-600 rounded-full" />}
                     </div>
-                    <span className="text-sm font-medium text-slate-700">{dynamicMonthlyDayOfWeekLabel}</span>
+                    <span className="text-sm font-medium text-slate-700">{`Ogni ${ordinalSuffixes[Math.floor(((parseLocalYYYYMMDD(formData.date||'')||new Date()).getDate()-1)/7)]} ${dayOfWeekNames[(parseLocalYYYYMMDD(formData.date||'')||new Date()).getDay()]}`}</span>
                   </div>
                 </div>
               )}
 
-              <div className="pt-4 border-t border-slate-2 00">
+              <div className="pt-4 border-t border-slate-200">
                 <div className="grid grid-cols-2 gap-4 items-end">
                   <div className={`relative ${!formData.recurrenceEndType || formData.recurrenceEndType === 'forever' ? 'col-span-2' : ''}`}>
                     <button
@@ -737,7 +786,10 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
                       onClick={() => { setIsRecurrenceEndOptionsOpen(v => !v); setIsRecurrenceOptionsOpen(false); }}
                       className="w-full flex items-center justify-between text-left gap-2 px-3 py-2.5 text-base rounded-lg border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 bg-white border-slate-300 text-slate-800 hover:bg-slate-50"
                     >
-                      <span className="truncate flex-1 capitalize">{getRecurrenceEndLabel()}</span>
+                      <span className="truncate flex-1 capitalize">
+                        {(!formData.recurrenceEndType || formData.recurrenceEndType === 'forever') ? 'Per sempre' :
+                         formData.recurrenceEndType === 'date' ? 'Fino a' : 'Numero di volte'}
+                      </span>
                       <ChevronDownIcon className={`w-5 h-5 text-slate-500 transition-transform ${isRecurrenceEndOptionsOpen ? 'rotate-180' : ''}`} />
                     </button>
 
