@@ -108,41 +108,6 @@ const getRecurrenceSummary = (e: Partial<Expense>) => {
   return s;
 };
 
-/* ================= TAP helper (niente swipe) ================= */
-const isFocusable = (el: HTMLElement | null) =>
-  !!el && (
-    el.tagName === 'INPUT' ||
-    el.tagName === 'TEXTAREA' ||
-    el.tagName === 'SELECT' ||
-    el.isContentEditable
-  );
-
-const findFocusTarget = (start: HTMLElement, root: HTMLElement) => {
-  const sel = 'input, textarea, select, [contenteditable=""], [contenteditable="true"]';
-
-  if (start.matches(sel)) return start;
-
-  const viaLabel = start.closest('label');
-  if (viaLabel) {
-    const forId = viaLabel.getAttribute('for');
-    if (forId) {
-      const byId = root.querySelector<HTMLElement>(`#${CSS.escape(forId)}`);
-      if (byId) return byId;
-    }
-    const nested = viaLabel.querySelector<HTMLElement>(sel);
-    if (nested) return nested;
-  }
-
-  const container = start.closest<HTMLElement>('.relative, .input-wrapper, .field');
-  if (container) {
-    const nested = container.querySelector<HTMLElement>(sel);
-    if (nested) return nested;
-  }
-
-  return start.closest<HTMLElement>(sel);
-};
-/* ============================================================ */
-
 const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
   formData,
   onFormChange,
@@ -186,60 +151,6 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     if (next !== formData.amount) onFormChange({ amount: next });
   }, [amountStr, formData.amount, onFormChange]);
 
-  /* =============== TAP guard in capture: elimina tap “a vuoto” =============== */
-  const cancelNextClick = useRef(false);
-  const ptr = useRef<{ id: number | null; startX: number; startY: number; moved: boolean; target: HTMLElement | null; }>({
-    id: null, startX: 0, startY: 0, moved: false, target: null
-  });
-  const SLOP = 12;
-
-  const onRootPointerDownCapture = useCallback((e: React.PointerEvent) => {
-    const root = rootRef.current;
-    if (!root) return;
-    // se arrivo da fuori, blur per evitare focus “appiccicato” dalla pagina precedente
-    const ae = document.activeElement as HTMLElement | null;
-    if (ae && !root.contains(ae)) ae.blur();
-    ptr.current = { id: e.pointerId, startX: e.clientX, startY: e.clientY, moved: false, target: e.target as HTMLElement };
-  }, []);
-
-  const onRootPointerMoveCapture = useCallback((e: React.PointerEvent) => {
-    if (ptr.current.id !== e.pointerId) return;
-    const dx = e.clientX - ptr.current.startX;
-    const dy = e.clientY - ptr.current.startY;
-    if (!ptr.current.moved && Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > SLOP) {
-      ptr.current.moved = true;
-      cancelNextClick.current = true;
-    }
-  }, []);
-
-  const onRootPointerUpCapture = useCallback((e: React.PointerEvent) => {
-    const root = rootRef.current;
-    if (!root || ptr.current.id !== e.pointerId) return;
-    const wasSwipe = ptr.current.moved;
-
-    if (!wasSwipe && ptr.current.target) {
-      const focusEl = findFocusTarget(ptr.current.target, root);
-      if (focusEl && isFocusable(focusEl) && focusEl !== document.activeElement) {
-        requestAnimationFrame(() => {
-          (focusEl as HTMLElement).focus({ preventScroll: true });
-          const t = focusEl as HTMLInputElement;
-          if (t.type === 'date' || t.type === 'time') t.click?.(); // apre nativo al primo tap
-        });
-      }
-    }
-    setTimeout(() => { cancelNextClick.current = false; }, 0);
-    ptr.current.id = null;
-  }, []);
-
-  const onRootClickCapture = useCallback((e: React.MouseEvent) => {
-    if (cancelNextClick.current) {
-      e.preventDefault();
-      e.stopPropagation();
-      cancelNextClick.current = false;
-    }
-  }, []);
-  /* ========================================================================== */
-
   if (typeof formData.amount !== 'number') {
     return (
       <div
@@ -247,10 +158,6 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
         tabIndex={-1}
         className="flex flex-col h-full bg-slate-100 items-center justify-center p-4"
         style={{ touchAction: 'pan-y' }}
-        onPointerDownCapture={onRootPointerDownCapture}
-        onPointerMoveCapture={onRootPointerMoveCapture}
-        onPointerUpCapture={onRootPointerUpCapture}
-        onClickCapture={onRootClickCapture}
       >
         <header className="p-4 flex items-center gap-4 text-slate-800 bg-white shadow-sm absolute top-0 left-0 right-0 z-10">
           {!isDesktop && (
@@ -328,10 +235,6 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
       data-details-page
       className="flex flex-col h-full bg-slate-100 focus:outline-none"
       style={{ touchAction: 'pan-y' }}
-      onPointerDownCapture={onRootPointerDownCapture}
-      onPointerMoveCapture={onRootPointerMoveCapture}
-      onPointerUpCapture={onRootPointerUpCapture}
-      onClickCapture={onRootClickCapture}
     >
       <header className="p-4 flex items-center justify-between gap-4 text-slate-800 bg-white shadow-sm sticky top-0 z-10">
         <div className="flex items-center gap-4">
