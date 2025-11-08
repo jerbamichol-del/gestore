@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef } from 'react';
+import React, { useMemo, useRef } from 'react';
 
 type DateFilter = 'all' | '7d' | '30d' | '6m' | '1y';
 type PeriodType = 'day' | 'week' | 'month' | 'year';
@@ -10,7 +10,7 @@ interface HistoryFilterCardProps {
   onSelectQuickFilter: (value: DateFilter) => void;
   currentQuickFilter: DateFilter;
 
-  // Custom range (apri modal esterna + ritorno range)
+  // Custom range (apertura modal esterna + ritorno range)
   onCustomRangeChange: (range: { start: string | null; end: string | null }) => void;
   currentCustomRange: { start: string | null; end: string | null };
   isCustomRangeActive: boolean;
@@ -25,7 +25,7 @@ interface HistoryFilterCardProps {
   onActivatePeriodFilter: () => void;
 }
 
-/** Util: etichette per i chip veloci */
+/** Etichette quick */
 const QUICK: Array<{ k: DateFilter; label: string }> = [
   { k: 'all',  label: 'Tutto' },
   { k: '7d',   label: '7 giorni' },
@@ -34,7 +34,7 @@ const QUICK: Array<{ k: DateFilter; label: string }> = [
   { k: '1y',   label: '1 anno' },
 ];
 
-/** Util: label periodo */
+/** Label periodo */
 const PERIOD_LABEL: Record<PeriodType, string> = {
   day: 'Giorno',
   week: 'Settimana',
@@ -42,7 +42,7 @@ const PERIOD_LABEL: Record<PeriodType, string> = {
   year: 'Anno',
 };
 
-/** TapGuard: converte il tap (pointer) in azione affidabile anche su mobile */
+/** TapGuard minimale: azione in onPointerUp se non c'è stato swipe */
 function useTap(handler: () => void) {
   const st = useRef<{ id: number | null; x: number; y: number; moved: boolean }>({
     id: null, x: 0, y: 0, moved: false
@@ -51,30 +51,25 @@ function useTap(handler: () => void) {
   const onPointerDown: React.PointerEventHandler = (e) => {
     st.current = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false };
   };
-
   const onPointerMove: React.PointerEventHandler = (e) => {
     if (st.current.id !== e.pointerId) return;
     if (st.current.moved) return;
     const dx = Math.abs(e.clientX - st.current.x);
     const dy = Math.abs(e.clientY - st.current.y);
-    // soglia piccola: se parte uno swipe, non consideriamo più il tap
-    if (dx > 8 || dy > 8) st.current.moved = true;
+    if (dx > 8 || dy > 8) st.current.moved = true; // piccolo slop per distinguere swipe
   };
-
   const onPointerUp: React.PointerEventHandler = (e) => {
     if (st.current.id !== e.pointerId) return;
     const moved = st.current.moved;
     st.current.id = null;
     if (!moved) {
-      // evitiamo click sintetici/ritardi
       e.preventDefault();
       e.stopPropagation();
       handler();
     }
   };
-
   const onClick: React.MouseEventHandler = (e) => {
-    // se il browser genera anche il click, non vogliamo doppioni
+    // Preveniamo il click sintetico per evitare doppi trigger
     e.preventDefault();
     e.stopPropagation();
   };
@@ -82,7 +77,7 @@ function useTap(handler: () => void) {
   return { onPointerDown, onPointerMove, onPointerUp, onClick };
 }
 
-const HistoryFilterCard: React.FC<HistoryFilterCardProps> = ({
+export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = ({
   isActive,
 
   onSelectQuickFilter,
