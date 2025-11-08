@@ -51,6 +51,44 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
   const isSyncingFromParent = useRef(false);
   const typingSinceActivationRef = useRef(false);
 
+  // --- TAP BRIDGE: evita il primo tap a vuoto ---
+  const tapRef = useRef<{
+    id: number | null; t0: number; x0: number; y0: number;
+    moved: boolean; clicked: boolean; target: EventTarget | null;
+  }>({ id: null, t0: 0, x0: 0, y0: 0, moved: false, clicked: false, target: null });
+
+  const SLOP = 10;       // tolleranza movimento (px)
+  const TAP_MS = 350;    // finestra massima per considerare il gesto un tap
+
+  const onPDcap = useCallback((e: React.PointerEvent) => {
+    tapRef.current = {
+      id: e.pointerId, t0: performance.now(), x0: e.clientX, y0: e.clientY,
+      moved: false, clicked: false, target: e.target
+    };
+  }, []);
+
+  const onPMcap = useCallback((e: React.PointerEvent) => {
+    const st = tapRef.current; if (st.id !== e.pointerId || st.moved) return;
+    const dx = Math.abs(e.clientX - st.x0), dy = Math.abs(e.clientY - st.y0);
+    if (dx > SLOP || dy > SLOP) st.moved = true;
+  }, []);
+
+  const onPUcap = useCallback((e: React.PointerEvent) => {
+    const st = tapRef.current; if (st.id !== e.pointerId) return;
+    const timeOk = performance.now() - st.t0 < TAP_MS;
+    if (!st.moved && timeOk && !st.clicked && st.target instanceof Element) {
+      if (!(st.target as Element).closest?.('[data-no-synthetic-click]')) {
+        const ev = new MouseEvent('click', { bubbles: true, cancelable: true, view: window });
+        st.target.dispatchEvent(ev);
+      }
+    }
+    tapRef.current.id = null;
+  }, []);
+
+  const onClickCap = useCallback(() => {
+    tapRef.current.clicked = true; // è arrivato il click nativo
+  }, []);
+
   useEffect(() => {
     onMenuStateChange(activeMenu !== null);
   }, [activeMenu, onMenuStateChange]);
@@ -315,7 +353,16 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
   );
 
   return (
-    <div ref={ref} tabIndex={-1} className="bg-slate-100 w-full h-full flex flex-col focus:outline-none">
+    <div
+      ref={ref}
+      tabIndex={-1}
+      className="bg-slate-100 w-full h-full flex flex-col focus:outline-none"
+      style={{ touchAction: 'pan-y' }}
+      onPointerDownCapture={onPDcap}
+      onPointerMoveCapture={onPMcap}
+      onPointerUpCapture={onPUcap}
+      onClickCapture={onClickCap}
+    >
       <div className="flex-1 flex flex-col">
         <header className={`flex items-center justify-between p-4 flex-shrink-0`}>
           <button
