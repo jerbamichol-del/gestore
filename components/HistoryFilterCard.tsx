@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { DateRangePickerModal } from './DateRangePickerModal';
 import { ChevronLeftIcon } from './icons/ChevronLeftIcon';
@@ -46,12 +47,10 @@ const QuickFilterControl: React.FC<{
         return (
           <button
             key={filter.value}
-            onPointerUp={(e) => {
-                e.preventDefault();
+            onClick={() => {
                 if (swipeStateRef.current.armed) return;
                 onSelect(currentValue === filter.value ? 'all' : filter.value);
             }}
-            onClick={(e) => e.preventDefault()}
             style={{ touchAction: 'manipulation' }}
             className={`flex-1 flex items-center justify-center px-2 text-center font-semibold text-sm transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500
               ${index > 0 ? 'border-l' : ''}
@@ -88,8 +87,7 @@ const CustomDateRangeInputs: React.FC<{
   return (
     <div className={`border h-10 transition-colors rounded-lg ${isActive ? 'border-indigo-600' : 'border-slate-400'}`}>
       <button
-        onPointerUp={(e) => { e.preventDefault(); if (swipeStateRef.current.armed) return; onClick(); }}
-        onClick={(e) => e.preventDefault()}
+        onClick={() => { if (swipeStateRef.current.armed) return; onClick(); }}
         style={{ touchAction: 'manipulation' }}
         aria-label={`Seleziona intervallo di date. ${ariaLabelText}`}
         className={`w-full h-full flex items-center justify-center gap-2 px-2 hover:bg-slate-200 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 rounded-lg ${isActive ? 'bg-indigo-100' : 'bg-slate-100'}`}
@@ -170,12 +168,12 @@ const PeriodNavigator: React.FC<{
 
   return (
     <div ref={wrapperRef} className={`w-full h-10 flex items-center justify-between border rounded-lg relative transition-colors bg-white ${isActive ? 'border-indigo-600' : 'border-slate-400'}`}>
-      <button onPointerUp={(e) => { e.preventDefault(); handlePrev(); }} onClick={e => e.preventDefault()} style={{ touchAction: 'manipulation' }} className="h-full px-4 flex items-center justify-center bg-white hover:bg-slate-100 active:scale-95 transition-transform focus:outline-none rounded-l-lg [-webkit-tap-highlight-color:transparent]" aria-label="Periodo precedente"> <ChevronLeftIcon className="w-5 h-5 text-slate-700" /> </button>
+      <button onClick={handlePrev} style={{ touchAction: 'manipulation' }} className="h-full px-4 flex items-center justify-center bg-white hover:bg-slate-100 active:scale-95 transition-transform focus:outline-none rounded-l-lg [-webkit-tap-highlight-color:transparent]" aria-label="Periodo precedente"> <ChevronLeftIcon className="w-5 h-5 text-slate-700" /> </button>
       <div className={`flex-1 text-center relative h-full ${isActive ? 'bg-indigo-100' : 'bg-slate-100'}`}>
-        <button onPointerUp={(e) => { e.preventDefault(); toggleMenu(); }} onClick={e => e.preventDefault()} style={{ touchAction: 'manipulation' }} className={`w-full h-full flex items-center justify-center text-sm font-semibold transition-colors ${isActive ? 'text-indigo-700' : 'text-slate-700'} hover:bg-slate-200`}> {getLabel()} </button>
-        {isMenuOpen && ( <div className="absolute bottom-full mb-2 left-0 right-0 mx-auto w-40 bg-white border border-slate-200 shadow-lg rounded-lg z-20 p-2 space-y-1 animate-fade-in-down"> {periodTypes.map(p => ( <button key={p.value} onPointerUp={(e) => {e.preventDefault(); handleTypeSelect(p.value)}} onClick={e => e.preventDefault()} style={{ touchAction: 'manipulation' }} className={`w-full text-left px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${periodType === p.value ? 'bg-indigo-100 text-indigo-800' : 'bg-slate-50 text-slate-800 hover:bg-slate-200'}`}> {p.label} </button> ))} </div> )}
+        <button onClick={toggleMenu} style={{ touchAction: 'manipulation' }} className={`w-full h-full flex items-center justify-center text-sm font-semibold transition-colors ${isActive ? 'text-indigo-700' : 'text-slate-700'} hover:bg-slate-200`}> {getLabel()} </button>
+        {isMenuOpen && ( <div className="absolute bottom-full mb-2 left-0 right-0 mx-auto w-40 bg-white border border-slate-200 shadow-lg rounded-lg z-20 p-2 space-y-1 animate-fade-in-down"> {periodTypes.map(p => ( <button key={p.value} onClick={() => handleTypeSelect(p.value)} style={{ touchAction: 'manipulation' }} className={`w-full text-left px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${periodType === p.value ? 'bg-indigo-100 text-indigo-800' : 'bg-slate-50 text-slate-800 hover:bg-slate-200'}`}> {p.label} </button> ))} </div> )}
       </div>
-      <button onPointerUp={(e) => { e.preventDefault(); handleNext(); }} onClick={e => e.preventDefault()} style={{ touchAction: 'manipulation' }} className="h-full px-4 flex items-center justify-center bg-white hover:bg-slate-100 active:scale-95 transition-transform focus:outline-none rounded-r-lg [-webkit-tap-highlight-color:transparent]" aria-label="Periodo successivo"> <ChevronRightIcon className="w-5 h-5 text-slate-700" /> </button>
+      <button onClick={handleNext} style={{ touchAction: 'manipulation' }} className="h-full px-4 flex items-center justify-center bg-white hover:bg-slate-100 active:scale-95 transition-transform focus:outline-none rounded-r-lg [-webkit-tap-highlight-color:transparent]" aria-label="Periodo successivo"> <ChevronRightIcon className="w-5 h-5 text-slate-700" /> </button>
     </div>
   );
 };
@@ -277,12 +275,10 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = ({
                 {[0, 1, 2].map(i => (
                     <button 
                         key={i} 
-                        onPointerUp={(e) => {
-                            e.preventDefault();
+                        onClick={() => {
                             if (swipeStateRef.current.armed) return;
                             handleViewChange(i);
                         }}
-                        onClick={(e) => e.preventDefault()}
                         style={{ touchAction: 'manipulation' }}
                         className={`w-2.5 h-2.5 rounded-full transition-colors duration-200 ${activeViewIndex === i ? 'bg-indigo-600' : 'bg-slate-300 hover:bg-slate-400'}`} 
                         aria-label={`Vai al filtro ${i === 0 ? 'Rapidi' : i === 1 ? 'Periodo' : 'Date'}`}

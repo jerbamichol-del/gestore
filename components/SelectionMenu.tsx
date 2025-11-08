@@ -121,8 +121,7 @@ const SelectionMenu: React.FC<SelectionMenuProps> = ({ isOpen, onClose, title, o
               return (
                 <li key={option.value}>
                   <button
-                    onPointerUp={(e) => { e.preventDefault(); onSelect(option.value); }}
-                    onClick={(e) => e.preventDefault()}
+                    onClick={() => onSelect(option.value)}
                     style={{ touchAction: 'manipulation' }}
                     className={`w-full text-left p-4 flex items-center justify-between gap-4 transition-colors rounded-lg ${
                       isSelected ? 'bg-indigo-100' : 'hover:bg-slate-200'

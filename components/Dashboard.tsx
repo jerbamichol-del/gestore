@@ -158,8 +158,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, onLogout, onNavigateToR
         </div>
         
         <button
-            onPointerUp={(e) => { e.preventDefault(); onNavigateToRecurring(); }}
-            onClick={(e) => e.preventDefault()}
+            onClick={onNavigateToRecurring}
             style={{ touchAction: 'manipulation' }}
             className="w-full flex items-center justify-between gap-4 px-6 py-4 text-left font-semibold text-slate-800 bg-white rounded-2xl shadow-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all"
         >
@@ -219,8 +218,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, onLogout, onNavigateToR
                         return (
                         <button
                             key={`item-${index}`}
-                            onPointerUp={(e) => { e.preventDefault(); handleLegendItemClick(index, e as any); }}
-                            onClick={(e) => e.preventDefault()}
+                            onClick={(e) => handleLegendItemClick(index, e)}
                             style={{ touchAction: 'manipulation' }}
                             data-legend-item
                             className={`flex items-center gap-3 p-2 rounded-full text-left transition-all duration-200 bg-slate-100 hover:bg-slate-200`}

@@ -101,7 +101,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
       const SLOP = 8;
       if (Math.abs(dx) <= SLOP && Math.abs(dy) <= SLOP) return;
 
-      const horizontal = Math.abs(dx) > Math.abs(dy) * 2;
+      const horizontal = Math.abs(dx) > Math.abs(dy) * 1.5;
 
       if (!horizontal) {
         ds.isDragging = false;
@@ -158,6 +158,10 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
     }
 
     if (wasLocked) {
+      // A swipe happened, prevent any ghost click.
+      if (e.cancelable) e.preventDefault();
+      e.stopPropagation();
+      
       const endX = new DOMMatrixReadOnly(window.getComputedStyle(itemRef.current!).transform).m41;
       const velocity = dx / (duration || 1);
       const shouldOpen = endX < -ACTION_WIDTH / 2 || (velocity < -0.3 && dx < -20);
@@ -306,94 +310,6 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
   const [isInteracting, setIsInteracting] = useState(false);
   const autoCloseTimerRef = useRef<number | null>(null);
 
-  // ===== FULL-SURFACE PAGE SWIPE (capture phase) =====
-  const pageRef = useRef<HTMLDivElement>(null);
-  const pageDrag = useRef({
-    active: false,
-    locked: false,
-    pointerId: null as number | null,
-    startX: 0,
-    startY: 0,
-  });
-
-  const onPDcap = (e: React.PointerEvent) => {
-    // Se un item sta già gestendo orizzontale, è aperto, o lo swipe parte da un'area da ignorare, non fare nulla.
-    if (isInteracting || openItemId || (e.target as HTMLElement).closest('[data-no-page-swipe], [role="dialog"], button, input, select, textarea')) {
-      return;
-    }
-    pageDrag.current = {
-      active: true,
-      locked: false,
-      pointerId: e.pointerId,
-      startX: e.clientX,
-      startY: e.clientY,
-    };
-  };
-
-  const onPMcap = (e: React.PointerEvent) => {
-    const pg = pageDrag.current;
-    if (!pg.active || pg.pointerId !== e.pointerId) return;
-
-    const dx = e.clientX - pg.startX;
-    const dy = e.clientY - pg.startY;
-
-    if (!pg.locked) {
-      const SLOP = 15; // evitare attivazioni accidentali
-      if (Math.abs(dx) <= SLOP && Math.abs(dy) <= SLOP) return;
-
-      const horizontal = Math.abs(dx) > Math.abs(dy) * 1.5; // più stringente
-      if (!horizontal) {
-        pg.active = false;
-        pg.pointerId = null;
-        return;
-      }
-
-      pg.locked = true;
-      try { pageRef.current?.setPointerCapture(e.pointerId); } catch {}
-      // 👇 PATCH MINIMALE: chiudi eventuali menu/modali dei filtri
-      window.dispatchEvent(new Event('history:close-menus-request'));
-    }
-  };
-
-  const onPUcap = (e: React.PointerEvent) => {
-    const pg = pageDrag.current;
-    if (!pg.active || pg.pointerId !== e.pointerId) return;
-
-    if (pg.locked) {
-      try { pageRef.current?.releasePointerCapture(e.pointerId); } catch {}
-    }
-
-    const wasLocked = pg.locked;
-
-    pg.active = false;
-    pg.locked = false;
-    pg.pointerId = null;
-
-    if (wasLocked) {
-      const dx = e.clientX - pg.startX;
-      const dy = e.clientY - pg.startY;
-
-      const THRESH = 100;
-      if (Math.abs(dx) > Math.abs(dy) && dx > THRESH && !isInteracting && !openItemId) {
-        onNavigateHome();
-      }
-    }
-  };
-
-  const onPCcap = (e: React.PointerEvent) => {
-    const pg = pageDrag.current;
-    if (!pg.active || pg.pointerId !== e.pointerId) return;
-
-    if (pg.locked) {
-      try { pageRef.current?.releasePointerCapture(e.pointerId); } catch {}
-    }
-
-    pg.active = false;
-    pg.locked = false;
-    pg.pointerId = null;
-  };
-  // ====================================================
-
   const prevIsEditingOrDeleting = useRef(isEditingOrDeleting);
   useEffect(() => {
     if (prevIsEditingOrDeleting.current && !isEditingOrDeleting) {
@@ -519,13 +435,8 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
 
   return (
     <div
-      ref={pageRef}
       className="h-full flex flex-col bg-slate-100"
       style={{ touchAction: 'pan-y' }}
-      onPointerDownCapture={onPDcap}
-      onPointerMoveCapture={onPMcap}
-      onPointerUpCapture={onPUcap}
-      onPointerCancelCapture={onPCcap}
     >
       <div className="flex-1 overflow-y-auto" style={{ touchAction: 'pan-y' }}>
         {expenseGroups.length > 0 ? (
@@ -534,7 +445,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
               <h2 className="font-bold text-slate-800 text-lg px-4 py-2 sticky top-0 bg-slate-100/80 backdrop-blur-sm z-10">
                 {group.label}
               </h2>
-              <div className="bg-white rounded-xl shadow-md mx-2 overflow-hidden">
+              <div data-no-page-swipe className="bg-white rounded-xl shadow-md mx-2 overflow-hidden">
                 {group.expenses.map((expense, index) => (
                   <React.Fragment key={expense.id}>
                     {index > 0 && <hr className="border-t border-slate-200 ml-16" />}

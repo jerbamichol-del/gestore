@@ -19,13 +19,6 @@ interface CalculatorInputScreenProps {
   isDesktop: boolean;
 }
 
-const parseAmountString = (str: string): number => {
-  // Rimuove i punti (separatori di migliaia) e converte la virgola in punto decimale
-  const cleaned = (str || '0').replace(/\./g, '').replace(',', '.');
-  const num = parseFloat(cleaned);
-  return isNaN(num) ? 0 : num;
-};
-
 const formatAmountForDisplay = (numStr: string): string => {
   let sanitizedStr = String(numStr || '0').replace('.', ',');
   let [integerPart, decimalPart] = sanitizedStr.split(',');
@@ -66,43 +59,29 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
     const onActivated = (e: Event) => {
       const ce = e as CustomEvent;
       if (ce.detail === 'calculator') {
-        // Blur forzato di qualsiasi elemento attivo (potrebbe essere dalla pagina dettagli)
-        const ae = document.activeElement as HTMLElement | null;
-        if (ae && typeof ae.blur === 'function') {
-          ae.blur();
-        }
-
-        // Forza la sincronizzazione dal parent quando si torna alla calcolatrice
-        // (il valore potrebbe essere stato modificato nella pagina dettagli)
-        const parentAmount = formData.amount || 0;
-        const currentDisplayAmount = parseAmountString(currentValue);
-        if (Math.abs(parentAmount - currentDisplayAmount) > 1e-9) {
-          setCurrentValue(String(parentAmount).replace('.', ','));
-        }
+        typingSinceActivationRef.current = false;
         setShouldResetCurrentValue(false);
         setJustCalculated(false);
       }
     };
     window.addEventListener('page-activated', onActivated as EventListener);
     return () => window.removeEventListener('page-activated', onActivated as EventListener);
-  }, [formData.amount, currentValue]);
+  }, []);
 
   useEffect(() => {
     const parentAmount = formData.amount || 0;
-    const currentDisplayAmount = parseAmountString(currentValue);
+    const currentDisplayAmount = parseFloat(currentValue.replace(/\./g, '').replace(',', '.')) || 0;
 
     if (Math.abs(parentAmount - currentDisplayAmount) > 1e-9) {
       if (!typingSinceActivationRef.current) {
         isSyncingFromParent.current = true;
         setCurrentValue(String(parentAmount).replace('.', ','));
+        // If the amount is synced from the parent, reset any ongoing calculation.
+        setPreviousValue(null);
+        setOperator(null);
+        setShouldResetCurrentValue(false);
+        setJustCalculated(false);
       }
-    }
-
-    if (formData.amount === 0 || !formData.amount) {
-      setPreviousValue(null);
-      setOperator(null);
-      setShouldResetCurrentValue(false);
-      setJustCalculated(false);
     }
   }, [formData.amount, currentValue]);
 
@@ -111,8 +90,8 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
       isSyncingFromParent.current = false;
       return;
     }
-    const newAmount = parseAmountString(currentValue);
-    if (Math.abs((formData.amount || 0) - newAmount) > 1e-9) {
+    const newAmount = parseFloat(currentValue.replace(/\./g, '').replace(',', '.'));
+    if (!isNaN(newAmount) && Math.abs((formData.amount || 0) - newAmount) > 1e-9) {
       onFormChange({ amount: newAmount });
     }
   }, [currentValue, onFormChange, formData.amount]);
@@ -206,8 +185,8 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
   }, []);
 
   const calculate = (): string => {
-    const prev = parseAmountString(previousValue || '0');
-    const current = parseAmountString(currentValue);
+    const prev = parseFloat((previousValue || '0').replace(/\./g, '').replace(',', '.'));
+    const current = parseFloat(currentValue.replace(/\./g, '').replace(',', '.'));
     let result = 0;
     switch (operator) {
       case '+': result = prev + current; break;
@@ -300,44 +279,40 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
     }
   };
 
-  const KeypadButton: React.FC<KeypadButtonProps> = ({ children, onClick, className = '', ...props }) => {
-    return (
-      <div
-        role="button" tabIndex={0}
-        onClick={(e) => { onClick?.(); blurSelf(e.currentTarget); }}
-        onKeyDown={(e) => {
-          if ((e.key === 'Enter' || e.key === ' ') && onClick) { e.preventDefault(); onClick(); blurSelf(e.currentTarget); }
-        }}
-        onPointerUp={(e) => blurSelf(e.currentTarget)}
-        onMouseDown={(e) => e.preventDefault()} // evita focus "appiccicoso" su mobile
-        className={`flex items-center justify-center text-5xl font-light focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 transition-colors duration-150 select-none cursor-pointer ${className}`}
-        style={{
-          WebkitTapHighlightColor: 'transparent',
-          touchAction: 'manipulation',
-          WebkitTouchCallout: 'none'
-        } as React.CSSProperties}
-        {...props}
-      >
-        <span className="pointer-events-none">{children}</span>
-      </div>
-    );
-  };
+  const KeypadButton: React.FC<KeypadButtonProps> = ({ children, onClick, className = '', ...props }) => (
+    <div
+      role="button" tabIndex={0}
+      onClick={(e) => { onClick?.(); blurSelf(e.currentTarget); }}
+      onKeyDown={(e) => {
+        if ((e.key === 'Enter' || e.key === ' ') && onClick) { e.preventDefault(); onClick(); blurSelf(e.currentTarget); }
+      }}
+      onPointerUp={(e) => blurSelf(e.currentTarget)}
+      onMouseDown={(e) => e.preventDefault()} // evita focus “appiccicoso” su mobile
+      className={`flex items-center justify-center text-5xl font-light focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 transition-colors duration-150 select-none cursor-pointer ${className}`}
+      style={{
+        WebkitTapHighlightColor: 'transparent',
+        touchAction: 'manipulation',
+        WebkitTouchCallout: 'none'
+      } as React.CSSProperties}
+      {...props}
+    >
+      <span className="pointer-events-none">{children}</span>
+    </div>
+  );
 
-  const OperatorButton: React.FC<{ children: React.ReactNode; onClick: () => void }> = ({ children, onClick }) => {
-    return (
-      <div
-        role="button" tabIndex={0}
-        onClick={(e) => { onClick(); blurSelf(e.currentTarget); }}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); blurSelf(e.currentTarget); } }}
-        onPointerUp={(e) => blurSelf(e.currentTarget)}
-        onMouseDown={(e) => e.preventDefault()}
-        className="flex-1 w-full text-5xl text-indigo-600 font-light active:bg-slate-300/80 transition-colors duration-150 flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 select-none cursor-pointer"
-        style={{ WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' } as React.CSSProperties}
-      >
-        <span className="pointer-events-none">{children}</span>
-      </div>
-    );
-  };
+  const OperatorButton: React.FC<{ children: React.ReactNode; onClick: () => void }> = ({ children, onClick }) => (
+    <div
+      role="button" tabIndex={0}
+      onClick={(e) => { onClick(); blurSelf(e.currentTarget); }}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); blurSelf(e.currentTarget); } }}
+      onPointerUp={(e) => blurSelf(e.currentTarget)}
+      onMouseDown={(e) => e.preventDefault()}
+      className="flex-1 w-full text-5xl text-indigo-600 font-light active:bg-slate-300/80 transition-colors duration-150 flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 select-none cursor-pointer"
+      style={{ WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' } as React.CSSProperties}
+    >
+      <span className="pointer-events-none">{children}</span>
+    </div>
+  );
 
   return (
     <div ref={ref} tabIndex={-1} className="bg-slate-100 w-full h-full flex flex-col focus:outline-none">

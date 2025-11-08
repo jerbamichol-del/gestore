@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { PlusIcon } from './icons/PlusIcon';
 import { MicrophoneIcon } from './icons/MicrophoneIcon';
@@ -89,8 +90,7 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({ onAddManual
                          style={{ transitionDelay: isOpen ? `${(actions.length - 1 - index) * 50}ms` : '0ms' }}
                     >
                         <button
-                            onPointerUp={(e) => { e.preventDefault(); action.onClick(); }}
-                            onClick={(e) => e.preventDefault()}
+                            onClick={action.onClick}
                             style={{ touchAction: 'manipulation' }}
                             tabIndex={isOpen ? 0 : -1}
                             className={`flex justify-center items-center w-14 h-14 ${action.bgColor} text-white rounded-full shadow-lg ${action.hoverBgColor} focus:outline-none`}
@@ -103,8 +103,7 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({ onAddManual
             </div>
             
             <button
-                onPointerUp={(e) => { e.preventDefault(); setIsOpen(!isOpen); }}
-                onClick={(e) => e.preventDefault()}
+                onClick={() => setIsOpen(!isOpen)}
                 style={{ touchAction: 'manipulation' }}
                 className={`pointer-events-auto flex justify-center items-center w-16 h-16 bg-indigo-600 text-white rounded-full shadow-lg hover:bg-indigo-700 transition-all transform duration-500 ease-in-out focus:outline-none ${isMounted ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-16 scale-90'}`}
                 aria-expanded={isOpen}

@@ -193,7 +193,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     if (updatedTemplates.length > 0) {
         setRecurringExpenses(prev => prev.map(t => updatedTemplates.find(ut => ut.id === t.id) || t));
     }
-  }, []); // Run on mount
+  }, []);
 
 
   const triggerSuccessIndicator = useCallback(() => {
@@ -265,9 +265,9 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       onSwipeRight: activeView === 'history' ? handleNavigateHome : undefined,
     },
     {
-      enabled: !isCalculatorContainerOpen && !isDateModalOpen && !isRecurringScreenOpen,
-      threshold: 32,
-      slop: 30, // Increased slop to make page swipe less sensitive than item swipe
+      enabled: !isCalculatorContainerOpen && !isDateModalOpen && !isRecurringScreenOpen && !isHistoryItemInteracting,
+      threshold: 40,
+      slop: 40,
       ignoreSelector: '[data-no-page-swipe]',
     }
   );
@@ -334,12 +334,9 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   };
 
   const handleFormSubmit = (data: Omit<Expense, 'id'> | Expense) => {
-      // Logic to convert a recurring expense to a single one
       if (editingRecurringExpense && 'id' in data && data.id === editingRecurringExpense.id && data.frequency !== 'recurring') {
-          // 1. Remove from recurring expenses
           setRecurringExpenses(prev => prev.filter(e => e.id !== editingRecurringExpense.id));
           
-          // 2. Add as a new single expense
           const newSingleExpenseData: Omit<Expense, 'id'> = {
               ...data,
               frequency: 'single',
@@ -362,7 +359,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
           } else {
               addRecurringExpense(data);
           }
-      } else { // single expense
+      } else {
           if ('id' in data) {
               updateExpense(data);
           } else {
@@ -454,13 +451,8 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const mainContentClasses = isCalculatorContainerOpen || isRecurringScreenOpen ? 'pointer-events-none' : '';
   
   const baseTranslatePercent = activeView === 'home' ? 0 : -50;
-  const dragTranslatePercent = isSwiping ? progress * 50 : 0;
+  const dragTranslatePercent = progress * 50;
   const viewTranslate = baseTranslatePercent + dragTranslatePercent;
-
-  const swipeContainerStyle: React.CSSProperties = {
-      transform: `translateX(${viewTranslate}%)`,
-      transition: isSwiping ? 'none' : 'transform 0.25s cubic-bezier(0.22, 0.61, 0.36, 1)',
-  };
 
   const isAnyModalOpen = isFormOpen || isImageSourceModalOpen || isVoiceModalOpen || isConfirmDeleteModalOpen || isConfirmDeleteRecurringModalOpen || isMultipleExpensesModalOpen || isDateModalOpen || isParsingImage || !!imageForAnalysis || isRecurringScreenOpen;
 
@@ -491,7 +483,11 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         >
             <div 
                 className="w-[200%] h-full flex swipe-container"
-                style={swipeContainerStyle}
+                style={{
+                  transform: `translateX(${viewTranslate}%)`,
+                  transition: isSwiping ? 'none' : 'transform 0.08s ease-out',
+                  pointerEvents: 'auto',
+                }}
             >
                 <div className="w-1/2 h-full overflow-y-auto space-y-6 swipe-view" style={{ touchAction: 'pan-y' }}>
                     <Dashboard expenses={expenses} onLogout={onLogout} onNavigateToRecurring={() => setIsRecurringScreenOpen(true)} isPageSwiping={isSwiping} />
