@@ -128,41 +128,6 @@ const daysOfWeekForPicker = [
   { label: 'Dom', value: 0 },
 ];
 
-/* ======= focus helpers ======= */
-const isFocusable = (el: HTMLElement | null) =>
-  !!el && (
-    el.tagName === 'INPUT' ||
-    el.tagName === 'TEXTAREA' ||
-    el.tagName === 'SELECT' ||
-    el.isContentEditable
-  );
-
-const findFocusTarget = (start: HTMLElement, root: HTMLElement) => {
-  const sel = 'input, textarea, select, [contenteditable=""], [contenteditable="true"]';
-
-  if (start.matches(sel)) return start;
-
-  const viaLabel = start.closest('label');
-  if (viaLabel) {
-    const forId = viaLabel.getAttribute('for');
-    if (forId) {
-      const byId = root.querySelector<HTMLElement>(`#${CSS.escape(forId)}`);
-      if (byId) return byId;
-    }
-    const nested = viaLabel.querySelector<HTMLElement>(sel);
-    if (nested) return nested;
-  }
-
-  const container = start.closest<HTMLElement>('.relative, .input-wrapper, .field');
-  if (container) {
-    const nested = container.querySelector<HTMLElement>(sel);
-    if (nested) return nested;
-  }
-
-  return start.closest<HTMLElement>(sel);
-};
-/* ============================= */
-
 const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
   formData,
   onFormChange,
@@ -241,100 +206,6 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
       return () => clearTimeout(t);
     } else setIsRecurrenceModalAnimating(false);
   }, [isRecurrenceModalOpen, formData.recurrence, formData.recurrenceInterval, formData.recurrenceDays, formData.monthlyRecurrenceType]);
-
-  /* ==============================
-     TAP vs SWIPE GESTURE GUARD + RESET SICURI
-     ============================== */
-  const cancelNextClick = useRef(false);
-  const pRef = useRef<{
-    id: number | null;
-    startX: number;
-    startY: number;
-    moved: boolean;
-    target: HTMLElement | null;
-  }>({ id: null, startX: 0, startY: 0, moved: false, target: null });
-
-  const SLOP = 12;
-
-  const onRootPointerDownCapture = useCallback((e: React.PointerEvent) => {
-    const root = rootRef.current;
-    if (!root) return;
-
-    // se il focus è fuori pagina, blur (evita “agganci” da altra vista)
-    const ae = document.activeElement as HTMLElement | null;
-    if (ae && !root.contains(ae)) ae.blur();
-
-    pRef.current = {
-      id: e.pointerId,
-      startX: e.clientX,
-      startY: e.clientY,
-      moved: false,
-      target: e.target as HTMLElement,
-    };
-  }, []);
-
-  const onRootPointerMoveCapture = useCallback((e: React.PointerEvent) => {
-    const p = pRef.current;
-    if (p.id !== e.pointerId) return;
-
-    const dx = e.clientX - p.startX;
-    const dy = e.clientY - p.startY;
-
-    if (!p.moved && Math.abs(dx) > SLOP && Math.abs(dx) > Math.abs(dy)) {
-      p.moved = true;
-      cancelNextClick.current = true;
-    }
-  }, []);
-
-  const onRootPointerUpCapture = useCallback((e: React.PointerEvent) => {
-    const root = rootRef.current;
-    const p = pRef.current;
-    if (!root || p.id !== e.pointerId) return;
-
-    const wasSwipe = p.moved;
-
-    if (!wasSwipe && p.target) {
-      // TAP: focus immediato sul vero target (niente primo tap a vuoto)
-      const focusEl = findFocusTarget(p.target, root);
-      if (focusEl && isFocusable(focusEl) && focusEl !== document.activeElement) {
-        requestAnimationFrame(() => {
-          (focusEl as HTMLElement).focus({ preventScroll: true });
-          const t = focusEl as HTMLInputElement;
-          if (t.type === 'date' || t.type === 'time') t.click?.();
-        });
-      }
-    }
-
-    // reset rapido del flag “annulla click”
-    setTimeout(() => { cancelNextClick.current = false; }, 0);
-    pRef.current.id = null;
-  }, []);
-
-  const onRootPointerCancelCapture = useCallback((e: React.PointerEvent) => {
-    if (pRef.current.id !== e.pointerId) return;
-    pRef.current.id = null;
-    pRef.current.moved = false;
-    cancelNextClick.current = false;
-  }, []);
-
-  useEffect(() => {
-    const reset = () => { cancelNextClick.current = false; pRef.current.id = null; pRef.current.moved = false; };
-    document.addEventListener('visibilitychange', reset);
-    window.addEventListener('blur', reset);
-    return () => {
-      document.removeEventListener('visibilitychange', reset);
-      window.removeEventListener('blur', reset);
-    };
-  }, []);
-
-  const onRootClickCapture = useCallback((e: React.MouseEvent) => {
-    if (cancelNextClick.current) {
-      e.preventDefault();
-      e.stopPropagation();
-      cancelNextClick.current = false;
-    }
-  }, []);
-  /* ============================== */
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -514,11 +385,6 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
       tabIndex={-1}
       className="flex flex-col h-full bg-slate-100 focus:outline-none"
       style={{ touchAction: 'pan-y' }}
-      onPointerDownCapture={onRootPointerDownCapture}
-      onPointerMoveCapture={onRootPointerMoveCapture}
-      onPointerUpCapture={onRootPointerUpCapture}
-      onPointerCancelCapture={onRootPointerCancelCapture}
-      onClickCapture={onRootClickCapture}
     >
       <header className="p-4 flex items-center justify-between gap-4 text-slate-800 bg-white shadow-sm sticky top-0 z-10">
         <div className="flex items-center gap-4">
