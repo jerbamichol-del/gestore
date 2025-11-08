@@ -108,6 +108,61 @@ const getRecurrenceSummary = (e: Partial<Expense>) => {
   return s;
 };
 
+const getIntervalLabel = (
+  recurrence?: 'daily'|'weekly'|'monthly'|'yearly',
+  n?: number
+) => {
+  const c = n || 1;
+  switch (recurrence) {
+    case 'daily':   return c === 1 ? 'giorno'     : 'giorni';
+    case 'weekly':  return c === 1 ? 'settimana'  : 'settimane';
+    case 'monthly': return c === 1 ? 'mese'       : 'mesi';
+    case 'yearly':  return c === 1 ? 'anno'       : 'anni';
+    default:        return 'mese';
+  }
+};
+
+const daysOfWeekForPicker = [
+  { label: 'Lun', value: 1 }, { label: 'Mar', value: 2 }, { label: 'Mer', value: 3 },
+  { label: 'Gio', value: 4 }, { label: 'Ven', value: 5 }, { label: 'Sab', value: 6 },
+  { label: 'Dom', value: 0 },
+];
+
+/* ======= focus helpers ======= */
+const isFocusable = (el: HTMLElement | null) =>
+  !!el && (
+    el.tagName === 'INPUT' ||
+    el.tagName === 'TEXTAREA' ||
+    el.tagName === 'SELECT' ||
+    el.isContentEditable
+  );
+
+const findFocusTarget = (start: HTMLElement, root: HTMLElement) => {
+  const sel = 'input, textarea, select, [contenteditable=""], [contenteditable="true"]';
+
+  if (start.matches(sel)) return start;
+
+  const viaLabel = start.closest('label');
+  if (viaLabel) {
+    const forId = viaLabel.getAttribute('for');
+    if (forId) {
+      const byId = root.querySelector<HTMLElement>(`#${CSS.escape(forId)}`);
+      if (byId) return byId;
+    }
+    const nested = viaLabel.querySelector<HTMLElement>(sel);
+    if (nested) return nested;
+  }
+
+  const container = start.closest<HTMLElement>('.relative, .input-wrapper, .field');
+  if (container) {
+    const nested = container.querySelector<HTMLElement>(sel);
+    if (nested) return nested;
+  }
+
+  return start.closest<HTMLElement>(sel);
+};
+/* ============================= */
+
 const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
   formData,
   onFormChange,
@@ -120,36 +175,261 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
 }) => {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const amountInputRef = useRef<HTMLInputElement>(null);
+  const descriptionInputRef = useRef<HTMLInputElement>(null);
 
   const [activeMenu, setActiveMenu] = useState<'account' | null>(null);
-  const [amountStr, setAmountStr] = useState('');
+  const [amountStr, setAmountStr] = useState('');        // ← importo LOCALE (niente sync continuo col parent)
   const [isAmountFocused, setIsAmountFocused] = useState(false);
 
   const [isFrequencyModalOpen, setIsFrequencyModalOpen] = useState(false);
-  const [isRecurrenceModalOpen, setIsRecurrenceModalOpen] = useState(false);
+  const [isFrequencyModalAnimating, setIsFrequencyModalAnimating] = useState(false);
 
-  // comunica al parent quando un menu/modale è aperto (senza toccare lo swipe)
+  const [isRecurrenceModalOpen, setIsRecurrenceModalOpen] = useState(false);
+  const [isRecurrenceModalAnimating, setIsRecurrenceModalAnimating] = useState(false);
+  const [isRecurrenceOptionsOpen, setIsRecurrenceOptionsOpen] = useState(false);
+  const [isRecurrenceEndOptionsOpen, setIsRecurrenceEndOptionsOpen] = useState(false);
+
+  const [tempRecurrence, setTempRecurrence] = useState(formData.recurrence);
+  const [tempRecurrenceInterval, setTempRecurrenceInterval] = useState<number | undefined>(formData.recurrenceInterval);
+  const [tempRecurrenceDays, setTempRecurrenceDays] = useState<number[] | undefined>(formData.recurrenceDays);
+  const [tempMonthlyRecurrenceType, setTempMonthlyRecurrenceType] = useState(formData.monthlyRecurrenceType);
+
+  const isSingleRecurring =
+    formData.frequency === 'recurring' &&
+    formData.recurrenceEndType === 'count' &&
+    formData.recurrenceCount === 1;
+
+  // —————————————————————————————————————————————————————
+  // OWNERSHIP & INIT IMPORTO: prendi il valore solo al mount, poi resta locale
+  const didInitAmountRef = useRef(false);
   useEffect(() => {
-    onMenuStateChange(!!(activeMenu || isFrequencyModalOpen || isRecurrenceModalOpen));
+    if (!didInitAmountRef.current) {
+      const initial = typeof formData.amount === 'number' ? String(formData.amount).replace('.', ',') : '';
+      setAmountStr(initial);
+      didInitAmountRef.current = true;
+    }
+  }, [formData.amount]);
+  // lock “pagina dettagli aperta” (se la calcolatrice lo rispetta, non invierà ulteriori cambi)
+  useEffect(() => {
+    try { sessionStorage.setItem('GS_DETAILS_OPEN', '1'); } catch {}
+    return () => { try { sessionStorage.removeItem('GS_DETAILS_OPEN'); } catch {} };
+  }, []);
+  // —————————————————————————————————————————————————————
+
+  // disabilita swipe container quando modali/menu aperti
+  useEffect(() => {
+    const anyOpen = !!(activeMenu || isFrequencyModalOpen || isRecurrenceModalOpen);
+    onMenuStateChange(anyOpen);
   }, [activeMenu, isFrequencyModalOpen, isRecurrenceModalOpen, onMenuStateChange]);
 
-  // sync amount string <- parent (solo quando non sto editando)
+  // animazioni modali
   useEffect(() => {
-    if (!isAmountFocused) {
-      const parent = formData.amount ?? 0;
-      const local = parseFloat((amountStr || '0').replace(',', '.')) || 0;
-      if (Math.abs(parent - local) > 1e-9) {
-        setAmountStr(parent === 0 ? '' : String(parent).replace('.', ','));
+    if (isFrequencyModalOpen) {
+      const t = setTimeout(() => setIsFrequencyModalAnimating(true), 10);
+      return () => clearTimeout(t);
+    } else setIsFrequencyModalAnimating(false);
+  }, [isFrequencyModalOpen]);
+
+  useEffect(() => {
+    if (isRecurrenceModalOpen) {
+      setTempRecurrence(formData.recurrence || 'monthly');
+      setTempRecurrenceInterval(formData.recurrenceInterval || 1);
+      setTempRecurrenceDays(formData.recurrenceDays || []);
+      setTempMonthlyRecurrenceType(formData.monthlyRecurrenceType || 'dayOfMonth');
+      setIsRecurrenceOptionsOpen(false);
+      const t = setTimeout(() => setIsRecurrenceModalAnimating(true), 10);
+      return () => clearTimeout(t);
+    } else setIsRecurrenceModalAnimating(false);
+  }, [isRecurrenceModalOpen, formData.recurrence, formData.recurrenceInterval, formData.recurrenceDays, formData.monthlyRecurrenceType]);
+
+  /* ==============================
+     TAP vs SWIPE GESTURE GUARD + RESET SICURI
+     ============================== */
+  const cancelNextClick = useRef(false);
+  const pRef = useRef<{
+    id: number | null;
+    startX: number;
+    startY: number;
+    moved: boolean;
+    target: HTMLElement | null;
+  }>({ id: null, startX: 0, startY: 0, moved: false, target: null });
+
+  const SLOP = 12;
+
+  const onRootPointerDownCapture = useCallback((e: React.PointerEvent) => {
+    const root = rootRef.current;
+    if (!root) return;
+
+    // se il focus è fuori pagina, blur (evita “agganci” da altra vista)
+    const ae = document.activeElement as HTMLElement | null;
+    if (ae && !root.contains(ae)) ae.blur();
+
+    pRef.current = {
+      id: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      moved: false,
+      target: e.target as HTMLElement,
+    };
+  }, []);
+
+  const onRootPointerMoveCapture = useCallback((e: React.PointerEvent) => {
+    const p = pRef.current;
+    if (p.id !== e.pointerId) return;
+
+    const dx = e.clientX - p.startX;
+    const dy = e.clientY - p.startY;
+
+    if (!p.moved && Math.abs(dx) > SLOP && Math.abs(dx) > Math.abs(dy)) {
+      p.moved = true;
+      cancelNextClick.current = true;
+    }
+  }, []);
+
+  const onRootPointerUpCapture = useCallback((e: React.PointerEvent) => {
+    const root = rootRef.current;
+    const p = pRef.current;
+    if (!root || p.id !== e.pointerId) return;
+
+    const wasSwipe = p.moved;
+
+    if (!wasSwipe && p.target) {
+      // TAP: focus immediato sul vero target (niente primo tap a vuoto)
+      const focusEl = findFocusTarget(p.target, root);
+      if (focusEl && isFocusable(focusEl) && focusEl !== document.activeElement) {
+        requestAnimationFrame(() => {
+          (focusEl as HTMLElement).focus({ preventScroll: true });
+          const t = focusEl as HTMLInputElement;
+          if (t.type === 'date' || t.type === 'time') t.click?.();
+        });
       }
     }
-  }, [formData.amount, isAmountFocused, amountStr]);
 
-  // sync parent <- amount string
+    // reset rapido del flag “annulla click”
+    setTimeout(() => { cancelNextClick.current = false; }, 0);
+    pRef.current.id = null;
+  }, []);
+
+  const onRootPointerCancelCapture = useCallback((e: React.PointerEvent) => {
+    if (pRef.current.id !== e.pointerId) return;
+    pRef.current.id = null;
+    pRef.current.moved = false;
+    cancelNextClick.current = false;
+  }, []);
+
   useEffect(() => {
-    const num = parseFloat((amountStr || '').replace(',', '.'));
-    const next = isNaN(num) ? 0 : num;
-    if (next !== formData.amount) onFormChange({ amount: next });
-  }, [amountStr, formData.amount, onFormChange]);
+    const reset = () => { cancelNextClick.current = false; pRef.current.id = null; pRef.current.moved = false; };
+    document.addEventListener('visibilitychange', reset);
+    window.addEventListener('blur', reset);
+    return () => {
+      document.removeEventListener('visibilitychange', reset);
+      window.removeEventListener('blur', reset);
+    };
+  }, []);
+
+  const onRootClickCapture = useCallback((e: React.MouseEvent) => {
+    if (cancelNextClick.current) {
+      e.preventDefault();
+      e.stopPropagation();
+      cancelNextClick.current = false;
+    }
+  }, []);
+  /* ============================== */
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+
+    if (name === 'recurrenceEndDate' && value === '') {
+      onFormChange({ recurrenceEndType: 'forever', recurrenceEndDate: undefined });
+      return;
+    }
+    if (name === 'recurrenceCount') {
+      const num = parseInt(value, 10);
+      onFormChange({ [name]: isNaN(num) || num <= 0 ? undefined : num } as any);
+      return;
+    }
+    if (name === 'amount') {
+      // IMPORTO LOCALE: non aggiornare il parent qui
+      let s = value.replace(/[^0-9,]/g, '');
+      const parts = s.split(',');
+      if (parts.length > 2) s = parts[0] + ',' + parts.slice(1).join('');
+      if (parts[1]?.length > 2) s = parts[0] + ',' + parts[1].slice(0, 2);
+      setAmountStr(s);
+      return;
+    }
+    onFormChange({ [name]: value });
+  };
+
+  const handleAccountSelect = (accountId: string) => {
+    onFormChange({ accountId });
+    setActiveMenu(null);
+  };
+
+  const blurActive = () => (document.activeElement as HTMLElement | null)?.blur?.();
+
+  const handleFrequencySelect = (frequency: 'none' | 'single' | 'recurring') => {
+    const up: Partial<Expense> = {};
+    if (frequency === 'none') {
+      Object.assign(up, {
+        frequency: undefined,
+        date: toYYYYMMDD(new Date()),
+        time: getCurrentTime(),
+        recurrence: undefined,
+        monthlyRecurrenceType: undefined,
+        recurrenceInterval: undefined,
+        recurrenceDays: undefined,
+        recurrenceEndType: 'forever',
+        recurrenceEndDate: undefined,
+        recurrenceCount: undefined,
+      });
+    } else {
+      up.frequency = 'recurring';
+      up.time = undefined;
+      if (!formData.recurrence) up.recurrence = 'monthly';
+      if (frequency === 'single') {
+        up.recurrenceEndType = 'count';
+        up.recurrenceCount = 1;
+        up.recurrenceEndDate = undefined;
+      } else {
+        up.recurrenceEndType = 'forever';
+        up.recurrenceCount = undefined;
+        up.recurrenceEndDate = undefined;
+      }
+    }
+    onFormChange(up);
+    setIsFrequencyModalOpen(false);
+    setIsFrequencyModalAnimating(false);
+  };
+
+  const handleApplyRecurrence = () => {
+    onFormChange({
+      recurrence: tempRecurrence as any,
+      recurrenceInterval: tempRecurrenceInterval || 1,
+      recurrenceDays: tempRecurrence === 'weekly' ? tempRecurrenceDays : undefined,
+      monthlyRecurrenceType: tempRecurrence === 'monthly' ? tempMonthlyRecurrenceType : undefined,
+    });
+    setIsRecurrenceModalOpen(false);
+    setIsRecurrenceModalAnimating(false);
+  };
+
+  const dynamicMonthlyDayOfWeekLabel = useMemo(() => {
+    const ds = formData.date;
+    if (!ds) return 'Seleziona una data di inizio valida';
+    const d = parseLocalYYYYMMDD(ds);
+    if (!d) return 'Data non valida';
+    const dom = d.getDate();
+    const dow = d.getDay();
+    const wom = Math.floor((dom - 1) / 7);
+    return `Ogni ${ordinalSuffixes[wom]} ${dayOfWeekNames[dow]} del mese`;
+  }, [formData.date]);
+
+  const getRecurrenceEndLabel = () => {
+    const t = formData.recurrenceEndType;
+    if (!t || t === 'forever') return 'Per sempre';
+    if (t === 'date') return 'Fino a';
+    if (t === 'count') return 'Numero di volte';
+    return 'Per sempre';
+  };
 
   if (typeof formData.amount !== 'number') {
     return (
@@ -157,7 +437,6 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
         ref={rootRef}
         tabIndex={-1}
         className="flex flex-col h-full bg-slate-100 items-center justify-center p-4"
-        style={{ touchAction: 'pan-y' }}
       >
         <header className="p-4 flex items-center gap-4 text-slate-800 bg-white shadow-sm absolute top-0 left-0 right-0 z-10">
           {!isDesktop && (
@@ -173,11 +452,6 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
   }
 
   const isFrequencySet = !!formData.frequency;
-  const isSingleRecurring =
-    formData.frequency === 'recurring' &&
-    formData.recurrenceEndType === 'count' &&
-    formData.recurrenceCount === 1;
-
   const selectedAccountLabel = accounts.find(a => a.id === formData.accountId)?.name;
   const accountOptions = accounts.map(a => ({ value: a.id, label: a.name }));
 
@@ -196,10 +470,10 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
             name="date"
             type="date"
             value={formData.date || ''}
-            onChange={(e) => onFormChange({ date: e.target.value })}
+            onChange={handleInputChange}
             className={`block w-full rounded-md bg-white py-2.5 pl-10 pr-3 text-base text-slate-900 placeholder:text-slate-400 focus:outline-none ${dateError ? 'border-red-500 ring-1 ring-red-500' : 'border border-slate-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500'}`}
             enterKeyHint="done"
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.currentTarget.blur(); e.preventDefault(); } }}
+            onKeyDown={(e) => { if (e.key === 'Enter') { (e.currentTarget as HTMLInputElement).blur(); e.preventDefault(); } }}
           />
         </div>
         {dateError && <p className="mt-1 text-sm text-red-600">Per favore, imposta una data.</p>}
@@ -217,10 +491,10 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
               name="time"
               type="time"
               value={formData.time || ''}
-              onChange={(e) => onFormChange({ time: e.target.value })}
+              onChange={handleInputChange}
               className="block w-full rounded-md border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-base text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
               enterKeyHint="done"
-              onKeyDown={(e) => { if (e.key === 'Enter') { e.currentTarget.blur(); e.preventDefault(); } }}
+              onKeyDown={(e) => { if (e.key === 'Enter') { (e.currentTarget as HTMLInputElement).blur(); e.preventDefault(); } }}
             />
           </div>
         </div>
@@ -228,25 +502,28 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     </div>
   );
 
+  // parse importo locale per il submit
+  const parseLocalAmount = () => {
+    const num = parseFloat((amountStr || '').replace(',', '.'));
+    return isNaN(num) ? 0 : num;
+  };
+
   return (
     <div
       ref={rootRef}
       tabIndex={-1}
-      data-details-page
       className="flex flex-col h-full bg-slate-100 focus:outline-none"
       style={{ touchAction: 'pan-y' }}
+      onPointerDownCapture={onRootPointerDownCapture}
+      onPointerMoveCapture={onRootPointerMoveCapture}
+      onPointerUpCapture={onRootPointerUpCapture}
+      onPointerCancelCapture={onRootPointerCancelCapture}
+      onClickCapture={onRootClickCapture}
     >
       <header className="p-4 flex items-center justify-between gap-4 text-slate-800 bg-white shadow-sm sticky top-0 z-10">
         <div className="flex items-center gap-4">
           {!isDesktop && (
-            <button
-              onClick={() => {
-                (document.activeElement as HTMLElement | null)?.blur?.();
-                onClose();
-              }}
-              className="p-2 rounded-full hover:bg-slate-200"
-              aria-label="Torna alla calcolatrice"
-            >
+            <button onClick={onClose} className="p-2 rounded-full hover:bg-slate-200" aria-label="Torna alla calcolatrice">
               <ArrowLeftIcon className="w-6 h-6" />
             </button>
           )}
@@ -270,19 +547,13 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
                 type="text"
                 inputMode="decimal"
                 value={amountStr}
-                onChange={(e) => {
-                  let s = e.target.value.replace(/[^0-9,]/g, '');
-                  const parts = s.split(',');
-                  if (parts.length > 2) s = parts[0] + ',' + parts.slice(1).join('');
-                  if (parts[1]?.length > 2) s = parts[0] + ',' + parts[1].slice(0, 2);
-                  setAmountStr(s);
-                }}
+                onChange={handleInputChange}
                 onFocus={() => setIsAmountFocused(true)}
                 onBlur={() => setIsAmountFocused(false)}
                 className="block w-full rounded-md border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-base text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                 placeholder="0,00"
                 enterKeyHint="done"
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.currentTarget.blur(); e.preventDefault(); } }}
+                onKeyDown={(e) => { if (e.key === 'Enter') { (e.currentTarget as HTMLInputElement).blur(); e.preventDefault(); } }}
               />
             </div>
           </div>
@@ -294,15 +565,16 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
                 <DocumentTextIcon className="h-5 w-5 text-slate-400" />
               </div>
               <input
+                ref={descriptionInputRef}
                 id="description"
                 name="description"
                 type="text"
                 value={formData.description || ''}
-                onChange={(e) => onFormChange({ description: e.target.value })}
+                onChange={handleInputChange}
                 className="block w-full rounded-md border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-base text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                 placeholder="Es. Caffè al bar"
                 enterKeyHint="done"
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.currentTarget.blur(); e.preventDefault(); } }}
+                onKeyDown={(e) => { if (e.key === 'Enter') { (e.currentTarget as HTMLInputElement).blur(); e.preventDefault(); } }}
               />
             </div>
           </div>
@@ -311,13 +583,10 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
             <label className="block text-base font-medium text-slate-700 mb-1">Conto</label>
             <button
               type="button"
-              onClick={() => {
-                (document.activeElement as HTMLElement | null)?.blur?.();
-                setActiveMenu('account');
-              }}
+              onClick={() => { blurActive(); setActiveMenu('account'); }}
               className="w-full flex items-center text-left gap-2 px-3 py-2.5 text-base rounded-lg border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors bg-white border-slate-300 text-slate-800 hover:bg-slate-50"
             >
-              <CreditCardIcon className="h-5 w-5 text-slate-400" />
+              <CreditCardIcon className="h-5 h-5 w-5 text-slate-400" />
               <span className="truncate flex-1">{selectedAccountLabel || 'Seleziona'}</span>
               <ChevronDownIcon className="w-5 h-5 text-slate-500" />
             </button>
@@ -330,10 +599,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
               <label className="block text-base font-medium text-slate-700 mb-1">Frequenza</label>
               <button
                 type="button"
-                onClick={() => {
-                  (document.activeElement as HTMLElement | null)?.blur?.();
-                  setIsFrequencyModalOpen(true);
-                }}
+                onClick={() => { blurActive(); setIsFrequencyModalOpen(true); }}
                 className={`w-full flex items-center justify-between text-left gap-2 px-3 py-2.5 text-base rounded-lg border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors ${
                   isFrequencySet
                     ? 'bg-white border-slate-300 text-slate-800 hover:bg-slate-50'
@@ -354,10 +620,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
                 <label className="block text-base font-medium text-slate-700 mb-1">Ricorrenza</label>
                 <button
                   type="button"
-                  onClick={() => {
-                    (document.activeElement as HTMLElement | null)?.blur?.();
-                    setIsRecurrenceModalOpen(true);
-                  }}
+                  onClick={() => { blurActive(); setIsRecurrenceModalOpen(true); }}
                   className="w-full flex items-center justify-between text-left gap-2 px-3 py-2.5 text-base rounded-lg border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors bg-white border-slate-300 text-slate-800 hover:bg-slate-50"
                 >
                   <span className="truncate flex-1">{getRecurrenceSummary(formData)}</span>
@@ -372,10 +635,14 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
           <button
             type="button"
             onClick={() => {
-              (document.activeElement as HTMLElement | null)?.blur?.();
-              onSubmit({ ...(formData as any), category: formData.category || 'Altro' });
+              const parsedAmount = parseLocalAmount();
+              onSubmit({
+                ...(formData as any),
+                amount: parsedAmount,                 // ← usa l'importo locale
+                category: formData.category || 'Altro'
+              } as Omit<Expense,'id'>);
             }}
-            disabled={(formData.amount ?? 0) <= 0}
+            disabled={parseLocalAmount() <= 0}
             className="w-full px-4 py-3 text-base font-semibold text-white bg-indigo-600 rounded-lg shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors disabled:bg-indigo-300 disabled:cursor-not-allowed"
           >
             Aggiungi Spesa
@@ -389,91 +656,243 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
         title="Seleziona un Conto"
         options={accountOptions}
         selectedValue={formData.accountId || ''}
-        onSelect={(accountId) => {
-          onFormChange({ accountId });
-          setActiveMenu(null);
-        }}
+        onSelect={handleAccountSelect}
       />
 
       {isFrequencyModalOpen && (
-        <ModalOverlay title="Seleziona Frequenza" onClose={() => setIsFrequencyModalOpen(false)}>
-          <div className="p-4 space-y-2">
-            <button onClick={() => {
-              onFormChange({
-                frequency: undefined,
-                date: toYYYYMMDD(new Date()),
-                time: getCurrentTime(),
-                recurrence: undefined,
-                monthlyRecurrenceType: undefined,
-                recurrenceInterval: undefined,
-                recurrenceDays: undefined,
-                recurrenceEndType: 'forever',
-                recurrenceEndDate: undefined,
-                recurrenceCount: undefined,
-              });
-              setIsFrequencyModalOpen(false);
-            }} className="w-full px-4 py-3 text-base font-semibold rounded-lg bg-slate-100 text-slate-800 hover:bg-indigo-100 hover:text-indigo-800">Nessuna</button>
-
-            <button onClick={() => {
-              onFormChange({
-                frequency: 'recurring',
-                time: undefined,
-                recurrence: 'monthly',
-                recurrenceEndType: 'count',
-                recurrenceCount: 1,
-                recurrenceEndDate: undefined,
-              });
-              setIsFrequencyModalOpen(false);
-            }} className="w-full px-4 py-3 text-base font-semibold rounded-lg bg-slate-100 text-slate-800 hover:bg-indigo-100 hover:text-indigo-800">Singolo</button>
-
-            <button onClick={() => {
-              onFormChange({
-                frequency: 'recurring',
-                time: undefined,
-                recurrence: formData.recurrence || 'monthly',
-                recurrenceEndType: 'forever',
-                recurrenceCount: undefined,
-                recurrenceEndDate: undefined,
-              });
-              setIsFrequencyModalOpen(false);
-            }} className="w-full px-4 py-3 text-base font-semibold rounded-lg bg-slate-100 text-slate-800 hover:bg-indigo-100 hover:text-indigo-800">Ricorrente</button>
+        <div
+          className={`absolute inset-0 z-[60] flex justify-center items-center p-4 transition-opacity duration-300 ${isFrequencyModalAnimating ? 'opacity-100' : 'opacity-0'} bg-slate-900/60 backdrop-blur-sm`}
+          onClick={() => { setIsFrequencyModalOpen(false); setIsFrequencyModalAnimating(false); }}
+          aria-modal="true"
+          role="dialog"
+        >
+          <div
+            className={`bg-white rounded-lg shadow-xl w-full max-w-xs transform transition-all duration-300 ${isFrequencyModalAnimating ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center p-4 border-b border-slate-200">
+              <h2 className="text-lg font-bold text-slate-800">Seleziona Frequenza</h2>
+              <button type="button" onClick={() => { setIsFrequencyModalOpen(false); setIsFrequencyModalAnimating(false); }} className="text-slate-500 hover:text-slate-800 p-1 rounded-full hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500" aria-label="Chiudi">
+                <XMarkIcon className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="p-4 space-y-2">
+              <button onClick={() => handleFrequencySelect('none')} className="w-full px-4 py-3 text-base font-semibold rounded-lg bg-slate-100 text-slate-800 hover:bg-indigo-100 hover:text-indigo-800">Nessuna</button>
+              <button onClick={() => handleFrequencySelect('single')} className="w-full px-4 py-3 text-base font-semibold rounded-lg bg-slate-100 text-slate-800 hover:bg-indigo-100 hover:text-indigo-800">Singolo</button>
+              <button onClick={() => handleFrequencySelect('recurring')} className="w-full px-4 py-3 text-base font-semibold rounded-lg bg-slate-100 text-slate-800 hover:bg-indigo-100 hover:text-indigo-800">Ricorrente</button>
+            </div>
           </div>
-        </ModalOverlay>
+        </div>
       )}
 
       {isRecurrenceModalOpen && (
-        <ModalOverlay title="Imposta Ricorrenza" onClose={() => setIsRecurrenceModalOpen(false)}>
-          {/* Mantieni il tuo contenuto esistente qui se ne avevi uno personalizzato;
-              il “tap fix” lavora sopra in capture e non richiede altro. */}
-          <div className="p-4 text-slate-600">
-            Configura la ricorrenza come preferisci (contenuto invariato rispetto alla tua UI).
+        <div
+          className={`absolute inset-0 z-[60] flex justify-center items-center p-4 transition-opacity duration-300 ${isRecurrenceModalAnimating ? 'opacity-100' : 'opacity-0'} bg-slate-900/60 backdrop-blur-sm`}
+          onClick={() => { setIsRecurrenceModalOpen(false); setIsRecurrenceModalAnimating(false); }}
+          aria-modal="true"
+          role="dialog"
+        >
+          <div
+            className={`bg-white rounded-lg shadow-xl w-full max-w-sm transform transition-all duration-300 ${isRecurrenceModalAnimating ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <header className="flex justify-between items-center p-4 border-b border-slate-200">
+              <h2 className="text-lg font-bold text-slate-800">Imposta Ricorrenza</h2>
+              <button type="button" onClick={() => { setIsRecurrenceModalOpen(false); setIsRecurrenceModalAnimating(false); }} className="text-slate-500 hover:text-slate-800 p-1 rounded-full hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500" aria-label="Chiudi">
+                <XMarkIcon className="w-6 h-6" />
+              </button>
+            </header>
+
+            <main className="p-4 space-y-4">
+              <div className="relative">
+                <button
+                  onClick={() => { setIsRecurrenceOptionsOpen(v => !v); setIsRecurrenceEndOptionsOpen(false); }}
+                  className="w-full flex items-center justify-between text-left gap-2 px-3 py-2.5 text-base rounded-lg border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 bg-white border-slate-300 text-slate-800 hover:bg-slate-50"
+                >
+                  <span className="truncate flex-1 capitalize">
+                    {recurrenceLabels[(tempRecurrence || 'monthly') as keyof typeof recurrenceLabels]}
+                  </span>
+                  <ChevronDownIcon className={`w-5 h-5 text-slate-500 transition-transform ${isRecurrenceOptionsOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {isRecurrenceOptionsOpen && (
+                  <div className="absolute top-full mt-1 w-full bg-white border border-slate-200 shadow-lg rounded-lg z-20 p-2 space-y-1">
+                    {(Object.keys(recurrenceLabels) as Array<keyof typeof recurrenceLabels>).map((k) => (
+                      <button
+                        key={k}
+                        onClick={() => { setTempRecurrence(k as any); setIsRecurrenceOptionsOpen(false); }}
+                        className="w-full text-left px-4 py-3 text-base font-semibold rounded-lg bg-slate-50 text-slate-800 hover:bg-indigo-100 hover:text-indigo-800"
+                      >
+                        {recurrenceLabels[k]}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-2">
+                <div className="flex items-center justify-center gap-2 bg-slate-100 p-3 rounded-lg">
+                  <span className="text-base text-slate-700">Ogni</span>
+                  <input
+                    type="number"
+                    value={tempRecurrenceInterval || ''}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === '') setTempRecurrenceInterval(undefined);
+                      else {
+                        const n = parseInt(v, 10);
+                        if (!isNaN(n) && n > 0) setTempRecurrenceInterval(n);
+                      }
+                    }}
+                    onFocus={(e) => e.currentTarget.select()}
+                    className="w-12 text-center text-lg font-bold text-slate-800 bg-transparent border-0 border-b-2 border-slate-400 focus:ring-0 focus:outline-none focus:border-indigo-600 p-0"
+                    min={1}
+                  />
+                  <span className="text-base text-slate-700">{getIntervalLabel(tempRecurrence as any, tempRecurrenceInterval)}</span>
+                </div>
+              </div>
+
+              {tempRecurrence === 'weekly' && (
+                <div className="pt-2">
+                  <div className="flex flex-wrap justify-center gap-2">
+                    {daysOfWeekForPicker.map(d => (
+                      <button
+                        key={d.value}
+                        onClick={() => {
+                          setTempRecurrenceDays(prev => {
+                            const arr = prev || [];
+                            const next = arr.includes(d.value)
+                              ? arr.filter(x => x !== d.value)
+                              : [...arr, d.value];
+                            return next.sort((a,b) => (a === 0 ? 7 : a) - (b === 0 ? 7 : b));
+                          });
+                        }}
+                        className={`w-14 h-14 rounded-full text-sm font-semibold border-2 transition-colors ${
+                          (tempRecurrenceDays || []).includes(d.value)
+                            ? 'bg-indigo-600 text-white border-indigo-600'
+                            : 'bg-white text-slate-800 border-indigo-400 hover:bg-indigo-50'
+                        }`}
+                      >
+                        {d.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {tempRecurrence === 'monthly' && (
+                <div className="pt-4 space-y-2 border-t border-slate-200">
+                  <div
+                    role="radio"
+                    aria-checked={tempMonthlyRecurrenceType === 'dayOfMonth'}
+                    onClick={() => setTempMonthlyRecurrenceType('dayOfMonth')}
+                    className="flex items-center gap-3 p-2 cursor-pointer rounded-lg hover:bg-slate-100"
+                  >
+                    <div className="w-5 h-5 rounded-full border-2 border-slate-400 flex items-center justify-center">
+                      {tempMonthlyRecurrenceType === 'dayOfMonth' && <div className="w-2.5 h-2.5 bg-indigo-600 rounded-full" />}
+                    </div>
+                    <span className="text-sm font-medium text-slate-700">Lo stesso giorno di ogni mese</span>
+                  </div>
+
+                  <div
+                    role="radio"
+                    aria-checked={tempMonthlyRecurrenceType === 'dayOfWeek'}
+                    onClick={() => setTempMonthlyRecurrenceType('dayOfWeek')}
+                    className="flex items-center gap-3 p-2 cursor-pointer rounded-lg hover:bg-slate-100"
+                  >
+                    <div className="w-5 h-5 rounded-full border-2 border-slate-400 flex items-center justify-center">
+                      {tempMonthlyRecurrenceType === 'dayOfWeek' && <div className="w-2.5 h-2.5 bg-indigo-600 rounded-full" />}
+                    </div>
+                    <span className="text-sm font-medium text-slate-700">{dynamicMonthlyDayOfWeekLabel}</span>
+                  </div>
+                </div>
+              )}
+
+              <div className="pt-4 border-t border-slate-200">
+                <div className="grid grid-cols-2 gap-4 items-end">
+                  <div className={`relative ${!formData.recurrenceEndType || formData.recurrenceEndType === 'forever' ? 'col-span-2' : ''}`}>
+                    <button
+                      type="button"
+                      onClick={() => { setIsRecurrenceEndOptionsOpen(v => !v); setIsRecurrenceOptionsOpen(false); }}
+                      className="w-full flex items-center justify-between text-left gap-2 px-3 py-2.5 text-base rounded-lg border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 bg-white border-slate-300 text-slate-800 hover:bg-slate-50"
+                    >
+                      <span className="truncate flex-1 capitalize">
+                        {(!formData.recurrenceEndType || formData.recurrenceEndType === 'forever') ? 'Per sempre' :
+                         formData.recurrenceEndType === 'date' ? 'Fino a' : 'Numero di volte'}
+                      </span>
+                      <ChevronDownIcon className={`w-5 h-5 text-slate-500 transition-transform ${isRecurrenceEndOptionsOpen ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {isRecurrenceEndOptionsOpen && (
+                      <div className="absolute top-full mt-1 w-full bg-white border border-slate-200 shadow-lg rounded-lg z-20 p-2 space-y-1">
+                        {(['forever','date','count'] as const).map(k => (
+                          <button
+                            key={k}
+                            onClick={() => {
+                              if (k === 'forever') onFormChange({ recurrenceEndType: 'forever', recurrenceEndDate: undefined, recurrenceCount: undefined });
+                              if (k === 'date')    onFormChange({ recurrenceEndType: 'date',    recurrenceEndDate: formData.recurrenceEndDate || toYYYYMMDD(new Date()), recurrenceCount: undefined });
+                              if (k === 'count')   onFormChange({ recurrenceEndType: 'count',   recurrenceCount: formData.recurrenceCount || 1, recurrenceEndDate: undefined });
+                              setIsRecurrenceEndOptionsOpen(false);
+                            }}
+                            className="w-full text-left px-4 py-3 text-base font-semibold rounded-lg bg-slate-50 text-slate-800 hover:bg-indigo-100 hover:text-indigo-800"
+                          >
+                            {k === 'forever' ? 'Per sempre' : k === 'date' ? 'Fino a' : 'Numero di volte'}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {formData.recurrenceEndType === 'date' && (
+                    <div>
+                      <label htmlFor="recurrence-end-date" className="block text-sm font-medium text-slate-700 mb-1">Data fine</label>
+                      <input
+                        id="recurrence-end-date"
+                        name="recurrenceEndDate"
+                        type="date"
+                        value={formData.recurrenceEndDate || ''}
+                        onChange={handleInputChange}
+                        className="block w-full rounded-md border border-slate-300 bg-white py-2.5 px-3 text-base text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                        enterKeyHint="done"
+                        onKeyDown={(e) => { if (e.key === 'Enter') { (e.currentTarget as HTMLInputElement).blur(); e.preventDefault(); } }}
+                      />
+                    </div>
+                  )}
+
+                  {formData.recurrenceEndType === 'count' && (
+                    <div>
+                      <label htmlFor="recurrence-count" className="block text-sm font-medium text-slate-700 mb-1">N. volte</label>
+                      <input
+                        id="recurrence-count"
+                        name="recurrenceCount"
+                        type="number"
+                        value={formData.recurrenceCount || ''}
+                        onChange={handleInputChange}
+                        className="block w-full rounded-md border border-slate-300 bg-white py-2.5 px-3 text-base text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                        min={1}
+                        enterKeyHint="done"
+                        onKeyDown={(e) => { if (e.key === 'Enter') { (e.currentTarget as HTMLInputElement).blur(); e.preventDefault(); } }}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </main>
+
+            <footer className="p-4 bg-slate-100 border-t border-slate-200 flex justify-end">
+              <button
+                type="button"
+                onClick={handleApplyRecurrence}
+                className="px-4 py-2 text-sm font-semibold text-white bg-indigo-600 rounded-lg shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+              >
+                Applica
+              </button>
+            </footer>
           </div>
-        </ModalOverlay>
+        </div>
       )}
     </div>
   );
 };
-
-const ModalOverlay: React.FC<{ title: string; onClose: () => void; children: React.ReactNode }> = ({ title, onClose, children }) => (
-  <div
-    className="absolute inset-0 z-[60] flex justify-center items-center p-4 bg-slate-900/60 backdrop-blur-sm"
-    onClick={onClose}
-    aria-modal="true"
-    role="dialog"
-  >
-    <div
-      className="bg-white rounded-lg shadow-xl w-full max-w-sm transform transition-all duration-200 scale-100 opacity-100"
-      onClick={(e) => e.stopPropagation()}
-    >
-      <header className="flex justify-between items-center p-4 border-b border-slate-200">
-        <h2 className="text-lg font-bold text-slate-800">{title}</h2>
-        <button type="button" onClick={onClose} className="text-slate-500 hover:text-slate-800 p-1 rounded-full hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500" aria-label="Chiudi">
-          <XMarkIcon className="w-6 h-6" />
-        </button>
-      </header>
-      {children}
-    </div>
-  </div>
-);
 
 export default TransactionDetailPage;
