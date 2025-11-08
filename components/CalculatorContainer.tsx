@@ -186,19 +186,15 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
       >
         {/* CALC */}
         <section className="h-full w-1/2 shrink-0">
-          {/* Passo prop “larghi”: il componente ignorerà quelli non usati */}
           <CalculatorInputScreen
-            // importo come sola fonte di verità
-            amount={amount}
-            onAmountChange={handleAmountFromCalc}
-            // passa la data per coerenza se la UI la mostra
-            date={formData.date}
-            time={formData.time}
-            onOpenDetails={() => navigateTo('details')}
+            onClose={onClose || onCancel || (() => {})}
+            onSubmit={handleSubmit}
             accounts={accounts}
+            onNavigateToDetails={() => navigateTo('details')}
+            formData={formData}
+            onFormChange={handleFormChange}
+            onMenuStateChange={setChildBlocksSwipe}
             isDesktop={isDesktop}
-            // opzionali; se non esistono nel componente, vengono ignorati
-            onCancel={onClose || onCancel}
           />
         </section>
 
