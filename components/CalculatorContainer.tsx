@@ -101,7 +101,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
     return () => vv.removeEventListener('resize', onResize);
   }, []);
 
-  const waitForKeyboardClose = useCallback((timeoutMs = 600) => {
+  const waitForKeyboardClose = useCallback((timeoutMs = 200) => {
     return new Promise<void>((resolve) => {
       if (!keyboardOpenRef.current) {
         resolve();
@@ -169,28 +169,28 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
     onSubmit(submittedData);
   };
 
-  const navigateTo = async (targetView: 'calculator' | 'details') => {
+  const navigateTo = (targetView: 'calculator' | 'details') => {
     if (view === targetView) return;
 
-    // 1) SEMPRE blur dell'elemento attivo (anche se è un div role="button")
+    // 1) SEMPRE blur dell'elemento attivo
     const ae = document.activeElement as HTMLElement | null;
     if (ae && typeof ae.blur === 'function') {
       ae.blur();
     }
 
-    // 2) Se la tastiera è aperta, aspetta che si chiuda (evita il primo tap a vuoto)
-    if (keyboardOpenRef.current) {
-      await waitForKeyboardClose();
-    }
-
-    // 3) Cleanup eventi
-    window.dispatchEvent(new Event('numPad:cancelLongPress'));
-
-    // 4) Cambia pagina immediatamente (senza delay per evitare saltello)
+    // 2) Cambia pagina IMMEDIATAMENTE (non aspettare la tastiera!)
     setView(targetView);
 
-    // 5) Notifica cambio pagina - l'evento viene catturato dai componenti che fanno cleanup
+    // 3) Notifica cambio pagina
     window.dispatchEvent(new CustomEvent('page-activated', { detail: targetView }));
+
+    // 4) Cleanup eventi
+    window.dispatchEvent(new Event('numPad:cancelLongPress'));
+
+    // 5) Chiudi tastiera in background (senza bloccare)
+    if (keyboardOpenRef.current) {
+      waitForKeyboardClose().catch(() => {});
+    }
   };
 
   if (!isOpen) return null;
@@ -218,7 +218,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
           className="absolute inset-0 flex w-[200%] md:w-full md:grid md:grid-cols-2"
           style={{
             transform: isDesktop ? 'none' : `translateX(${translateX}%)`,
-            transition: isSwiping ? 'none' : 'transform 0.12s ease-out',
+            transition: isSwiping ? 'none' : 'transform 0.08s ease-out',
             willChange: 'transform',
           }}
         >
