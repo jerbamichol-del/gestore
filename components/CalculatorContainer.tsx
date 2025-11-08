@@ -8,6 +8,11 @@ interface CalculatorContainerProps {
   isDesktop?: boolean;
   onSubmit: (data: Omit<Expense, 'id'>) => void;
   onCancel?: () => void;
+  isOpen?: boolean;
+  onClose?: () => void;
+  expenses?: Expense[];
+  onEditExpense?: (expense: Expense) => void;
+  onDeleteExpense?: (id: string) => void;
 }
 
 /** Util */
@@ -27,6 +32,8 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   isDesktop = false,
   onSubmit,
   onCancel,
+  isOpen = true,
+  onClose,
 }) => {
   /** View state */
   const [view, setView] = useState<'calc' | 'details'>('calc');
@@ -158,6 +165,9 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
     navigateTo('calc');
   }, [onSubmit, accounts, navigateTo]);
 
+  // Nascondi il componente se non è aperto
+  if (!isOpen) return null;
+
   return (
     <div
       ref={rootRef}
@@ -188,7 +198,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
             accounts={accounts}
             isDesktop={isDesktop}
             // opzionali; se non esistono nel componente, vengono ignorati
-            onCancel={onCancel}
+            onCancel={onClose || onCancel}
           />
         </section>
 
