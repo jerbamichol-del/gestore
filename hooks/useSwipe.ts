@@ -107,55 +107,22 @@ export function useSwipe(
       if (st.pointerId !== e.pointerId) return;
 
       const wasArmed = st.armed;
-      let didNavigate = false;
       
       if (wasArmed) {
-        // Rilascio pointer capture
         try { 
           root.releasePointerCapture(e.pointerId);
         } catch {}
 
-        // Check navigation
         if (Math.abs(st.dx) >= threshold) {
             if (st.intent === "left" && handlersRef.current.onSwipeLeft) {
               handlersRef.current.onSwipeLeft();
-              didNavigate = true;
             } else if (st.intent === "right" && handlersRef.current.onSwipeRight) {
               handlersRef.current.onSwipeRight();
-              didNavigate = true;
             }
         }
       }
       
-      // Reset immediatamente
       resetState();
-
-      // FIX GHOST CLICKS: Flush del sistema touch
-      if (didNavigate && wasArmed) {
-        // Forza il browser a processare tutti gli eventi touch pendenti
-        // Questo "svuota" la coda degli eventi fantasma
-        const touchEater = (evt: TouchEvent | PointerEvent) => {
-          evt.preventDefault();
-          evt.stopPropagation();
-          evt.stopImmediatePropagation();
-        };
-
-        // Blocca tutti i touch/pointer per 50ms
-        document.addEventListener('touchstart', touchEater, { capture: true, passive: false });
-        document.addEventListener('touchend', touchEater, { capture: true, passive: false });
-        document.addEventListener('pointerdown', touchEater, { capture: true, passive: false });
-        document.addEventListener('pointerup', touchEater, { capture: true, passive: false });
-        document.addEventListener('click', touchEater, { capture: true, passive: false });
-
-        // Sblocca dopo 50ms
-        setTimeout(() => {
-          document.removeEventListener('touchstart', touchEater as any, { capture: true } as any);
-          document.removeEventListener('touchend', touchEater as any, { capture: true } as any);
-          document.removeEventListener('pointerdown', touchEater as any, { capture: true } as any);
-          document.removeEventListener('pointerup', touchEater as any, { capture: true } as any);
-          document.removeEventListener('click', touchEater as any, { capture: true } as any);
-        }, 50);
-      }
     };
     
     const onCancel = (e: PointerEvent) => {
