@@ -202,6 +202,100 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     formData.recurrenceEndType === 'count' &&
     formData.recurrenceCount === 1;
 
+  // --- TAP vs SWIPE GUARD (capture-phase, phone-first) ---
+  const cancelNextClick = useRef(false);
+  const pRef = useRef<{ id: number|null; startX: number; startY: number; moved: boolean; target: HTMLElement|null }>({
+    id: null, startX: 0, startY: 0, moved: false, target: null
+  });
+
+  // più tollerante su mobile
+  const SLOP = 16;          // px per armare
+  const H_RATIO = 2.2;      // orizzontale deve battere il verticale di 2.2x
+  const IGNORE_SEL = 'input, textarea, select, button, [role="dialog"], [data-no-page-swipe]';
+
+  const onRootPointerDownCapture = useCallback((e: React.PointerEvent) => {
+    const root = rootRef.current;
+    if (!root) return;
+
+    // NON armare se parte da controlli o aree da ignorare
+    if ((e.target as HTMLElement)?.closest(IGNORE_SEL)) return;
+
+    // se focus è fuori dalla view, blur per evitare "ganci" su altre pagine
+    const ae = document.activeElement as HTMLElement | null;
+    if (ae && !root.contains(ae)) ae.blur();
+
+    pRef.current = {
+      id: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      moved: false,
+      target: e.target as HTMLElement
+    };
+  }, []);
+
+  const onRootPointerMoveCapture = useCallback((e: React.PointerEvent) => {
+    const p = pRef.current;
+    if (p.id !== e.pointerId || p.moved) return;
+
+    const dx = e.clientX - p.startX;
+    const dy = e.clientY - p.startY;
+
+    // arma solo quando è davvero orizzontale (e sopra slop)
+    if (Math.abs(dx) > SLOP && Math.abs(dx) > Math.abs(dy) * H_RATIO) {
+      p.moved = true;
+      cancelNextClick.current = true; // annulla il click che segue: niente tap fantasma
+    }
+  }, []);
+
+  const onRootPointerUpCapture = useCallback((e: React.PointerEvent) => {
+    const root = rootRef.current;
+    const p = pRef.current;
+    if (!root || p.id !== e.pointerId) return;
+
+    const wasSwipe = p.moved;
+
+    // TAP vero: metti focus al volo sull'input giusto (niente primo tap a vuoto)
+    if (!wasSwipe && p.target) {
+      const sel = 'input, textarea, select, [contenteditable=""], [contenteditable="true"]';
+      // via <label for>, oppure input vicino al tocco
+      const viaLabel = (p.target.closest('label'));
+      let focusEl: HTMLElement | null = null;
+
+      if (viaLabel) {
+        const forId = viaLabel.getAttribute('for');
+        if (forId) focusEl = root.querySelector<HTMLElement>(`#${CSS.escape(forId)}`);
+        if (!focusEl) focusEl = viaLabel.querySelector<HTMLElement>(sel);
+      }
+      if (!focusEl) {
+        const container = p.target.closest<HTMLElement>('.relative, .input-wrapper, .field');
+        if (container) focusEl = container.querySelector<HTMLElement>(sel);
+      }
+      if (!focusEl && (p.target as HTMLElement).matches(sel)) focusEl = p.target as HTMLElement;
+
+      if (focusEl && focusEl !== document.activeElement) {
+        requestAnimationFrame(() => {
+          (focusEl as HTMLElement).focus({ preventScroll: true });
+          const it = focusEl as HTMLInputElement;
+          if (it.type === 'date' || it.type === 'time') it.click?.();
+        });
+      }
+    }
+
+    // reset microtask, e togli la soppressione se non era swipe
+    setTimeout(() => { if (!wasSwipe) cancelNextClick.current = false; }, 0);
+    pRef.current.id = null;
+    pRef.current.moved = false;
+  }, []);
+
+  const onRootClickCapture = useCallback((e: React.MouseEvent) => {
+    if (cancelNextClick.current) {
+      e.preventDefault();
+      e.stopPropagation();
+      cancelNextClick.current = false; // consumato
+    }
+  }, []);
+  // --- fine TAP vs SWIPE GUARD ---
+
   /** Tastiera: blocca swipe e segnala al container */
   const keyboardOpenRef = useRef(false);
   useEffect(() => {
@@ -483,6 +577,11 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
         ref={rootRef}
         tabIndex={-1}
         className="flex flex-col h-full bg-slate-100 items-center justify-center p-4"
+        style={{ touchAction: 'pan-y' }}
+        onPointerDownCapture={onRootPointerDownCapture}
+        onPointerMoveCapture={onRootPointerMoveCapture}
+        onPointerUpCapture={onRootPointerUpCapture}
+        onClickCapture={onRootClickCapture}
       >
         <header className="p-4 flex items-center gap-4 text-slate-800 bg-white shadow-sm absolute top-0 left-0 right-0 z-10">
           {!isDesktop && (
