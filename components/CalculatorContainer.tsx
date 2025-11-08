@@ -218,7 +218,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
           className="absolute inset-0 flex w-[200%] md:w-full md:grid md:grid-cols-2"
           style={{
             transform: isDesktop ? 'none' : `translateX(${translateX}%)`,
-            transition: isSwiping ? 'none' : 'transform 0.08s ease-out',
+            transition: 'none',
             willChange: 'transform',
           }}
         >
