@@ -119,15 +119,6 @@ export function useSwipe(
       if (wasArmed) {
         try { root.releasePointerCapture(e.pointerId); } catch {}
 
-        // Stop this event from bubbling to parent elements' pointerup listeners.
-        e.stopPropagation();
-
-        // This is the key fix: Prevent the browser from firing a "ghost click" 
-        // from this gesture without affecting subsequent, legitimate clicks.
-        if (e.cancelable) {
-            e.preventDefault();
-        }
-        
         // Check if swipe crossed the threshold to trigger navigation
         if (Math.abs(st.dx) >= threshold) {
             if (st.intent === "left" && handlersRef.current.onSwipeLeft) {
