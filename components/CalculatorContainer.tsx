@@ -9,28 +9,29 @@ interface CalculatorContainerProps {
   onClose: () => void;
   onSubmit: (data: Omit<Expense, 'id'>) => void;
   accounts: Account[];
-  expenses: Expense[];
-  onEditExpense: (expense: Expense) => void;
-  onDeleteExpense: (id: string) => void;
 }
 
 const useMediaQuery = (query: string) => {
   const [matches, setMatches] = useState(false);
   useEffect(() => {
     const media = window.matchMedia(query);
-    if (media.matches !== matches) setMatches(media.matches);
-    const listener = () => setMatches(media.matches);
-    window.addEventListener('resize', listener);
-    return () => window.removeEventListener('resize', listener);
-  }, [matches, query]);
+    const apply = () => setMatches(media.matches);
+    apply();
+    media.addEventListener?.('change', apply);
+    window.addEventListener('resize', apply);
+    return () => {
+      media.removeEventListener?.('change', apply);
+      window.removeEventListener('resize', apply);
+    };
+  }, [query]);
   return matches;
 };
 
 const toYYYYMMDD = (date: Date) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 };
 
 const getCurrentTime = () =>
@@ -42,9 +43,15 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   onSubmit,
   accounts,
 }) => {
+  const isDesktop = useMediaQuery('(min-width: 768px)');
+
+  // UI/page state
   const [isAnimating, setIsAnimating] = useState(false);
   const [view, setView] = useState<'calculator' | 'details'>('calculator');
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [dateError, setDateError] = useState(false);
 
+  // form state
   const resetFormData = useCallback(
     (): Partial<Omit<Expense, 'id'>> => ({
       amount: 0,
@@ -65,111 +72,112 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
     }),
     [accounts]
   );
-
   const [formData, setFormData] = useState<Partial<Omit<Expense, 'id'>>>(resetFormData);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [dateError, setDateError] = useState(false);
 
-  const isDesktop = useMediaQuery('(min-width: 768px)');
-
-  const containerRef = useRef<HTMLDivElement>(null);
-  const swipeableDivRef = useRef<HTMLDivElement>(null);
-  const calculatorPageRef = useRef<HTMLDivElement>(null);
-  const detailsPageRef = useRef<HTMLDivElement>(null);
-
-  // Tastiera virtuale
+  // keyboard detection
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const keyboardOpenRef = useRef(false);
-  useEffect(() => {
-    keyboardOpenRef.current = keyboardOpen;
-  }, [keyboardOpen]);
+  useEffect(() => { keyboardOpenRef.current = keyboardOpen; }, [keyboardOpen]);
 
   useEffect(() => {
     const vv = (window as any).visualViewport as VisualViewport | undefined;
     if (!vv) return;
-    let baseHeight = vv.height;
+    let baseline = vv.height;
     const onResize = () => {
-      const delta = baseHeight - vv.height;
+      const delta = baseline - vv.height;
       if (delta > 120) {
         setKeyboardOpen(true);
       } else {
         setKeyboardOpen(false);
-        baseHeight = vv.height;
+        baseline = vv.height;
       }
     };
     vv.addEventListener('resize', onResize);
     return () => vv.removeEventListener('resize', onResize);
   }, []);
 
-  const navigateTo = useCallback((targetView: 'calculator' | 'details') => {
-    if (view === targetView) return;
-    (document.activeElement as HTMLElement | null)?.blur?.();
-    
-    // Cleanup from old navigateTo
-    window.dispatchEvent(new Event('numPad:cancelLongPress'));
+  // non blocca più i tap: chiude la tastiera in background
+  const waitForKeyboardClose = useCallback((timeoutMs = 200) => {
+    return new Promise<void>((resolve) => {
+      if (!keyboardOpenRef.current) { resolve(); return; }
+      const vv = (window as any).visualViewport as VisualViewport | undefined;
+      let done = false;
+      const finish = () => { if (done) return; done = true; vv?.removeEventListener('resize', onResize); resolve(); };
+      const onResize = () => { if (!keyboardOpenRef.current) finish(); };
+      vv?.addEventListener('resize', onResize);
+      setTimeout(finish, timeoutMs);
+    });
+  }, []);
 
-    setView(targetView); // cambia subito
-    
-    // Notify from old navigateTo
-    window.dispatchEvent(new CustomEvent('page-activated', { detail: targetView }));
-
-    // chiudi tastiera in background (se serve), senza bloccare i tap
-    setTimeout(() => {
-      const vv: any = (window as any).visualViewport;
-      const start = Date.now();
-      const check = () => {
-        // se la visualViewport torna alta, bene; altrimenti smetti dopo 200ms
-        if (!vv || Date.now() - start > 200) return;
-        requestAnimationFrame(check);
-      };
-      check();
-    }, 0);
-  }, [view]);
-
+  // swipe container
+  const containerRef = useRef<HTMLDivElement>(null);
   const { progress, isSwiping } = useSwipe(
     containerRef,
     {
-      onSwipeLeft: view === 'calculator' ? () => navigateTo('details') : undefined,
-      onSwipeRight: view === 'details' ? () => navigateTo('calculator') : undefined,
+      onSwipeLeft: !isDesktop && view === 'calculator' ? () => navigateTo('details') : undefined,
+      onSwipeRight: !isDesktop && view === 'details' ? () => navigateTo('calculator') : undefined,
     },
     {
-      enabled: !isDesktop && isOpen && !isMenuOpen && !keyboardOpen,
-      threshold: 36,
-      slop: 10,
+      enabled: isOpen && !isDesktop && !isMenuOpen && !keyboardOpen,
+      threshold: 32,
+      slop: 6,
     }
   );
 
+  // open/close animation + cleanup
   useEffect(() => {
     if (isOpen) {
       setView('calculator');
-      const timer = setTimeout(() => setIsAnimating(true), 10);
-      return () => clearTimeout(timer);
+      const t = window.setTimeout(() => setIsAnimating(true), 10);
+      return () => window.clearTimeout(t);
     } else {
       setIsAnimating(false);
       const t = window.setTimeout(() => {
         setFormData(resetFormData());
         setDateError(false);
       }, 300);
-      return () => clearTimeout(t);
+      return () => window.clearTimeout(t);
     }
   }, [isOpen, resetFormData]);
-
-  const handleClose = () => onClose();
 
   const handleFormChange = (newData: Partial<Omit<Expense, 'id'>>) => {
     if ('date' in newData && newData.date) setDateError(false);
     setFormData(prev => ({ ...prev, ...newData }));
   };
 
-  const handleAttemptSubmit = (submittedData: Omit<Expense, 'id'>) => {
-    if (!submittedData.date) {
+  const handleAttemptSubmit = (submitted: Omit<Expense, 'id'>) => {
+    if (!submitted.date) {
+      // forza focus sulla data
       navigateTo('details');
       setDateError(true);
-      setTimeout(() => document.getElementById('date')?.focus(), 150);
+      setTimeout(() => document.getElementById('date')?.focus(), 120);
       return;
     }
     setDateError(false);
-    onSubmit(submittedData);
+    onSubmit(submitted);
+  };
+
+  // <<< QUI la modifica richiesta: niente await >>>
+  const navigateTo = (targetView: 'calculator' | 'details') => {
+    if (view === targetView) return;
+
+    // stacca subito l'eventuale focus (evita tap “a vuoto” alla pagina successiva)
+    const ae = document.activeElement as HTMLElement | null;
+    ae?.blur?.();
+
+    // cambia pagina immediatamente
+    setView(targetView);
+
+    // chiudi eventuale lungo-press in corso sulla calcolatrice
+    window.dispatchEvent(new Event('numPad:cancelLongPress'));
+
+    // annuncia attivazione pagina (usato dagli schermi figli per reset interni)
+    window.dispatchEvent(new CustomEvent('page-activated', { detail: targetView }));
+
+    // chiudi tastiera in background, senza bloccare l’UI
+    if (keyboardOpenRef.current) {
+      waitForKeyboardClose().catch(() => {});
+    }
   };
 
   if (!isOpen) return null;
@@ -177,13 +185,10 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   const translateX = (view === 'calculator' ? 0 : -50) + (progress * 50);
   const isCalculatorActive = view === 'calculator';
   const isDetailsActive = view === 'details';
-  const isClosing = !isOpen;
 
   return (
     <div
-      className={`fixed inset-0 z-50 bg-slate-100 transform transition-transform duration-300 ease-in-out ${
-        isAnimating ? 'translate-y-0' : 'translate-y-full'
-      } ${isClosing ? 'pointer-events-none' : ''}`}
+      className={`fixed inset-0 z-50 bg-slate-100 transform transition-transform duration-300 ease-in-out ${isAnimating ? 'translate-y-0' : 'translate-y-full'}`}
       aria-modal="true"
       role="dialog"
     >
@@ -193,26 +198,20 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
         style={{ touchAction: 'pan-y' }}
       >
         <div
-          ref={swipeableDivRef}
           className="absolute inset-0 flex w-[200%] md:w-full md:grid md:grid-cols-2"
           style={{
             transform: isDesktop ? 'none' : `translateX(${translateX}%)`,
-            transition: isSwiping ? 'none' : 'transform 0.08s ease-out',
+            transition: isSwiping ? 'none' : 'transform 0.12s ease-out',
             willChange: 'transform',
+            pointerEvents: 'auto',
           }}
         >
-          <div
-            className="w-1/2 md:w-auto h-full relative"
-            style={{
-              zIndex: isCalculatorActive ? 10 : 0,
-              pointerEvents: isCalculatorActive ? 'auto' : 'none',
-            }}
-          >
+          {/* Calculator */}
+          <div className={`w-1/2 md:w-auto h-full relative ${isCalculatorActive ? 'z-10' : 'z-0'}`} aria-hidden={!isCalculatorActive}>
             <CalculatorInputScreen
-              ref={calculatorPageRef}
               formData={formData}
               onFormChange={handleFormChange}
-              onClose={handleClose}
+              onClose={onClose}
               onSubmit={handleAttemptSubmit}
               accounts={accounts}
               onNavigateToDetails={() => navigateTo('details')}
@@ -221,15 +220,9 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
             />
           </div>
 
-          <div
-            className="w-1/2 md:w-auto h-full relative"
-            style={{
-              zIndex: isDetailsActive ? 10 : 0,
-              pointerEvents: isDetailsActive ? 'auto' : 'none',
-            }}
-          >
+          {/* Details */}
+          <div className={`w-1/2 md:w-auto h-full relative ${isDetailsActive ? 'z-10' : 'z-0'}`} aria-hidden={!isDetailsActive}>
             <TransactionDetailPage
-              ref={detailsPageRef}
               formData={formData}
               onFormChange={handleFormChange}
               accounts={accounts}
