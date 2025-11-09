@@ -220,6 +220,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     }
     
     setIsPageTransitioning(true);
+    setTimeout(() => setIsPageTransitioning(false), 150);
     setActiveView(targetView);
     window.history.pushState({ view: targetView }, '');
   }, [activeView, isDateModalOpen]);
@@ -485,7 +486,6 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         >
             <div 
                 className="w-[200%] h-full flex swipe-container"
-                onTransitionEnd={() => setIsPageTransitioning(false)}
                 style={{
                   transform: `translateX(${viewTranslate}%)`,
                   transition: isSwiping ? 'none' : 'transform 0.08s ease-out',
@@ -505,7 +505,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
                         syncingImageId={syncingImageId}
                     />
                 </div>
-                <div className="w-1/2 h-full swipe-view" style={{ touchAction: 'pan-y' }}>
+                <div className="w-1/2 h-full swipe-view">
                     <HistoryScreen 
                       expenses={expenses}
                       accounts={accounts}
@@ -685,21 +685,6 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
             />
         )}
 
-        {/* Debug View */}
-        <div style={{
-          position: 'fixed',
-          bottom: '10px',
-          left: '10px',
-          backgroundColor: 'rgba(0,0,0,0.7)',
-          color: 'white',
-          padding: '2px 5px',
-          fontSize: '10px',
-          zIndex: 9999,
-          borderRadius: '3px',
-          fontFamily: 'monospace'
-        }}>
-          isPageTransitioning: {isPageTransitioning ? 'true' : 'false'}
-        </div>
     </div>
   );
 };
