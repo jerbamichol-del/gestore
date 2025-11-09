@@ -132,29 +132,15 @@ export function useSwipe(
 
       // FIX GHOST CLICKS: Flush del sistema touch
       if (didNavigate && wasArmed) {
-        // Forza il browser a processare tutti gli eventi touch pendenti
-        // Questo "svuota" la coda degli eventi fantasma
-        const touchEater = (evt: TouchEvent | PointerEvent) => {
+        const clickBlocker = (evt: MouseEvent) => {
           evt.preventDefault();
           evt.stopPropagation();
           evt.stopImmediatePropagation();
         };
-
-        // Blocca tutti i touch/pointer per 10ms
-        document.addEventListener('touchstart', touchEater, { capture: true, passive: false });
-        document.addEventListener('touchend', touchEater, { capture: true, passive: false });
-        document.addEventListener('pointerdown', touchEater, { capture: true, passive: false });
-        document.addEventListener('pointerup', touchEater, { capture: true, passive: false });
-        document.addEventListener('click', touchEater, { capture: true, passive: false });
-
-        // Sblocca dopo 10ms
-        setTimeout(() => {
-          document.removeEventListener('touchstart', touchEater as any, { capture: true } as any);
-          document.removeEventListener('touchend', touchEater as any, { capture: true } as any);
-          document.removeEventListener('pointerdown', touchEater as any, { capture: true } as any);
-          document.removeEventListener('pointerup', touchEater as any, { capture: true } as any);
-          document.removeEventListener('click', touchEater as any, { capture: true } as any);
-        }, 10);
+        // After a swipe, the browser synthesizes a click. We want to capture and kill it.
+        // We listen on the window with capture:true to get the event before anyone else.
+        // once:true ensures the listener removes itself after the first click.
+        window.addEventListener('click', clickBlocker, { capture: true, once: true });
       }
     };
     
