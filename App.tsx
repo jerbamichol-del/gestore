@@ -685,6 +685,21 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
             />
         )}
 
+        {/* Debug View */}
+        <div style={{
+          position: 'fixed',
+          bottom: '10px',
+          left: '10px',
+          backgroundColor: 'rgba(0,0,0,0.7)',
+          color: 'white',
+          padding: '2px 5px',
+          fontSize: '10px',
+          zIndex: 9999,
+          borderRadius: '3px',
+          fontFamily: 'monospace'
+        }}>
+          isPageTransitioning: {isPageTransitioning ? 'true' : 'false'}
+        </div>
     </div>
   );
 };
