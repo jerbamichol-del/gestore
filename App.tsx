@@ -502,7 +502,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
                         syncingImageId={syncingImageId}
                     />
                 </div>
-                <div className="w-1/2 h-full swipe-view">
+                <div className="w-1/2 h-full swipe-view" style={{ touchAction: 'pan-y' }}>
                     <HistoryScreen 
                       expenses={expenses}
                       accounts={accounts}
