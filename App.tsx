@@ -149,6 +149,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const [isHistoryItemInteracting, setIsHistoryItemInteracting] = useState(false);
   const [showSuccessIndicator, setShowSuccessIndicator] = useState(false);
   const successIndicatorTimerRef = useRef<number | null>(null);
+  const [isPageTransitioning, setIsPageTransitioning] = useState(false);
   
   useEffect(() => {
     const today = new Date();
@@ -218,6 +219,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         setIsDateModalOpen(false);
     }
     
+    setIsPageTransitioning(true);
     setActiveView(targetView);
     window.history.pushState({ view: targetView }, '');
   }, [activeView, isDateModalOpen]);
@@ -483,10 +485,11 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         >
             <div 
                 className="w-[200%] h-full flex swipe-container"
+                onTransitionEnd={() => setIsPageTransitioning(false)}
                 style={{
                   transform: `translateX(${viewTranslate}%)`,
                   transition: isSwiping ? 'none' : 'transform 0.08s ease-out',
-                  pointerEvents: 'auto',
+                  pointerEvents: isPageTransitioning ? 'none' : 'auto',
                 }}
             >
                 <div className="w-1/2 h-full overflow-y-auto space-y-6 swipe-view" style={{ touchAction: 'pan-y' }}>
