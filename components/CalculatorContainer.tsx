@@ -45,6 +45,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
 }) => {
   const [isAnimating, setIsAnimating] = useState(false);
   const [view, setView] = useState<'calculator' | 'details'>('calculator');
+  const [isTransitioning, setIsTransitioning] = useState(false);
 
   const resetFormData = useCallback(
     (): Partial<Omit<Expense, 'id'>> => ({
@@ -165,6 +166,8 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
     window.dispatchEvent(new Event('numPad:cancelLongPress'));
 
     // cambio vista immediato
+    setIsTransitioning(true);
+    setTimeout(() => setIsTransitioning(false), 150);
     setView(target);
 
     // chiudi tastiera dietro le quinte
@@ -201,6 +204,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
             transform: isDesktop ? 'none' : `translateX(${translateX}%)`,
             transition: isSwiping ? 'none' : 'transform 0.12s ease-out',
             willChange: 'transform',
+            pointerEvents: isTransitioning ? 'none' : 'auto',
           }}
         >
           <div className={`w-1/2 md:w-auto h-full ${isCalculatorActive ? 'z-10' : 'z-0'}`} aria-hidden={!isCalculatorActive}>
