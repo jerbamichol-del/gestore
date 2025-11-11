@@ -169,15 +169,7 @@ const RecurringExpenseItem: React.FC<{
         <div className="relative bg-white overflow-hidden">
             <div className="absolute top-0 right-0 h-full flex items-center z-0">
                 <button
-                    onPointerDown={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                    }}
-                    onPointerUp={(e) => { 
-                        e.preventDefault();
-                        e.stopPropagation();
-                        onDeleteRequest(expense.id); 
-                    }}
+                    onClick={() => onDeleteRequest(expense.id)}
                     className="w-[72px] h-full flex flex-col items-center justify-center bg-red-500 text-white hover:bg-red-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white"
                     aria-label="Elimina spesa ricorrente"
                 >

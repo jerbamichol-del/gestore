@@ -200,8 +200,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
       {/* layer azioni */}
       <div className="absolute top-0 right-0 h-full flex items-center z-0">
         <button
-          onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
-          onPointerUp={(e) => { e.stopPropagation(); onDelete(expense.id); }}
+          onClick={() => onDelete(expense.id)}
           className="w-[72px] h-full flex flex-col items-center justify-center bg-red-500 text-white hover:bg-red-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white"
           aria-label="Elimina spesa"
         >
@@ -438,7 +437,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
       className="h-full flex flex-col bg-slate-100"
       style={{ touchAction: 'pan-y' }}
     >
-      <div className="flex-1 overflow-y-auto" style={{ touchAction: 'pan-y' }}>
+      <div className="flex-1 overflow-y-auto pb-36" style={{ touchAction: 'pan-y' }}>
         {expenseGroups.length > 0 ? (
           expenseGroups.map(group => (
             <div key={group.label} className="mb-6 last:mb-0">
@@ -473,8 +472,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
         )}
       </div>
 
-      <div data-no-page-swipe className="relative z-20">
-        <HistoryFilterCard
+      <HistoryFilterCard
           isActive={isActive}
           onSelectQuickFilter={(value) => {
             setDateFilter(value);
@@ -503,7 +501,6 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
           isPeriodFilterActive={activeFilterMode === 'period'}
           onActivatePeriodFilter={() => setActiveFilterMode('period')}
         />
-      </div>
     </div>
   );
 };

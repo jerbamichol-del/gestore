@@ -143,13 +143,12 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   // UI State
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const pendingImagesCountRef = useRef(0);
-  const [installPromptEvent, setInstallPromptEvent] = useState<any>(null);
+  const [installPromptEvent, setInstallPromptEvent] = useState<any>(null); // ✅ FIX AGGIUNTO
   const backPressExitTimeoutRef = useRef<number | null>(null);
   const [isHistoryItemOpen, setIsHistoryItemOpen] = useState(false);
   const [isHistoryItemInteracting, setIsHistoryItemInteracting] = useState(false);
   const [showSuccessIndicator, setShowSuccessIndicator] = useState(false);
   const successIndicatorTimerRef = useRef<number | null>(null);
-  const [isPageTransitioning, setIsPageTransitioning] = useState(false);
   
   useEffect(() => {
     const today = new Date();
@@ -159,12 +158,22 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     const updatedTemplates: Expense[] = [];
 
     recurringExpenses.forEach(template => {
-        let cursor = parseDate(template.lastGeneratedDate || template.date);
-        let updatedTemplate = { ...template };
+        if (!template.date) {
+          console.warn('Skipping recurring expense template with no date:', template);
+          return; // Skip this template if it has no start date.
+        }
 
-        let nextDue = calculateNextDueDate(template, cursor);
+        const cursorDateString = template.lastGeneratedDate || template.date;
+        let cursor = parseDate(cursorDateString);
+        let updatedTemplate = { ...template };
+        
+        let nextDue = !template.lastGeneratedDate ? parseDate(template.date) : calculateNextDueDate(template, cursor);
 
         while (nextDue && nextDue <= today) {
+            const totalGenerated = expenses.filter(e => e.recurringExpenseId === template.id).length + newExpenses.filter(e => e.recurringExpenseId === template.id).length;
+            if (template.recurrenceEndType === 'date' && template.recurrenceEndDate && toYYYYMMDD(nextDue) > template.recurrenceEndDate) break;
+            if (template.recurrenceEndType === 'count' && template.recurrenceCount && totalGenerated >= template.recurrenceCount) break;
+            
             const nextDueDateString = toYYYYMMDD(nextDue);
             const instanceExists = expenses.some(exp => exp.recurringExpenseId === template.id && exp.date === nextDueDateString);
             
@@ -178,12 +187,13 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
                     lastGeneratedDate: undefined,
                 });
             }
-            cursor = nextDue;
+            
+            cursor = nextDue; 
             updatedTemplate.lastGeneratedDate = toYYYYMMDD(cursor);
             nextDue = calculateNextDueDate(template, cursor);
         }
         
-        if (updatedTemplate.lastGeneratedDate !== template.lastGeneratedDate) {
+        if (updatedTemplate.lastGeneratedDate && updatedTemplate.lastGeneratedDate !== template.lastGeneratedDate) {
             updatedTemplates.push(updatedTemplate);
         }
     });
@@ -219,8 +229,6 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         setIsDateModalOpen(false);
     }
     
-    setIsPageTransitioning(true);
-    setTimeout(() => setIsPageTransitioning(false), 150);
     setActiveView(targetView);
     window.history.pushState({ view: targetView }, '');
   }, [activeView, isDateModalOpen]);
@@ -255,6 +263,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     };
   }, [ activeView, handleNavigation, showToast, isCalculatorContainerOpen, isFormOpen, isImageSourceModalOpen, isVoiceModalOpen, isConfirmDeleteModalOpen, isConfirmDeleteRecurringModalOpen, isMultipleExpensesModalOpen, imageForAnalysis, isRecurringScreenOpen ]);
 
+
   const swipeContainerRef = useRef<HTMLDivElement>(null);
   
   const handleNavigateHome = useCallback(() => {
@@ -269,8 +278,8 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     },
     {
       enabled: !isCalculatorContainerOpen && !isDateModalOpen && !isRecurringScreenOpen && !isHistoryItemInteracting,
-      threshold: 40,
-      slop: 40,
+      threshold: 36,
+      slop: 10,
       ignoreSelector: '[data-no-page-swipe]',
     }
   );
@@ -286,8 +295,11 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     installPromptEvent.prompt();
     const { outcome } = await installPromptEvent.userChoice;
     setInstallPromptEvent(null);
-    if (outcome === 'accepted') { showToast({ message: 'App installata!', type: 'success' }); } 
-    else { showToast({ message: 'Installazione annullata.', type: 'info' }); }
+    if (outcome === 'accepted') {
+      showToast({ message: 'App installata!', type: 'success' });
+    } else {
+      showToast({ message: 'Installazione annullata.', type: 'info' });
+    }
   };
 
   const refreshPendingImages = useCallback(() => {
@@ -468,7 +480,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   };
 
   return (
-    <div className="h-full w-full bg-slate-100 flex flex-col font-sans overflow-hidden">
+    <div className="h-full w-full bg-slate-100 flex flex-col font-sans overflow-hidden" style={{ touchAction: 'pan-y' }}>
         <div className={`flex-shrink-0 z-20 ${mainContentClasses}`}>
             <Header
               pendingSyncs={pendingImages.length}
@@ -489,7 +501,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
                 style={{
                   transform: `translateX(${viewTranslate}%)`,
                   transition: isSwiping ? 'none' : 'transform 0.08s ease-out',
-                  pointerEvents: isPageTransitioning ? 'none' : 'auto',
+                  pointerEvents: 'auto',
                 }}
             >
                 <div className="w-1/2 h-full overflow-y-auto space-y-6 swipe-view" style={{ touchAction: 'pan-y' }}>
@@ -555,6 +567,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
             expenses={expenses}
             onEditExpense={openEditForm}
             onDeleteExpense={handleDeleteRequest}
+            onMenuStateChange={() => {}} // ✅ FIX: Prop aggiunta
         />
       
         <ExpenseForm 

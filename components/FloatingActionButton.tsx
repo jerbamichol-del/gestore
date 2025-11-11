@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { PlusIcon } from './icons/PlusIcon';
 import { MicrophoneIcon } from './icons/MicrophoneIcon';
@@ -91,7 +90,6 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({ onAddManual
                     >
                         <button
                             onClick={action.onClick}
-                            style={{ touchAction: 'manipulation' }}
                             tabIndex={isOpen ? 0 : -1}
                             className={`flex justify-center items-center w-14 h-14 ${action.bgColor} text-white rounded-full shadow-lg ${action.hoverBgColor} focus:outline-none`}
                             aria-label={action.label}
@@ -104,7 +102,6 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({ onAddManual
             
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                style={{ touchAction: 'manipulation' }}
                 className={`pointer-events-auto flex justify-center items-center w-16 h-16 bg-indigo-600 text-white rounded-full shadow-lg hover:bg-indigo-700 transition-all transform duration-500 ease-in-out focus:outline-none ${isMounted ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-16 scale-90'}`}
                 aria-expanded={isOpen}
                 aria-label={isOpen ? "Chiudi menu azioni" : "Apri menu azioni"}
