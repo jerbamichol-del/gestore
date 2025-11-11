@@ -4,7 +4,7 @@
     <meta charset="UTF--8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Gestore Spese - Nuovo Inizio</title>
-    <link rel="manifest" href="/gestore/manifest.json?v=09170987d18ffaf043587d6b2b39df34bcfbbd5f" />
+    <link rel="manifest" href="/gestore/manifest.json?v=d86363e613b0934366d481e4f215d3a9d22e9c34" />
     <meta name="theme-color" content="#4f46e5" />
     <script src="https://cdn.tailwindcss.com"></script>
 
@@ -20,6 +20,8 @@
         padding-bottom: env(safe-area-inset-bottom, 0px);
         padding-left: env(safe-area-inset-left, 0px);
         overscroll-behavior-y: contain;
+        touch-action: manipulation; /* Disables double-tap-to-zoom delay */
+        -webkit-tap-highlight-color: transparent; /* Removes tap highlight on WebKit */
       }
       /* Fix for browser autofill background color */
       input:-webkit-autofill,
@@ -125,10 +127,10 @@
         from { transform: translateX(-100%); }
         to { transform: translateX(0); }
       }
-      .animate-slide-out-left { animation: slide-out-to-left 0.2s ease-out forwards; }
-      .animate-slide-in-from-right { animation: slide-in-from-right 0.2s ease-out forwards; }
-      .animate-slide-out-right { animation: slide-out-to-right 0.2s ease-out forwards; }
-      .animate-slide-in-from-left { animation: slide-in-from-left 0.2s ease-out forwards; }
+      .animate-slide-out-left { animation: slide-out-to-left 0.08s ease-out forwards; }
+      .animate-slide-in-from-right { animation: slide-in-from-right 0.08s ease-out forwards; }
+      .animate-slide-out-right { animation: slide-out-to-right 0.08s ease-out forwards; }
+      .animate-slide-in-from-left { animation: slide-in-from-left 0.08s ease-out forwards; }
 
     </style>
     <script type="importmap">
@@ -140,18 +142,19 @@
     "react-dom/": "https://esm.sh/react-dom@18.3.1/",
     "@google/genai": "https://aistudiocdn.com/@google/genai@^1.21.0",
     "recharts": "https://esm.sh/recharts@2.12.7",
-    "idb": "https://cdn.jsdelivr.net/npm/idb@8/+esm"
+    "idb": "https://cdn.jsdelivr.net/npm/idb@8/+esm",
+    "react-dom": "https://aistudiocdn.com/react-dom@^19.2.0"
   }
 }
 </script>
-    <script type="module" crossorigin src="/gestore/assets/index-7bHbjCV9.js"></script>
+    <script type="module" crossorigin src="/gestore/assets/index-Cj-vJ-oN.js"></script>
   </head>
   <body class="bg-slate-100 overflow-hidden">
     <div id="root"></div>
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/gestore/service-worker.js?v=09170987d18ffaf043587d6b2b39df34bcfbbd5f', { scope: '/gestore/' })
+          navigator.serviceWorker.register('/gestore/service-worker.js?v=d86363e613b0934366d481e4f215d3a9d22e9c34', { scope: '/gestore/' })
             .then(registration => {
               console.log('ServiceWorker registration successful with scope: ', registration.scope);
             })
@@ -162,6 +165,6 @@
       }
     </script>
     <!-- Preview refresh trigger: 1719331041355 -->
-    <script type="module" src="./pwa-update.js?v=09170987d18ffaf043587d6b2b39df34bcfbbd5f"></script>
+    <script type="module" src="./pwa-update.js?v=d86363e613b0934366d481e4f215d3a9d22e9c34"></script>
 </body>
 </html>
