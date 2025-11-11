@@ -26,7 +26,7 @@ interface HistoryFilterCardProps {
   isPeriodFilterActive: boolean;
 }
 
-/* ---------- QuickFilterControl (NIENTE stopPropagation qui) ---------- */
+/* -------------------- QuickFilterControl -------------------- */
 const QuickFilterControl: React.FC<{
   onSelect: (value: DateFilter) => void;
   currentValue: DateFilter;
@@ -46,8 +46,7 @@ const QuickFilterControl: React.FC<{
           <button
             key={f.value}
             onClick={() => onSelect(f.value)}
-            // niente e.stopPropagation: consente allo swipe orizzontale di catturare il gesto
-            style={{ touchAction: 'none' }}
+            style={{ touchAction: 'none' }} // swipe orizzontale anche partendo dal bottone
             className={`flex-1 flex items-center justify-center px-2 text-center font-semibold text-sm transition-colors duration-200 focus:outline-none
               ${i > 0 ? 'border-l' : ''}
               ${active ? 'bg-indigo-600 text-white border-indigo-600'
@@ -80,11 +79,11 @@ const CustomDateRangeInputs: React.FC<{
     <div className={`border h-10 transition-colors rounded-lg ${isActive ? 'border-indigo-600' : 'border-slate-400'}`}>
       <button
         onClick={onClick}
-        style={{ touchAction: 'none' }} // consente swipe orizzontale gestito via JS
+        style={{ touchAction: 'none' }}
         className={`w-full h-full flex items-center justify-center gap-2 px-2 hover:bg-slate-200 transition-colors focus:outline-none rounded-lg ${isActive ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-700'}`}
         aria-label="Seleziona intervallo di date"
       >
-        <span className="text-sm font-semibold">{txt}</span>
+        <span className="text-sm font-semibold pointer-events-none">{txt}</span>
       </button>
     </div>
   );
@@ -169,7 +168,7 @@ const PeriodNavigator: React.FC<{
       {isMenuOpen && (
         <div className="absolute bottom-full mb-2 left-0 right-0 mx-auto w-40 bg-white border border-slate-200 shadow-lg rounded-lg z-[1000] p-2 space-y-1">
           {(['day','week','month','year'] as PeriodType[]).map(v => (
-            <button key={v} onClick={() => { onActivate(); onTypeChange(v); onMenuToggle(false); }} style={{ touchAction: 'none' }} className={`w-full text-left px-4 py-2 text-sm font-semibold rounded-lg ${periodType === v ? 'bg-indigo-100 text-indigo-800' : 'bg-slate-50 text-slate-800 hover:bg-slate-200'}`}>
+            <button key={v} onClick={() => { onActivate(); onTypeChange(v); onMenuToggle(false); }} style={{ touchAction: 'none' }} className={`w-full text-left px-4 py-2 text-sm font-semibold rounded-lg ${isActive && periodType === v ? 'bg-indigo-100 text-indigo-800' : 'bg-slate-50 text-slate-800 hover:bg-slate-200'}`}>
               {v === 'day' ? 'Giorno' : v === 'week' ? 'Settimana' : v === 'month' ? 'Mese' : 'Anno'}
             </button>
           ))}
@@ -201,35 +200,59 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
     startTranslateY: 0, pointerId: null as number | null,
   });
 
+  // rebind dello swipe dopo tap su filtri rapidi
+  const [swipeEnabled, setSwipeEnabled] = useState(true);
+  const rafRemount = useRef(0);
+  const remountSwipe = useCallback(() => {
+    if (rafRemount.current) cancelAnimationFrame(rafRemount.current);
+    // Disabilita e riabilita useSwipe per forzare re-bind degli eventi
+    setSwipeEnabled(false);
+    rafRemount.current = requestAnimationFrame(() => {
+      requestAnimationFrame(() => setSwipeEnabled(true));
+    });
+  }, []);
+
   const OPEN_Y = 0;
-  const CLOSED_Y = openHeight > peekHeight ? openHeight - peekHeight : 0;
   const [translateY, setTranslateY] = useState(0);
   const [anim, setAnim] = useState(false);
 
-  // notifica parent
+  const closedYRef = useRef(0);
+  const translateYRef = useRef(0);
+  useEffect(() => { translateYRef.current = translateY; }, [translateY]);
+
+  const CLOSED_Y = openHeight > peekHeight ? openHeight - peekHeight : 0;
+  useEffect(() => { closedYRef.current = CLOSED_Y; }, [CLOSED_Y]);
+
+  // notifica parent sul calendario
   useEffect(() => { props.onDateModalStateChange?.(isDateModalOpen); }, [isDateModalOpen, props.onDateModalStateChange]);
 
   const setCardY = useCallback((y: number, animated: boolean) => { setAnim(animated); setTranslateY(y); }, []);
 
-  // layout solo quando Storico è attivo
+  // layout solo in Storico (con fallback rAF per il ref)
   useEffect(() => {
     if (!props.isActive) { setLaidOut(false); return; }
+    let raf = 0;
     const update = () => {
-      if (!filterBarRef.current || gs.current.isDragging) return;
+      if (!filterBarRef.current) { raf = requestAnimationFrame(update); return; }
       const vh = window.innerHeight / 100;
       const oh = OPEN_HEIGHT_VH * vh;
       const ph = filterBarRef.current.offsetHeight || 0;
+      
+      // FIX: aspetta che il filterBar sia renderizzato con altezza > 0
+      if (ph === 0) { raf = requestAnimationFrame(update); return; }
+      
       const closed = oh - ph;
       setOpenHeight(oh); setPeekHeight(ph);
-      if (!laidOut) { setCardY(closed, false); setLaidOut(true); } else { setTranslateY(cur => (cur < closed * 0.9 ? OPEN_Y : closed)); setAnim(false); }
+      if (!laidOut) { setCardY(closed, false); setLaidOut(true); }
+      else { setTranslateY(cur => (cur < closed * 0.9 ? OPEN_Y : closed)); setAnim(false); }
     };
     update();
     window.addEventListener('resize', update);
-    return () => window.removeEventListener('resize', update);
+    return () => { window.removeEventListener('resize', update); if (raf) cancelAnimationFrame(raf); };
   }, [props.isActive, laidOut, setCardY]);
 
-  // blocco scroll sotto quando pannello è davvero aperto
-  const overlayOpen = props.isActive && laidOut && translateY <= Math.max(0, CLOSED_Y - 1);
+  // lock scroll sotto quando overlay davvero aperto
+  const overlayOpen = props.isActive && laidOut && translateY <= Math.max(0, CLOSED_Y - 1) && !isDateModalOpen;
   useEffect(() => {
     if (!overlayOpen) return;
     const prev = document.documentElement.style.overflow;
@@ -237,26 +260,43 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
     return () => { document.documentElement.style.overflow = prev; };
   }, [overlayOpen]);
 
-  // sblocco fail-safe
+  // snap helper (usa soglie 35% / 65%)
+  const snapToAnchor = useCallback(() => {
+    const closed = closedYRef.current;
+    const y = translateYRef.current;
+    const ratio = closed > 0 ? y / closed : 1; // 0=aperto, 1=chiuso
+    const target = (ratio <= 0.35) ? OPEN_Y : (ratio >= 0.65 ? closed : (ratio < 0.5 ? OPEN_Y : closed));
+    setCardY(target, true);
+  }, [setCardY]);
+
+  // fail-safe unlock + snap anche se l'up arriva su window
   useEffect(() => {
-    const unlock = () => { gs.current.isDragging = false; gs.current.isLocked = false; gs.current.pointerId = null; };
+    const unlock = () => {
+      if (gs.current.isDragging || gs.current.isLocked) {
+        gs.current.isDragging = false;
+        gs.current.isLocked = false;
+        gs.current.pointerId = null;
+        // forza snap anche se il dito "esce" fuori dal pannello
+        snapToAnchor();
+      }
+    };
     window.addEventListener('pointerup', unlock, { capture: true });
     window.addEventListener('pointercancel', unlock, { capture: true });
     return () => {
       window.removeEventListener('pointerup', unlock as any, { capture: true } as any);
       window.removeEventListener('pointercancel', unlock as any, { capture: true } as any);
     };
-  }, []);
+  }, [snapToAnchor]);
 
-  // flick veloce per aprire/chiudere
+  // velocità per flick
   const SPEED = 0.18; // px/ms
   const DPR = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
-  const clamp = (y: number) => Math.round(Math.max(OPEN_Y, Math.min(CLOSED_Y, y)) * DPR) / DPR;
+  const clamp = (y: number) => Math.round(Math.max(OPEN_Y, Math.min(closedYRef.current, y)) * DPR) / DPR;
 
-  /* ---------- TapBridge + drag verticale (in capture sul pannello) ---------- */
+  /* ---------- TapBridge + drag verticale (in capture) ---------- */
   const onPD = (e: React.PointerEvent) => {
     tapBridge.onPointerDown(e);
-    if (!props.isActive || isDateModalOpen) return; // 2) chiuso quando calendario aperto
+    if (!props.isActive || isDateModalOpen) return;
     if (anim || gs.current.pointerId !== null || e.button !== 0) return;
     const now = performance.now();
     gs.current.isDragging = true; gs.current.isLocked = false;
@@ -269,43 +309,64 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
     if (!props.isActive || isDateModalOpen) return;
     const S = gs.current;
     if (!S.isDragging || S.pointerId !== e.pointerId) return;
-    const dy = e.clientY - S.startY; const dx = e.clientX - S.startX;
+
+    const dy = e.clientY - S.startY;
+    const dx = e.clientX - S.startX;
+
     if (!S.isLocked) {
       const SLOP = 6;
       if (Math.abs(dy) < SLOP && Math.abs(dx) < SLOP) return;
       if (Math.abs(dy) > Math.abs(dx) * 1.3) { S.isLocked = true; (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); }
       else { S.isDragging = false; S.pointerId = null; return; }
     }
+
     if (e.cancelable) e.preventDefault();
     let y = S.startTranslateY + dy;
+    const closed = closedYRef.current;
     if (y < OPEN_Y) y = OPEN_Y - Math.tanh(-y / 200) * 100;
-    if (y > CLOSED_Y) y = CLOSED_Y + Math.tanh((y - CLOSED_Y) / 200) * 100;
+    if (y > closed) y = closed + Math.tanh((y - closed) / 200) * 100;
+
     setCardY(y, false);
+
     S.lastY = e.clientY; S.lastT = performance.now();
   };
   const onPU = (e: React.PointerEvent) => {
     tapBridge.onPointerUp(e);
     if (!props.isActive) return;
+
     const S = gs.current;
     if (!S.isDragging || S.pointerId !== e.pointerId) return;
+
     if (S.isLocked) (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+
     const dt = Math.max(1, performance.now() - S.lastT);
     const vy = (e.clientY - S.lastY) / dt;
-    const mid = CLOSED_Y / 2;
+
+    const closed = closedYRef.current;
+    const ratio = closed > 0 ? translateYRef.current / closed : 1; // 0=aperto, 1=chiuso
+    const openBySpeed = vy <= -SPEED;
+    const closeBySpeed = vy >= SPEED;
+
     S.isDragging = false; S.isLocked = false; S.pointerId = null;
-    const target = vy <= -SPEED ? OPEN_Y : vy >= SPEED ? CLOSED_Y : (translateY < mid ? OPEN_Y : CLOSED_Y);
+
+    // Snap definitivo (nessuna posizione intermedia al rilascio)
+    let target: number;
+    if (openBySpeed || ratio <= 0.35) target = OPEN_Y;
+    else if (closeBySpeed || ratio >= 0.65) target = closed;
+    else target = ratio < 0.5 ? OPEN_Y : closed;
+
     setCardY(target, true);
   };
   const onPC = (e: React.PointerEvent) => {
     tapBridge.onPointerCancel?.(e as any);
     const S = gs.current; if (!S.isDragging) return;
     S.isDragging = S.isLocked = false; S.pointerId = null;
-    const target = translateY < CLOSED_Y / 2 ? OPEN_Y : CLOSED_Y;
-    setCardY(target, true);
+    // Anche sul cancel fai snap duro
+    snapToAnchor();
   };
   const onClickCap = (e: React.MouseEvent) => { tapBridge.onClickCapture(e as any); };
 
-  /* ---------------- Swipe orizzontale tra i 3 insiemi di filtri ---------------- */
+  /* ---------------- Swipe orizzontale tra le 3 viste ---------------- */
   const swipeWrapperRef = useRef<HTMLDivElement>(null);
   const changeView = useCallback((i: number) => setActiveViewIndex(i), []);
   const { progress, isSwiping } = useSwipe(
@@ -315,10 +376,10 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
       onSwipeRight: () => changeView(Math.max(0, activeViewIndex - 1)),
     },
     {
-      enabled: props.isActive && !isPeriodMenuOpen && !isDateModalOpen, // 2) disabilita swipe se calendario aperto
+      enabled: swipeEnabled && props.isActive && !isPeriodMenuOpen && !isDateModalOpen,
       threshold: 28,
       slop: 8,
-      disableDrag: () => gs.current.isLocked, // se stai trascinando in verticale, niente swipe
+      disableDrag: () => gs.current.isLocked, // se trascini in verticale, blocca lo swipe orizzontale
     }
   );
 
@@ -326,7 +387,13 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
   const tx = -activeViewIndex * (100 / 3) + progress * (100 / 3);
   const listTransform = `translateX(${tx}%)`;
 
-  /* ----------------- PORTAL: SOLO in Storico e solo se calendario chiuso ----------------- */
+  // handler che seleziona rapido + remount dello swipe (fix swipe "morto")
+  const handleQuickSelect = useCallback((v: DateFilter) => {
+    props.onSelectQuickFilter(v);
+    remountSwipe();
+  }, [props, remountSwipe]);
+
+  // Pannello overlay (Portal) — sempre montato quando isActive; invisibile quando apri il calendario
   const panel = (
     <div
       onPointerDownCapture={onPD}
@@ -343,6 +410,8 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
         touchAction: 'none',
         backfaceVisibility: 'hidden',
         willChange: 'transform',
+        opacity: laidOut && !isDateModalOpen ? 1 : 0,
+        pointerEvents: laidOut && !isDateModalOpen ? 'auto' : 'none',
       }}
       onTransitionEnd={() => setAnim(false)}
     >
@@ -354,12 +423,12 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
         <div
           ref={swipeWrapperRef}
           className={`relative ${isPeriodMenuOpen ? 'overflow-visible' : 'overflow-hidden'}`}
-          style={{ touchAction: 'none' }}  // fondamentale per swipe anche se premi i pulsanti
+          style={{ touchAction: 'none' }} // swipe orizzontale anche partendo dai pulsanti
         >
           <div className="w-[300%] flex" style={{ transform: listTransform, transition: isSwiping ? 'none' : 'transform 0.08s ease-out' }}>
             <div className="w-1/3 px-4 py-1">
               <QuickFilterControl
-                onSelect={props.onSelectQuickFilter}
+                onSelect={handleQuickSelect}
                 currentValue={props.currentQuickFilter}
                 isActive={isQuickFilterActive}
               />
@@ -407,8 +476,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
 
   return (
     <>
-      {/* 1) SOLO in "Storico" (isActive) e 2) scompare quando apri il calendario */}
-      {props.isActive && !isDateModalOpen && laidOut && createPortal(panel, document.body)}
+      {props.isActive && createPortal(panel, document.body)}
 
       <DateRangePickerModal
         isOpen={isDateModalOpen}
@@ -419,3 +487,4 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
     </>
   );
 };
+
