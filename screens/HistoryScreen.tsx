@@ -52,6 +52,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
     initialTranslateX: 0,
     pointerId: null as number | null,
   });
+  const closeTimer = useRef<number | null>(null);
 
   const setTranslateX = useCallback((x: number, animated: boolean) => {
     const el = itemRef.current;
@@ -60,7 +61,6 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
     el.style.transform = `translateX(${x}px)`;
   }, []);
 
-  // Se il pager prende lo swipe (cambio pagina), resetta il drag dell'item
   useEffect(() => {
     if (isPageSwiping && dragState.current.isDragging) {
       dragState.current.isDragging = false;
@@ -75,9 +75,12 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
     tapBridge.onPointerDown(e);
     const el = itemRef.current;
     if (!el) return;
-
-    // lascia passare il click sui bottoni interni
     if ((e.target as HTMLElement).closest('button')) return;
+
+    if (closeTimer.current) {
+      clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
 
     el.style.transition = 'none';
     const m = new DOMMatrixReadOnly(getComputedStyle(el).transform);
@@ -93,7 +96,6 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
       initialTranslateX: currentX || 0,
       pointerId: e.pointerId,
     };
-    // setPointerCapture solo quando lockiamo l'item
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
@@ -111,16 +113,24 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
 
       // predominanza orizzontale
       if (Math.abs(dx) > Math.abs(dy) * 1.2) {
-        // gesto a destra: se l'item non è aperto → lascia al pager (Home)
-        if (dx > 0 && !isOpen) {
-          ds.isDragging = false;
-          ds.pointerId = null;
-          return;
+        if (dx > 0) {
+          // → gesto a destra: se l'item è aperto, LO CHIUDIAMO NOI (blocchiamo il pager finché non è chiuso)
+          if (isOpen) {
+            ds.isLocked = true;
+            try { el.setPointerCapture(ds.pointerId!); } catch {}
+            onInteractionChange(true);
+          } else {
+            // item chiuso: lascia al pager (Home)
+            ds.isDragging = false;
+            ds.pointerId = null;
+            return;
+          }
+        } else {
+          // ← gesto a sinistra: apri azioni dell'item
+          ds.isLocked = true;
+          try { el.setPointerCapture(ds.pointerId!); } catch {}
+          onInteractionChange(true);
         }
-        // altrimenti locka l'item e cattura
-        ds.isLocked = true;
-        try { el.setPointerCapture(ds.pointerId!); } catch {}
-        onInteractionChange(true);
       } else {
         // predominanza verticale → abort
         ds.isDragging = false;
@@ -133,10 +143,10 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
 
     // limiti + elasticità
     let nx = ds.initialTranslateX + dx;
-    if (nx > 0) nx = Math.tanh(nx / 100) * 60;
+    if (nx > 0) nx = Math.tanh(nx / 100) * 60; // resistenza verso destra
     if (nx < -ACTION_WIDTH) {
       const over = -ACTION_WIDTH - nx;
-      nx = -ACTION_WIDTH - Math.tanh(over / 100) * 60;
+      nx = -ACTION_WIDTH - Math.tanh(over / 100) * 60; // resistenza oltre il limite
     }
 
     setTranslateX(nx, false);
@@ -155,20 +165,41 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
     }
 
     const dt = Math.max(1, performance.now() - ds.lastT);
-    const vx = (e.clientX - ds.lastX) / dt;
-
+    const vx = (e.clientX - ds.lastX) / dt;     // px/ms
     const cur = new DOMMatrixReadOnly(getComputedStyle(el).transform).m41;
-    let open = isOpen;
-    if (cur <= -ACTION_WIDTH * 0.6 || vx < -0.3) open = true;
-    if (cur >= -ACTION_WIDTH * 0.4 || vx > 0.3) open = false;
+    const progress = Math.min(1, Math.max(0, Math.abs(cur) / ACTION_WIDTH)); // 0..1
 
-    setTranslateX(open ? -ACTION_WIDTH : 0, true);
-    if (open !== isOpen) onOpen(open ? expense.id : '');
+    // Soglie più permissive per apertura a sinistra
+    // - se velocità a sinistra > 0.15 → apri
+    // - se velocità a destra > 0.20 → chiudi
+    // - altrimenti snap: apri se superi ~40% di trascinamento
+    let open = isOpen;
+    if (vx <= -0.15) open = true;
+    else if (vx >= 0.20) open = false;
+    else open = progress >= 0.40;
+
+    // Anima e gestisci il lock pagina SOLO finché dura l’animazione
+    if (open) {
+      onInteractionChange(true);
+      setTranslateX(-ACTION_WIDTH, true);
+      closeTimer.current = window.setTimeout(() => {
+        onOpen(expense.id);
+        onInteractionChange(false);
+        closeTimer.current = null;
+      }, 210);
+    } else {
+      onInteractionChange(true);
+      setTranslateX(0, true);
+      closeTimer.current = window.setTimeout(() => {
+        if (isOpen) onOpen(''); // segnala chiusura
+        onInteractionChange(false);
+        closeTimer.current = null;
+      }, 210);
+    }
 
     ds.isDragging = false;
     ds.isLocked = false;
     ds.pointerId = null;
-    onInteractionChange(false);
   };
 
   const handlePointerCancel = (e: React.PointerEvent) => {
@@ -181,11 +212,14 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
     ds.isDragging = false;
     ds.isLocked = false;
     ds.pointerId = null;
-    onInteractionChange(false);
+    onInteractionChange(true);
     setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
+    closeTimer.current = window.setTimeout(() => {
+      onInteractionChange(false);
+      closeTimer.current = null;
+    }, 210);
   };
 
-  // Allinea posizione quando cambia isOpen
   useEffect(() => {
     if (!dragState.current.isDragging) {
       setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
@@ -194,7 +228,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
 
   return (
     <div className="relative bg-white overflow-hidden">
-      {/* layer azioni a destra */}
+      {/* azioni a destra */}
       <div className="absolute top-0 right-0 h-full flex items-center z-0">
         <button
           onClick={() => onDelete(expense.id)}
@@ -309,7 +343,6 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
   const [isInteracting, setIsInteracting] = useState(false);
   const autoCloseTimerRef = useRef<number | null>(null);
 
-  // chiudi l'item quando finisce un'operazione modale (edit/delete)
   const prevIsEditingOrDeleting = useRef(isEditingOrDeleting);
   useEffect(() => {
     if (prevIsEditingOrDeleting.current && !isEditingOrDeleting) {
@@ -451,7 +484,6 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
                 {group.label}
               </h2>
 
-              {/* NIENTE data-no-page-swipe qui: lo swipe verso Home deve funzionare sopra la lista */}
               <div className="bg-white rounded-xl shadow-md mx-2 overflow-hidden">
                 {group.expenses.map((expense, index) => (
                   <React.Fragment key={expense.id}>
