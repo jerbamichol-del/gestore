@@ -24,11 +24,11 @@ interface ExpenseItemProps {
 
 const ACTION_WIDTH = 72;
 
-// Soglie più permissive per apertura e flick
+// Soglie per apertura/chiusura + flick
 const OPEN_SNAP  = 0.20;  // ≥20% verso sinistra → apri
 const CLOSE_SNAP = 0.50;  // ≤50% verso destra quando aperto → chiudi
-const OPEN_VX    = -0.08; // fling a sinistra (px/ms)
-const CLOSE_VX   =  0.18; // fling a destra (px/ms)
+const OPEN_VX    = -0.08; // px/ms
+const CLOSE_VX   =  0.18; // px/ms
 
 /* ==================== ExpenseItem ==================== */
 const ExpenseItem: React.FC<ExpenseItemProps> = ({
@@ -67,6 +67,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
     el.style.transform = `translateX(${x}px)`;
   }, []);
 
+  // Se il pager swipa la pagina, abortisci il drag dell'item
   useEffect(() => {
     if (isPageSwiping && dragState.current.isDragging) {
       dragState.current.isDragging = false;
@@ -100,7 +101,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
       pointerId: e.pointerId,
     };
 
-    // Se già aperto, blocca subito il pager: la chiusura resta “locale”
+    // Se già aperto, blocca subito il pager: la chiusura è "locale"
     if (isOpen) {
       dragState.current.isLocked = true;
       try { el.setPointerCapture(e.pointerId); } catch {}
@@ -121,23 +122,22 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
       const SLOP = 6;
       if (Math.abs(dx) < SLOP && Math.abs(dy) < SLOP) return;
 
-      // **FOLLOW IMMEDIATO A SINISTRA**: appena superi lo slop e dx<0 → locka e cattura
+      // Follow immediato a sinistra: lock appena superi lo slop
       if (dx < -SLOP) {
         ds.isLocked = true;
         try { el.setPointerCapture(ds.pointerId!); } catch {}
         onInteractionChange(true);
       } else if (dx > SLOP) {
-        // gesto a destra: se chiuso → cedi al pager; se aperto → locka per chiudere localmente
+        // Destra: se chiuso → cedi al pager; se aperto → lock per chiudere senza spostare la pagina
         if (!isOpen) {
           ds.isDragging = false;
           ds.pointerId = null;
-          return; // lascia la pagina
+          return; // lascia il pager
         }
         ds.isLocked = true;
         try { el.setPointerCapture(ds.pointerId!); } catch {}
         onInteractionChange(true);
       } else {
-        // predominanza verticale → abort
         if (Math.abs(dy) > Math.abs(dx) * 1.2) {
           ds.isDragging = false;
           ds.pointerId = null;
@@ -148,7 +148,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
 
     if (e.cancelable) e.preventDefault();
 
-    // limiti + elasticità
+    // Limiti con elasticità
     let nx = ds.initialTranslateX + dx;
     if (nx > 0) nx = Math.tanh(nx / 100) * 60;
     if (nx < -ACTION_WIDTH) {
@@ -156,7 +156,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
       nx = -ACTION_WIDTH - Math.tanh(over / 100) * 60;
     }
 
-    setTranslateX(nx, false);        // ← segue il dito frame-by-frame
+    setTranslateX(nx, false); // segue il dito
     ds.lastX = e.clientX;
     ds.lastT = performance.now();
   };
@@ -173,11 +173,10 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
 
     const dt = Math.max(1, performance.now() - ds.lastT);
     const vx = (e.clientX - ds.lastX) / dt; // px/ms
-
     const cur = new DOMMatrixReadOnly(getComputedStyle(el).transform).m41;
     const progress = Math.min(1, Math.max(0, Math.abs(cur) / ACTION_WIDTH)); // 0..1
 
-    // Apertura/chiusura: follow + flick
+    // Follow + flick
     let open = isOpen;
     if (!isOpen) {
       open = (vx <= OPEN_VX) || (progress >= OPEN_SNAP);
@@ -217,6 +216,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
     }, 210);
   };
 
+  // Allinea quando cambia isOpen dall'esterno
   useEffect(() => {
     if (!dragState.current.isDragging) {
       setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
@@ -267,7 +267,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
   );
 };
 
-/* ==================== HistoryScreen (resto invariato) ==================== */
+/* ==================== HistoryScreen ==================== */
 interface HistoryScreenProps {
   expenses: Expense[];
   accounts: Account[];
@@ -276,82 +276,189 @@ interface HistoryScreenProps {
   onItemStateChange: (state: { isOpen: boolean; isInteracting: boolean }) => void;
   isEditingOrDeleting: boolean;
   onNavigateHome: () => void;
-  isActive: boolean;
+  isActive: boolean; // true solo nella pagina "Storico"
   onDateModalStateChange: (isOpen: boolean) => void;
-  isPageSwiping: boolean;
+  isPageSwiping: boolean; // dal pager esterno
 }
-interface ExpenseGroup { year: number; week: number; label: string; expenses: Expense[]; }
-const getISOWeek = (date: Date): [number, number] => { const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())); const dayNum = d.getUTCDay() || 7; d.setUTCDate(d.getUTCDate() + 4 - dayNum); const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1)); return [d.getUTCFullYear(), Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)]; };
-const getWeekLabel = (y: number, w: number) => { const now = new Date(); const [cy, cw] = getISOWeek(now); if (y === cy) { if (w === cw) return 'Questa Settimana'; if (w === cw - 1) return 'Settimana Scorsa'; } return `Settimana ${w}, ${y}`; };
-const parseLocalYYYYMMDD = (s: string) => { const p = s.split('-').map(Number); return new Date(p[0], p[1] - 1, p[2]); };
+
+interface ExpenseGroup {
+  year: number;
+  week: number;
+  label: string;
+  expenses: Expense[];
+}
+
+const getISOWeek = (date: Date): [number, number] => {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return [d.getUTCFullYear(), Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)];
+};
+
+const getWeekLabel = (y: number, w: number) => {
+  const now = new Date();
+  const [cy, cw] = getISOWeek(now);
+  if (y === cy) {
+    if (w === cw) return 'Questa Settimana';
+    if (w === cw - 1) return 'Settimana Scorsa';
+  }
+  return `Settimana ${w}, ${y}`;
+};
+
+const parseLocalYYYYMMDD = (s: string) => {
+  const p = s.split('-').map(Number);
+  return new Date(p[0], p[1] - 1, p[2]);
+};
 
 const HistoryScreen: React.FC<HistoryScreenProps> = ({
-  expenses, accounts, onEditExpense, onDeleteExpense, onItemStateChange,
-  isEditingOrDeleting, onNavigateHome, isActive, onDateModalStateChange, isPageSwiping,
+  expenses,
+  accounts,
+  onEditExpense,
+  onDeleteExpense,
+  onItemStateChange,
+  isEditingOrDeleting,
+  onNavigateHome,
+  isActive,
+  onDateModalStateChange,
+  isPageSwiping,
 }) => {
   const tapBridge = useTapBridge();
 
   const [activeFilterMode, setActiveFilterMode] = useState<ActiveFilterMode>('quick');
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
   const [customRange, setCustomRange] = useState<{ start: string | null; end: string | null }>({ start: null, end: null });
-  const [periodType, setPeriodType] = useState<PeriodType>('week');
-  const [periodDate, setPeriodDate] = useState<Date>(() => { const d = new Date(); d.setHours(0,0,0,0); return d; });
 
+  const [periodType, setPeriodType] = useState<PeriodType>('week');
+  const [periodDate, setPeriodDate] = useState<Date>(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  });
+
+  // ⬇️ UNA SOLA DICHIARAZIONE (niente duplicati più in basso)
   const [openItemId, setOpenItemId] = useState<string | null>(null);
   const [isInteracting, setIsInteracting] = useState(false);
-  const autoCloseTimerRef = useRef<number | null>(null);
 
+  const autoCloseTimerRef = useRef<number | null>(null);
   const prevIsEditingOrDeleting = useRef(isEditingOrDeleting);
-  useEffect(() => { if (prevIsEditingOrDeleting.current && !isEditingOrDeleting) setOpenItemId(null); prevIsEditingOrDeleting.current = isEditingOrDeleting; }, [isEditingOrDeleting]);
-  useEffect(() => { if (!isActive) setOpenItemId(null); }, [isActive]);
-  useEffect(() => { onItemStateChange({ isOpen: openItemId !== null, isInteracting }); }, [openItemId, isInteracting, onItemStateChange]);
-  useEffect(() => { if (autoCloseTimerRef.current) clearTimeout(autoCloseTimerRef.current); if (openItemId && !isEditingOrDeleting) { autoCloseTimerRef.current = window.setTimeout(() => setOpenItemId(null), 5000); } return () => { if (autoCloseTimerRef.current) clearTimeout(autoCloseTimerRef.current); }; }, [openItemId, isEditingOrDeleting]);
+
+  useEffect(() => {
+    if (prevIsEditingOrDeleting.current && !isEditingOrDeleting) {
+      setOpenItemId(null);
+    }
+    prevIsEditingOrDeleting.current = isEditingOrDeleting;
+  }, [isEditingOrDeleting]);
+
+  useEffect(() => {
+    if (!isActive) setOpenItemId(null);
+  }, [isActive]);
+
+  useEffect(() => {
+    onItemStateChange({ isOpen: openItemId !== null, isInteracting });
+  }, [openItemId, isInteracting, onItemStateChange]);
+
+  useEffect(() => {
+    if (autoCloseTimerRef.current) clearTimeout(autoCloseTimerRef.current);
+    if (openItemId && !isEditingOrDeleting) {
+      autoCloseTimerRef.current = window.setTimeout(() => setOpenItemId(null), 5000);
+    }
+    return () => {
+      if (autoCloseTimerRef.current) clearTimeout(autoCloseTimerRef.current);
+    };
+  }, [openItemId, isEditingOrDeleting]);
 
   const filteredExpenses = useMemo(() => {
     if (activeFilterMode === 'period') {
       const start = new Date(periodDate); start.setHours(0,0,0,0);
       const end = new Date(periodDate); end.setHours(23,59,59,999);
+
       switch (periodType) {
         case 'day': break;
-        case 'week': { const day = start.getDay(); const diff = start.getDate() - day + (day === 0 ? -6 : 1); start.setDate(diff); end.setDate(start.getDate() + 6); break; }
-        case 'month': start.setDate(1); end.setMonth(end.getMonth() + 1); end.setDate(0); break;
-        case 'year': start.setMonth(0, 1); end.setFullYear(end.getFullYear() + 1); end.setMonth(0, 0); break;
+        case 'week': {
+          const day = start.getDay();
+          const diff = start.getDate() - day + (day === 0 ? -6 : 1);
+          start.setDate(diff);
+          end.setDate(start.getDate() + 6);
+          break;
+        }
+        case 'month':
+          start.setDate(1);
+          end.setMonth(end.getMonth() + 1);
+          end.setDate(0);
+          break;
+        case 'year':
+          start.setMonth(0, 1);
+          end.setFullYear(end.getFullYear() + 1);
+          end.setMonth(0, 0);
+          break;
       }
-      const t0 = start.getTime(); const t1 = end.getTime();
-      return expenses.filter(e => { const d = parseLocalYYYYMMDD(e.date); if (isNaN(d.getTime())) return false; const t = d.getTime(); return t >= t0 && t <= t1; });
+
+      const t0 = start.getTime();
+      const t1 = end.getTime();
+      return expenses.filter(e => {
+        const d = parseLocalYYYYMMDD(e.date);
+        if (isNaN(d.getTime())) return false;
+        const t = d.getTime();
+        return t >= t0 && t <= t1;
+      });
     }
+
     if (activeFilterMode === 'custom' && customRange.start && customRange.end) {
       const t0 = parseLocalYYYYMMDD(customRange.start!).getTime();
-      const endDay = parseLocalYYYYMMDD(customRange.end!); endDay.setDate(endDay.getDate() + 1);
+      const endDay = parseLocalYYYYMMDD(customRange.end!);
+      endDay.setDate(endDay.getDate() + 1);
       const t1 = endDay.getTime();
-      return expenses.filter(e => { const d = parseLocalYYYYMMDD(e.date); if (isNaN(d.getTime())) return false; const t = d.getTime(); return t >= t0 && t < t1; });
+      return expenses.filter(e => {
+        const d = parseLocalYYYYMMDD(e.date);
+        if (isNaN(d.getTime())) return false;
+        const t = d.getTime();
+        return t >= t0 && t < t1;
+      });
     }
+
     if (dateFilter === 'all') return expenses;
-    const startDate = new Date(); startDate.setHours(0,0,0,0);
-    switch (dateFilter) { case '7d': startDate.setDate(startDate.getDate() - 6); break; case '30d': startDate.setDate(startDate.getDate() - 29); break; case '6m': startDate.setMonth(startDate.getMonth() - 6); break; case '1y': startDate.setFullYear(startDate.getFullYear() - 1); break; }
+
+    const startDate = new Date();
+    startDate.setHours(0, 0, 0, 0);
+    switch (dateFilter) {
+      case '7d': startDate.setDate(startDate.getDate() - 6); break;
+      case '30d': startDate.setDate(startDate.getDate() - 29); break;
+      case '6m': startDate.setMonth(startDate.getMonth() - 6); break;
+      case '1y': startDate.setFullYear(startDate.getFullYear() - 1); break;
+    }
     const t0 = startDate.getTime();
-    return expenses.filter(e => { const d = parseLocalYYYYMMDD(e.date); return !isNaN(d.getTime()) && d.getTime() >= t0; });
+
+    return expenses.filter(e => {
+      const d = parseLocalYYYYMMDD(e.date);
+      return !isNaN(d.getTime()) && d.getTime() >= t0;
+    });
   }, [expenses, activeFilterMode, dateFilter, customRange, periodType, periodDate]);
 
   const groupedExpenses = useMemo(() => {
     const sorted = [...filteredExpenses].sort((a, b) => {
-      const db = parseLocalYYYYMMDD(b.date); const da = parseLocalYYYYMMDD(a.date);
+      const db = parseLocalYYYYMMDD(b.date);
+      const da = parseLocalYYYYMMDD(a.date);
       if (b.time) { const [h, m] = b.time.split(':').map(Number); if (!isNaN(h) && !isNaN(m)) db.setHours(h, m); }
       if (a.time) { const [h, m] = a.time.split(':').map(Number); if (!isNaN(h) && !isNaN(m)) da.setHours(h, m); }
       return db.getTime() - da.getTime();
     });
+
     return sorted.reduce<Record<string, ExpenseGroup>>((acc, e) => {
-      const d = parseLocalYYYYMMDD(e.date); if (isNaN(d.getTime())) return acc;
-      const [y, w] = getISOWeek(d); const key = `${y}-${w}`;
+      const d = parseLocalYYYYMMDD(e.date);
+      if (isNaN(d.getTime())) return acc;
+      const [y, w] = getISOWeek(d);
+      const key = `${y}-${w}`;
       if (!acc[key]) acc[key] = { year: y, week: w, label: getWeekLabel(y, w), expenses: [] };
-      acc[key].expenses.push(e); return acc;
+      acc[key].expenses.push(e);
+      return acc;
     }, {});
   }, [filteredExpenses]);
 
-  const expenseGroups = (Object.values(groupedExpenses) as ExpenseGroup[]).sort((a, b) => (a.year !== b.year ? b.year - a.year : b.week - a.week));
+  const expenseGroups = (Object.values(groupedExpenses) as ExpenseGroup[]).sort(
+    (a, b) => (a.year !== b.year ? b.year - a.year : b.week - a.week)
+  );
 
-  const [openItemId, setOpenItemId] = useState<string | null>(null);
-  const [isInteracting, setIsInteracting] = useState(false);
   const handleOpenItem = (id: string) => setOpenItemId(id || null);
   const handleInteractionChange = (v: boolean) => setIsInteracting(v);
 
@@ -373,6 +480,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
                 {group.label}
               </h2>
 
+              {/* niente data-no-page-swipe: lo swipe verso Home funziona sopra la lista */}
               <div className="bg-white rounded-xl shadow-md mx-2 overflow-hidden">
                 {group.expenses.map((expense, index) => (
                   <React.Fragment key={expense.id}>
@@ -411,7 +519,11 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
         onDateModalStateChange={onDateModalStateChange}
         periodType={periodType}
         periodDate={periodDate}
-        onSelectPeriodType={(type) => { setPeriodType(type); setPeriodDate(() => { const d = new Date(); d.setHours(0,0,0,0); return d; }); setActiveFilterMode('period'); }}
+        onSelectPeriodType={(type) => {
+          setPeriodType(type);
+          setPeriodDate(() => { const d = new Date(); d.setHours(0,0,0,0); return d; });
+          setActiveFilterMode('period');
+        }}
         onSetPeriodDate={setPeriodDate}
         isPeriodFilterActive={activeFilterMode === 'period'}
         onActivatePeriodFilter={() => setActiveFilterMode('period')}
