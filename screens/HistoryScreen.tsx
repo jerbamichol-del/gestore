@@ -1,3 +1,4 @@
+import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { Expense, Account } from '../types';
 import { getCategoryStyle } from '../utils/categoryStyles';
 import { formatCurrency } from '../components/icons/formatters';
@@ -35,7 +36,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
   onNavigateHome,
   isPageSwiping,
 }) => {
-  const tapBridge = useTapBridge(); // <-- integrazione TapBridge sull’item
+  const tapBridge = useTapBridge();
 
   const style = getCategoryStyle(expense.category);
   const accountName = accounts.find(a => a.id === expense.accountId)?.name || 'Sconosciuto';
@@ -53,11 +54,13 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
   });
 
   const setTranslateX = useCallback((x: number, animated: boolean) => {
-    if (!itemRef.current) return;
-    itemRef.current.style.transition = animated ? 'transform 0.2s cubic-bezier(0.22,0.61,0.36,1)' : 'none';
-    itemRef.current.style.transform = `translateX(${x}px)`;
+    const el = itemRef.current;
+    if (!el) return;
+    el.style.transition = animated ? 'transform 0.2s cubic-bezier(0.22,0.61,0.36,1)' : 'none';
+    el.style.transform = `translateX(${x}px)`;
   }, []);
 
+  // Se il pager prende lo swipe (cambio pagina), resetta il drag dell'item
   useEffect(() => {
     if (isPageSwiping && dragState.current.isDragging) {
       dragState.current.isDragging = false;
@@ -69,12 +72,15 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
   }, [isPageSwiping, onInteractionChange, setTranslateX]);
 
   const handlePointerDown = (e: React.PointerEvent) => {
-    tapBridge.onPointerDown(e); // <-- bridge
-    if (!itemRef.current) return;
+    tapBridge.onPointerDown(e);
+    const el = itemRef.current;
+    if (!el) return;
+
+    // lascia passare il click sui bottoni interni
     if ((e.target as HTMLElement).closest('button')) return;
 
-    itemRef.current.style.transition = 'none';
-    const m = new DOMMatrixReadOnly(window.getComputedStyle(itemRef.current).transform);
+    el.style.transition = 'none';
+    const m = new DOMMatrixReadOnly(getComputedStyle(el).transform);
     const currentX = m.m41;
 
     dragState.current = {
@@ -87,13 +93,14 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
       initialTranslateX: currentX || 0,
       pointerId: e.pointerId,
     };
-    // niente setPointerCapture qui: lo faremo solo quando lockiamo lo swipe dell’item
+    // setPointerCapture solo quando lockiamo l'item
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
-    tapBridge.onPointerMove(e); // <-- bridge
+    tapBridge.onPointerMove(e);
     const ds = dragState.current;
-    if (!ds.isDragging || ds.pointerId !== e.pointerId || !itemRef.current) return;
+    const el = itemRef.current;
+    if (!ds.isDragging || ds.pointerId !== e.pointerId || !el) return;
 
     const dx = e.clientX - ds.startX;
     const dy = e.clientY - ds.startY;
@@ -102,16 +109,20 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
       const SLOP = 6;
       if (Math.abs(dx) < SLOP && Math.abs(dy) < SLOP) return;
 
+      // predominanza orizzontale
       if (Math.abs(dx) > Math.abs(dy) * 1.2) {
+        // gesto a destra: se l'item non è aperto → lascia al pager (Home)
         if (dx > 0 && !isOpen) {
           ds.isDragging = false;
           ds.pointerId = null;
-          return; // gesto a destra → lascia al pager
+          return;
         }
+        // altrimenti locka l'item e cattura
         ds.isLocked = true;
-        try { itemRef.current.setPointerCapture(ds.pointerId!); } catch {}
+        try { el.setPointerCapture(ds.pointerId!); } catch {}
         onInteractionChange(true);
       } else {
+        // predominanza verticale → abort
         ds.isDragging = false;
         ds.pointerId = null;
         return;
@@ -120,6 +131,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
 
     if (e.cancelable) e.preventDefault();
 
+    // limiti + elasticità
     let nx = ds.initialTranslateX + dx;
     if (nx > 0) nx = Math.tanh(nx / 100) * 60;
     if (nx < -ACTION_WIDTH) {
@@ -133,18 +145,19 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
-    tapBridge.onPointerUp(e); // <-- bridge
+    tapBridge.onPointerUp(e);
     const ds = dragState.current;
-    if (!ds.isDragging || ds.pointerId !== e.pointerId) return;
+    const el = itemRef.current;
+    if (!ds.isDragging || ds.pointerId !== e.pointerId || !el) return;
 
     if (ds.isLocked) {
-      try { itemRef.current?.releasePointerCapture(ds.pointerId!); } catch {}
+      try { el.releasePointerCapture(ds.pointerId!); } catch {}
     }
 
     const dt = Math.max(1, performance.now() - ds.lastT);
     const vx = (e.clientX - ds.lastX) / dt;
 
-    const cur = new DOMMatrixReadOnly(window.getComputedStyle(itemRef.current!).transform).m41;
+    const cur = new DOMMatrixReadOnly(getComputedStyle(el).transform).m41;
     let open = isOpen;
     if (cur <= -ACTION_WIDTH * 0.6 || vx < -0.3) open = true;
     if (cur >= -ACTION_WIDTH * 0.4 || vx > 0.3) open = false;
@@ -159,12 +172,12 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
   };
 
   const handlePointerCancel = (e: React.PointerEvent) => {
-    tapBridge.onPointerCancel?.(e as any); // <-- bridge
+    tapBridge.onPointerCancel?.(e as any);
     const ds = dragState.current;
-    if (!ds.isDragging || ds.pointerId !== e.pointerId) return;
+    const el = itemRef.current;
+    if (!ds.isDragging || ds.pointerId !== e.pointerId || !el) return;
 
-    try { itemRef.current?.releasePointerCapture(ds.pointerId!); } catch {}
-
+    try { el.releasePointerCapture(ds.pointerId!); } catch {}
     ds.isDragging = false;
     ds.isLocked = false;
     ds.pointerId = null;
@@ -172,6 +185,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
     setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
   };
 
+  // Allinea posizione quando cambia isOpen
   useEffect(() => {
     if (!dragState.current.isDragging) {
       setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
@@ -180,7 +194,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
 
   return (
     <div className="relative bg-white overflow-hidden">
-      {/* azioni a destra */}
+      {/* layer azioni a destra */}
       <div className="absolute top-0 right-0 h-full flex items-center z-0">
         <button
           onClick={() => onDelete(expense.id)}
@@ -199,7 +213,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}
-        onClickCapture={(e) => tapBridge.onClickCapture(e as any)} // <-- bridge click
+        onClickCapture={(e) => tapBridge.onClickCapture(e as any)}
         className="relative flex items-center gap-4 py-3 px-4 bg-white z-10 cursor-pointer"
         style={{ touchAction: 'pan-y' }}
       >
@@ -231,9 +245,9 @@ interface HistoryScreenProps {
   onItemStateChange: (state: { isOpen: boolean; isInteracting: boolean }) => void;
   isEditingOrDeleting: boolean;
   onNavigateHome: () => void;
-  isActive: boolean;
+  isActive: boolean; // true solo nella pagina "Storico"
   onDateModalStateChange: (isOpen: boolean) => void;
-  isPageSwiping: boolean;
+  isPageSwiping: boolean; // dal pager esterno
 }
 
 interface ExpenseGroup {
@@ -278,7 +292,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
   onDateModalStateChange,
   isPageSwiping,
 }) => {
-  const tapBridge = useTapBridge(); // <-- integrazione TapBridge a livello lista
+  const tapBridge = useTapBridge();
 
   const [activeFilterMode, setActiveFilterMode] = useState<ActiveFilterMode>('quick');
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
@@ -295,6 +309,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
   const [isInteracting, setIsInteracting] = useState(false);
   const autoCloseTimerRef = useRef<number | null>(null);
 
+  // chiudi l'item quando finisce un'operazione modale (edit/delete)
   const prevIsEditingOrDeleting = useRef(isEditingOrDeleting);
   useEffect(() => {
     if (prevIsEditingOrDeleting.current && !isEditingOrDeleting) {
@@ -419,14 +434,10 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
   const handleInteractionChange = (v: boolean) => setIsInteracting(v);
 
   return (
-    <div
-      className="h-full flex flex-col bg-slate-100"
-      style={{ touchAction: 'pan-y' }}
-    >
+    <div className="h-full flex flex-col bg-slate-100" style={{ touchAction: 'pan-y' }}>
       <div
         className="flex-1 overflow-y-auto pb-36"
         style={{ touchAction: 'pan-y' }}
-        /* TapBridge a livello lista: cattura PD/PM/PU + click per eliminare i “tap a vuoto” post-swipe */
         onPointerDownCapture={(e) => tapBridge.onPointerDown(e)}
         onPointerMoveCapture={(e) => tapBridge.onPointerMove(e)}
         onPointerUpCapture={(e) => tapBridge.onPointerUp(e)}
@@ -440,6 +451,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
                 {group.label}
               </h2>
 
+              {/* NIENTE data-no-page-swipe qui: lo swipe verso Home deve funzionare sopra la lista */}
               <div className="bg-white rounded-xl shadow-md mx-2 overflow-hidden">
                 {group.expenses.map((expense, index) => (
                   <React.Fragment key={expense.id}>
