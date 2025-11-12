@@ -24,6 +24,12 @@ interface ExpenseItemProps {
 
 const ACTION_WIDTH = 72;
 
+// Soglie più permissive e prevedibili
+const OPEN_SNAP = 0.25;   // ≥25% verso sinistra → apri
+const CLOSE_SNAP = 0.50;  // ≤50% verso destra quando aperto → chiudi
+const OPEN_VX  = -0.12;   // fling a sinistra
+const CLOSE_VX =  0.18;   // fling a destra
+
 /* ==================== ExpenseItem ==================== */
 const ExpenseItem: React.FC<ExpenseItemProps> = ({
   expense,
@@ -52,7 +58,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
     initialTranslateX: 0,
     pointerId: null as number | null,
   });
-  const closeTimer = useRef<number | null>(null);
+  const animTimer = useRef<number | null>(null);
 
   const setTranslateX = useCallback((x: number, animated: boolean) => {
     const el = itemRef.current;
@@ -61,6 +67,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
     el.style.transform = `translateX(${x}px)`;
   }, []);
 
+  // Se il pager sta swipando, abortisci eventuale drag item
   useEffect(() => {
     if (isPageSwiping && dragState.current.isDragging) {
       dragState.current.isDragging = false;
@@ -77,9 +84,9 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
     if (!el) return;
     if ((e.target as HTMLElement).closest('button')) return;
 
-    if (closeTimer.current) {
-      clearTimeout(closeTimer.current);
-      closeTimer.current = null;
+    if (animTimer.current) {
+      clearTimeout(animTimer.current);
+      animTimer.current = null;
     }
 
     el.style.transition = 'none';
@@ -96,6 +103,13 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
       initialTranslateX: currentX || 0,
       pointerId: e.pointerId,
     };
+
+    // FIX #1: se l’item è aperto, blocca SUBITO il pager finché non si chiude
+    if (isOpen) {
+      dragState.current.isLocked = true;
+      try { el.setPointerCapture(e.pointerId); } catch {}
+      onInteractionChange(true);
+    }
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
@@ -111,22 +125,21 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
       const SLOP = 6;
       if (Math.abs(dx) < SLOP && Math.abs(dy) < SLOP) return;
 
-      // predominanza orizzontale
+      // predominanza orizzontale → locka item
       if (Math.abs(dx) > Math.abs(dy) * 1.2) {
         if (dx > 0) {
-          // → gesto a destra: se l'item è aperto, LO CHIUDIAMO NOI (blocchiamo il pager finché non è chiuso)
-          if (isOpen) {
-            ds.isLocked = true;
-            try { el.setPointerCapture(ds.pointerId!); } catch {}
-            onInteractionChange(true);
-          } else {
-            // item chiuso: lascia al pager (Home)
+          // gesto a destra: se chiuso → lascia al pager
+          if (!isOpen) {
             ds.isDragging = false;
             ds.pointerId = null;
             return;
           }
+          // se aperto → chiudi tu (pager bloccato finché non chiude)
+          ds.isLocked = true;
+          try { el.setPointerCapture(ds.pointerId!); } catch {}
+          onInteractionChange(true);
         } else {
-          // ← gesto a sinistra: apri azioni dell'item
+          // gesto a sinistra: apri
           ds.isLocked = true;
           try { el.setPointerCapture(ds.pointerId!); } catch {}
           onInteractionChange(true);
@@ -143,10 +156,10 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
 
     // limiti + elasticità
     let nx = ds.initialTranslateX + dx;
-    if (nx > 0) nx = Math.tanh(nx / 100) * 60; // resistenza verso destra
+    if (nx > 0) nx = Math.tanh(nx / 100) * 60;
     if (nx < -ACTION_WIDTH) {
       const over = -ACTION_WIDTH - nx;
-      nx = -ACTION_WIDTH - Math.tanh(over / 100) * 60; // resistenza oltre il limite
+      nx = -ACTION_WIDTH - Math.tanh(over / 100) * 60;
     }
 
     setTranslateX(nx, false);
@@ -165,37 +178,28 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
     }
 
     const dt = Math.max(1, performance.now() - ds.lastT);
-    const vx = (e.clientX - ds.lastX) / dt;     // px/ms
+    const vx = (e.clientX - ds.lastX) / dt; // px/ms
+
     const cur = new DOMMatrixReadOnly(getComputedStyle(el).transform).m41;
     const progress = Math.min(1, Math.max(0, Math.abs(cur) / ACTION_WIDTH)); // 0..1
 
-    // Soglie più permissive per apertura a sinistra
-    // - se velocità a sinistra > 0.15 → apri
-    // - se velocità a destra > 0.20 → chiudi
-    // - altrimenti snap: apri se superi ~40% di trascinamento
+    // Decisione robusta:
+    // - Se chiuso: apri con vx sinistra o con progress ≥ 25%
+    // - Se aperto: chiudi con vx destra o progress ≤ 50%, altrimenti resta aperto
     let open = isOpen;
-    if (vx <= -0.15) open = true;
-    else if (vx >= 0.20) open = false;
-    else open = progress >= 0.40;
-
-    // Anima e gestisci il lock pagina SOLO finché dura l’animazione
-    if (open) {
-      onInteractionChange(true);
-      setTranslateX(-ACTION_WIDTH, true);
-      closeTimer.current = window.setTimeout(() => {
-        onOpen(expense.id);
-        onInteractionChange(false);
-        closeTimer.current = null;
-      }, 210);
+    if (!isOpen) {
+      open = (vx <= OPEN_VX) || (progress >= OPEN_SNAP);
     } else {
-      onInteractionChange(true);
-      setTranslateX(0, true);
-      closeTimer.current = window.setTimeout(() => {
-        if (isOpen) onOpen(''); // segnala chiusura
-        onInteractionChange(false);
-        closeTimer.current = null;
-      }, 210);
+      open = !((vx >= CLOSE_VX) || (progress <= CLOSE_SNAP));
     }
+
+    onInteractionChange(true);
+    setTranslateX(open ? -ACTION_WIDTH : 0, true);
+    animTimer.current = window.setTimeout(() => {
+      if (open !== isOpen) onOpen(open ? expense.id : '');
+      onInteractionChange(false);
+      animTimer.current = null;
+    }, 210);
 
     ds.isDragging = false;
     ds.isLocked = false;
@@ -212,14 +216,16 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
     ds.isDragging = false;
     ds.isLocked = false;
     ds.pointerId = null;
+
     onInteractionChange(true);
     setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
-    closeTimer.current = window.setTimeout(() => {
+    animTimer.current = window.setTimeout(() => {
       onInteractionChange(false);
-      closeTimer.current = null;
+      animTimer.current = null;
     }, 210);
   };
 
+  // Allinea quando cambia isOpen dall'esterno
   useEffect(() => {
     if (!dragState.current.isDragging) {
       setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
@@ -484,6 +490,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
                 {group.label}
               </h2>
 
+              {/* niente data-no-page-swipe: lo swipe verso Home deve funzionare sopra la lista */}
               <div className="bg-white rounded-xl shadow-md mx-2 overflow-hidden">
                 {group.expenses.map((expense, index) => (
                   <React.Fragment key={expense.id}>
