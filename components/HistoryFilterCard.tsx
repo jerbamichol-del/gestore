@@ -205,7 +205,6 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
   const rafRemount = useRef(0);
   const remountSwipe = useCallback(() => {
     if (rafRemount.current) cancelAnimationFrame(rafRemount.current);
-    // Disabilita e riabilita useSwipe per forzare re-bind degli eventi
     setSwipeEnabled(false);
     rafRemount.current = requestAnimationFrame(() => {
       requestAnimationFrame(() => setSwipeEnabled(true));
@@ -223,12 +222,11 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
   const CLOSED_Y = openHeight > peekHeight ? openHeight - peekHeight : 0;
   useEffect(() => { closedYRef.current = CLOSED_Y; }, [CLOSED_Y]);
 
-  // notifica parent sul calendario
   useEffect(() => { props.onDateModalStateChange?.(isDateModalOpen); }, [isDateModalOpen, props.onDateModalStateChange]);
 
   const setCardY = useCallback((y: number, animated: boolean) => { setAnim(animated); setTranslateY(y); }, []);
 
-  // layout solo in Storico (con fallback rAF per il ref)
+  // layout solo in Storico (attendi misura reale)
   useEffect(() => {
     if (!props.isActive) { setLaidOut(false); return; }
     let raf = 0;
@@ -237,10 +235,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
       const vh = window.innerHeight / 100;
       const oh = OPEN_HEIGHT_VH * vh;
       const ph = filterBarRef.current.offsetHeight || 0;
-      
-      // FIX: aspetta che il filterBar sia renderizzato con altezza > 0
       if (ph === 0) { raf = requestAnimationFrame(update); return; }
-      
       const closed = oh - ph;
       setOpenHeight(oh); setPeekHeight(ph);
       if (!laidOut) { setCardY(closed, false); setLaidOut(true); }
@@ -260,7 +255,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
     return () => { document.documentElement.style.overflow = prev; };
   }, [overlayOpen]);
 
-  // snap helper (usa soglie 35% / 65%)
+  // snap helper (35% / 65%)
   const snapToAnchor = useCallback(() => {
     const closed = closedYRef.current;
     const y = translateYRef.current;
@@ -276,7 +271,6 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
         gs.current.isDragging = false;
         gs.current.isLocked = false;
         gs.current.pointerId = null;
-        // forza snap anche se il dito "esce" fuori dal pannello
         snapToAnchor();
       }
     };
@@ -288,16 +282,17 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
     };
   }, [snapToAnchor]);
 
-  // velocità per flick
   const SPEED = 0.18; // px/ms
   const DPR = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
   const clamp = (y: number) => Math.round(Math.max(OPEN_Y, Math.min(closedYRef.current, y)) * DPR) / DPR;
 
-  /* ---------- TapBridge + drag verticale (in capture) ---------- */
+  /* ---------- TapBridge + drag verticale (capture) ---------- */
   const onPD = (e: React.PointerEvent) => {
     tapBridge.onPointerDown(e);
     if (!props.isActive || isDateModalOpen) return;
-    if (anim || gs.current.pointerId !== null || e.button !== 0) return;
+    // FIX #2: non bloccare il drag se anim è rimasto true (resetta e permetti il drag)
+    if (anim) setAnim(false);
+    if (gs.current.pointerId !== null || e.button !== 0) return;
     const now = performance.now();
     gs.current.isDragging = true; gs.current.isLocked = false;
     gs.current.startX = e.clientX; gs.current.startY = e.clientY;
@@ -349,7 +344,6 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
 
     S.isDragging = false; S.isLocked = false; S.pointerId = null;
 
-    // Snap definitivo (nessuna posizione intermedia al rilascio)
     let target: number;
     if (openBySpeed || ratio <= 0.35) target = OPEN_Y;
     else if (closeBySpeed || ratio >= 0.65) target = closed;
@@ -361,7 +355,6 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
     tapBridge.onPointerCancel?.(e as any);
     const S = gs.current; if (!S.isDragging) return;
     S.isDragging = S.isLocked = false; S.pointerId = null;
-    // Anche sul cancel fai snap duro
     snapToAnchor();
   };
   const onClickCap = (e: React.MouseEvent) => { tapBridge.onClickCapture(e as any); };
@@ -379,7 +372,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
       enabled: swipeEnabled && props.isActive && !isPeriodMenuOpen && !isDateModalOpen,
       threshold: 28,
       slop: 8,
-      disableDrag: () => gs.current.isLocked, // se trascini in verticale, blocca lo swipe orizzontale
+      disableDrag: () => gs.current.isLocked,
     }
   );
 
@@ -387,13 +380,20 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
   const tx = -activeViewIndex * (100 / 3) + progress * (100 / 3);
   const listTransform = `translateX(${tx}%)`;
 
-  // handler che seleziona rapido + remount dello swipe (fix swipe "morto")
   const handleQuickSelect = useCallback((v: DateFilter) => {
     props.onSelectQuickFilter(v);
     remountSwipe();
   }, [props, remountSwipe]);
 
-  // Pannello overlay (Portal) — sempre montato quando isActive; invisibile quando apri il calendario
+  // --------- Y iniziale in stato chiuso prima del layout (FIX #1) ----------
+  const initialPanelHeightPx = Math.round(
+    (typeof window !== 'undefined' ? window.innerHeight : 0) * (OPEN_HEIGHT_VH / 100)
+  );
+  const yForStyle = laidOut
+    ? clamp((openHeight - peekHeight) > 0 ? translateY : openHeight)
+    : (openHeight || initialPanelHeightPx);
+
+  // Pannello overlay
   const panel = (
     <div
       onPointerDownCapture={onPD}
@@ -405,7 +405,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
       className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-[0_-8px_20px_-5px_rgba(0,0,0,0.08)] z-[1000]"
       style={{
         height: `${OPEN_HEIGHT_VH}vh`,
-        transform: `translate3d(0, ${clamp((openHeight - peekHeight) > 0 ? translateY : openHeight)}px, 0)`,
+        transform: `translate3d(0, ${yForStyle}px, 0)`,
         transition: anim ? 'transform 0.26s cubic-bezier(0.22, 0.61, 0.36, 1)' : 'none',
         touchAction: 'none',
         backfaceVisibility: 'hidden',
@@ -487,4 +487,3 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
     </>
   );
 };
-
