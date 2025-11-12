@@ -1,10 +1,10 @@
 import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
-import { Expense, Account } from '../types';
-import { getCategoryStyle } from '../utils/categoryStyles';
-import { formatCurrency, formatDate } from '../components/icons/formatters';
-import { PencilSquareIcon } from '../components/icons/PencilSquareIcon';
-import { TrashIcon } from '../components/icons/TrashIcon';
-import { HistoryFilterCard } from '../components/HistoryFilterCard';
+import { Expense, Account } from './types';
+import { getCategoryStyle } from './utils/categoryStyles';
+import { formatCurrency } from './components/icons/formatters';
+import { TrashIcon } from './components/icons/TrashIcon';
+import { HistoryFilterCard } from './components/HistoryFilterCard';
+import { useTapBridge } from './hooks/useTapBridge';
 
 type DateFilter = 'all' | '7d' | '30d' | '6m' | '1y';
 type PeriodType = 'day' | 'week' | 'month' | 'year';
@@ -24,7 +24,7 @@ interface ExpenseItemProps {
 
 const ACTION_WIDTH = 72;
 
-/* -------------------- ExpenseItem -------------------- */
+/* ==================== ExpenseItem ==================== */
 const ExpenseItem: React.FC<ExpenseItemProps> = ({
   expense,
   accounts,
@@ -36,6 +36,8 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
   onNavigateHome,
   isPageSwiping,
 }) => {
+  const tapBridge = useTapBridge(); // <-- integrazione TapBridge sull’item
+
   const style = getCategoryStyle(expense.category);
   const accountName = accounts.find(a => a.id === expense.accountId)?.name || 'Sconosciuto';
 
@@ -45,7 +47,8 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
     isLocked: false,
     startX: 0,
     startY: 0,
-    startTime: 0,
+    lastX: 0,
+    lastT: 0,
     initialTranslateX: 0,
     pointerId: null as number | null,
   });
@@ -56,7 +59,6 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
     itemRef.current.style.transform = `translateX(${x}px)`;
   }, []);
 
-  // Se il pager prende lo swipe, resettiamo
   useEffect(() => {
     if (isPageSwiping && dragState.current.isDragging) {
       dragState.current.isDragging = false;
@@ -68,10 +70,11 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
   }, [isPageSwiping, onInteractionChange, setTranslateX]);
 
   const handlePointerDown = (e: React.PointerEvent) => {
-    if ((e.target as HTMLElement).closest('button') || !itemRef.current) return;
+    tapBridge.onPointerDown(e); // <-- bridge
+    if (!itemRef.current) return;
+    if ((e.target as HTMLElement).closest('button')) return;
 
     itemRef.current.style.transition = 'none';
-
     const m = new DOMMatrixReadOnly(window.getComputedStyle(itemRef.current).transform);
     const currentX = m.m41;
 
@@ -80,112 +83,93 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
       isLocked: false,
       startX: e.clientX,
       startY: e.clientY,
-      startTime: performance.now(),
-      initialTranslateX: currentX,
+      lastX: e.clientX,
+      lastT: performance.now(),
+      initialTranslateX: currentX || 0,
       pointerId: e.pointerId,
     };
-
-    try {
-      itemRef.current.setPointerCapture(e.pointerId);
-    } catch {}
+    // niente setPointerCapture qui: lo faremo solo quando lockiamo lo swipe dell’item
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
+    tapBridge.onPointerMove(e); // <-- bridge
     const ds = dragState.current;
-    if (!ds.isDragging || e.pointerId !== ds.pointerId) return;
+    if (!ds.isDragging || ds.pointerId !== e.pointerId || !itemRef.current) return;
 
     const dx = e.clientX - ds.startX;
     const dy = e.clientY - ds.startY;
 
     if (!ds.isLocked) {
-      const SLOP = 8;
-      if (Math.abs(dx) <= SLOP && Math.abs(dy) <= SLOP) return;
+      const SLOP = 6;
+      if (Math.abs(dx) < SLOP && Math.abs(dy) < SLOP) return;
 
-      const horizontal = Math.abs(dx) > Math.abs(dy) * 1.5;
-
-      if (!horizontal) {
+      if (Math.abs(dx) > Math.abs(dy) * 1.2) {
+        if (dx > 0 && !isOpen) {
+          ds.isDragging = false;
+          ds.pointerId = null;
+          return; // gesto a destra → lascia al pager
+        }
+        ds.isLocked = true;
+        try { itemRef.current.setPointerCapture(ds.pointerId!); } catch {}
+        onInteractionChange(true);
+      } else {
         ds.isDragging = false;
-        if (ds.pointerId !== null) itemRef.current?.releasePointerCapture(ds.pointerId);
         ds.pointerId = null;
         return;
       }
-
-      const wasOpen = ds.initialTranslateX < -1 || isOpen;
-      if (dx > 0 && !wasOpen) {
-        ds.isDragging = false;
-        if (ds.pointerId !== null) itemRef.current?.releasePointerCapture(ds.pointerId);
-        ds.pointerId = null;
-        return;
-      }
-
-      ds.isLocked = true;
-      onInteractionChange(true);
     }
 
     if (e.cancelable) e.preventDefault();
 
-    let x = ds.initialTranslateX + dx;
-    if (x > 0) x = Math.tanh(x / 50) * 25;
-    if (x < -ACTION_WIDTH) x = -ACTION_WIDTH - Math.tanh((Math.abs(x) - ACTION_WIDTH) / 50) * 25;
-    setTranslateX(x, false);
+    let nx = ds.initialTranslateX + dx;
+    if (nx > 0) nx = Math.tanh(nx / 100) * 60;
+    if (nx < -ACTION_WIDTH) {
+      const over = -ACTION_WIDTH - nx;
+      nx = -ACTION_WIDTH - Math.tanh(over / 100) * 60;
+    }
+
+    setTranslateX(nx, false);
+    ds.lastX = e.clientX;
+    ds.lastT = performance.now();
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
+    tapBridge.onPointerUp(e); // <-- bridge
     const ds = dragState.current;
-    if (!ds.isDragging || e.pointerId !== ds.pointerId) return;
+    if (!ds.isDragging || ds.pointerId !== e.pointerId) return;
 
-    if (ds.pointerId !== null) itemRef.current?.releasePointerCapture(ds.pointerId);
+    if (ds.isLocked) {
+      try { itemRef.current?.releasePointerCapture(ds.pointerId!); } catch {}
+    }
 
-    const wasLocked = ds.isLocked;
+    const dt = Math.max(1, performance.now() - ds.lastT);
+    const vx = (e.clientX - ds.lastX) / dt;
 
-    const dx = e.clientX - ds.startX;
-    const dy = e.clientY - ds.startY;
-    const dist = Math.hypot(dx, dy);
-    const duration = performance.now() - ds.startTime;
+    const cur = new DOMMatrixReadOnly(window.getComputedStyle(itemRef.current!).transform).m41;
+    let open = isOpen;
+    if (cur <= -ACTION_WIDTH * 0.6 || vx < -0.3) open = true;
+    if (cur >= -ACTION_WIDTH * 0.4 || vx > 0.3) open = false;
 
-    const isTap = dist < 10 && duration < 250;
+    setTranslateX(open ? -ACTION_WIDTH : 0, true);
+    if (open !== isOpen) onOpen(open ? expense.id : '');
 
     ds.isDragging = false;
     ds.isLocked = false;
     ds.pointerId = null;
-    if (wasLocked) onInteractionChange(false);
-
-    if (isTap) {
-      setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
-      if (isOpen) onOpen('');
-      else onEdit(expense);
-      return;
-    }
-
-    if (wasLocked) {
-      // A swipe happened, prevent any ghost click.
-      if (e.cancelable) e.preventDefault();
-      e.stopPropagation();
-      
-      const endX = new DOMMatrixReadOnly(window.getComputedStyle(itemRef.current!).transform).m41;
-      const velocity = dx / (duration || 1);
-      const shouldOpen = endX < -ACTION_WIDTH / 2 || (velocity < -0.3 && dx < -20);
-
-      onOpen(shouldOpen ? expense.id : '');
-      setTranslateX(shouldOpen ? -ACTION_WIDTH : 0, true);
-    } else {
-      setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
-    }
+    onInteractionChange(false);
   };
 
   const handlePointerCancel = (e: React.PointerEvent) => {
+    tapBridge.onPointerCancel?.(e as any); // <-- bridge
     const ds = dragState.current;
-    if (!ds.isDragging || e.pointerId !== ds.pointerId) return;
+    if (!ds.isDragging || ds.pointerId !== e.pointerId) return;
 
-    if (ds.pointerId !== null) itemRef.current?.releasePointerCapture(ds.pointerId);
-
-    const wasLocked = ds.isLocked;
+    try { itemRef.current?.releasePointerCapture(ds.pointerId!); } catch {}
 
     ds.isDragging = false;
     ds.isLocked = false;
     ds.pointerId = null;
-    if (wasLocked) onInteractionChange(false);
-
+    onInteractionChange(false);
     setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
   };
 
@@ -197,7 +181,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
 
   return (
     <div className="relative bg-white overflow-hidden">
-      {/* layer azioni */}
+      {/* azioni a destra */}
       <div className="absolute top-0 right-0 h-full flex items-center z-0">
         <button
           onClick={() => onDelete(expense.id)}
@@ -216,6 +200,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}
+        onClickCapture={(e) => tapBridge.onClickCapture(e as any)} // <-- bridge click
         className="relative flex items-center gap-4 py-3 px-4 bg-white z-10 cursor-pointer"
         style={{ touchAction: 'pan-y' }}
       >
@@ -238,7 +223,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
   );
 };
 
-/* -------------------- HistoryScreen -------------------- */
+/* ==================== HistoryScreen ==================== */
 interface HistoryScreenProps {
   expenses: Expense[];
   accounts: Account[];
@@ -294,6 +279,8 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
   onDateModalStateChange,
   isPageSwiping,
 }) => {
+  const tapBridge = useTapBridge(); // <-- integrazione TapBridge a livello lista
+
   const [activeFilterMode, setActiveFilterMode] = useState<ActiveFilterMode>('quick');
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
   const [customRange, setCustomRange] = useState<{ start: string | null; end: string | null }>({ start: null, end: null });
@@ -429,7 +416,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
     return b.week - a.week;
   });
 
-  const handleOpenItem = (id: string) => setOpenItemId(id);
+  const handleOpenItem = (id: string) => setOpenItemId(id || null);
   const handleInteractionChange = (v: boolean) => setIsInteracting(v);
 
   return (
@@ -437,14 +424,24 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
       className="h-full flex flex-col bg-slate-100"
       style={{ touchAction: 'pan-y' }}
     >
-      <div className="flex-1 overflow-y-auto pb-36" style={{ touchAction: 'pan-y' }}>
+      <div
+        className="flex-1 overflow-y-auto pb-36"
+        style={{ touchAction: 'pan-y' }}
+        /* TapBridge a livello lista: cattura PD/PM/PU + click per eliminare i “tap a vuoto” post-swipe */
+        onPointerDownCapture={(e) => tapBridge.onPointerDown(e)}
+        onPointerMoveCapture={(e) => tapBridge.onPointerMove(e)}
+        onPointerUpCapture={(e) => tapBridge.onPointerUp(e)}
+        onPointerCancelCapture={(e) => tapBridge.onPointerCancel?.(e as any)}
+        onClickCapture={(e) => tapBridge.onClickCapture(e as any)}
+      >
         {expenseGroups.length > 0 ? (
           expenseGroups.map(group => (
             <div key={group.label} className="mb-6 last:mb-0">
               <h2 className="font-bold text-slate-800 text-lg px-4 py-2 sticky top-0 bg-slate-100/80 backdrop-blur-sm z-10">
                 {group.label}
               </h2>
-              <div data-no-page-swipe className="bg-white rounded-xl shadow-md mx-2 overflow-hidden">
+
+              <div className="bg-white rounded-xl shadow-md mx-2 overflow-hidden">
                 {group.expenses.map((expense, index) => (
                   <React.Fragment key={expense.id}>
                     {index > 0 && <hr className="border-t border-slate-200 ml-16" />}
@@ -473,34 +470,34 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
       </div>
 
       <HistoryFilterCard
-          isActive={isActive}
-          onSelectQuickFilter={(value) => {
-            setDateFilter(value);
-            setActiveFilterMode('quick');
-          }}
-          currentQuickFilter={dateFilter}
-          onCustomRangeChange={(range) => {
-            setCustomRange(range);
-            setActiveFilterMode('custom');
-          }}
-          currentCustomRange={customRange}
-          isCustomRangeActive={activeFilterMode === 'custom'}
-          onDateModalStateChange={onDateModalStateChange}
-          periodType={periodType}
-          periodDate={periodDate}
-          onSelectPeriodType={(type) => {
-            setPeriodType(type);
-            setPeriodDate(() => {
-              const d = new Date();
-              d.setHours(0, 0, 0, 0);
-              return d;
-            });
-            setActiveFilterMode('period');
-          }}
-          onSetPeriodDate={setPeriodDate}
-          isPeriodFilterActive={activeFilterMode === 'period'}
-          onActivatePeriodFilter={() => setActiveFilterMode('period')}
-        />
+        isActive={isActive}
+        onSelectQuickFilter={(value) => {
+          setDateFilter(value);
+          setActiveFilterMode('quick');
+        }}
+        currentQuickFilter={dateFilter}
+        onCustomRangeChange={(range) => {
+          setCustomRange(range);
+          setActiveFilterMode('custom');
+        }}
+        currentCustomRange={customRange}
+        isCustomRangeActive={activeFilterMode === 'custom'}
+        onDateModalStateChange={onDateModalStateChange}
+        periodType={periodType}
+        periodDate={periodDate}
+        onSelectPeriodType={(type) => {
+          setPeriodType(type);
+          setPeriodDate(() => {
+            const d = new Date();
+            d.setHours(0, 0, 0, 0);
+            return d;
+          });
+          setActiveFilterMode('period');
+        }}
+        onSetPeriodDate={setPeriodDate}
+        isPeriodFilterActive={activeFilterMode === 'period'}
+        onActivatePeriodFilter={() => setActiveFilterMode('period')}
+      />
     </div>
   );
 };
