@@ -1,10 +1,9 @@
-import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
-import { Expense, Account } from './types';
-import { getCategoryStyle } from './utils/categoryStyles';
-import { formatCurrency } from './components/icons/formatters';
-import { TrashIcon } from './components/icons/TrashIcon';
-import { HistoryFilterCard } from './components/HistoryFilterCard';
-import { useTapBridge } from './hooks/useTapBridge';
+import { Expense, Account } from '../types';
+import { getCategoryStyle } from '../utils/categoryStyles';
+import { formatCurrency } from '../components/icons/formatters';
+import { TrashIcon } from '../components/icons/TrashIcon';
+import { HistoryFilterCard } from '../components/HistoryFilterCard';
+import { useTapBridge } from '../hooks/useTapBridge';
 
 type DateFilter = 'all' | '7d' | '30d' | '6m' | '1y';
 type PeriodType = 'day' | 'week' | 'month' | 'year';
