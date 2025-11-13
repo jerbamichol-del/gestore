@@ -160,7 +160,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
     if (wasLocked) {
       const endX = new DOMMatrixReadOnly(window.getComputedStyle(itemRef.current!).transform).m41;
       const velocity = dx / (duration || 1);
-      const shouldOpen = endX < -ACTION_WIDTH / 2 || (velocity < -0.3 && dx < -20);
+      const shouldOpen = endX < -ACTION_WIDTH * 0.35 || (velocity < -0.25 && dx < -20);
 
       onOpen(shouldOpen ? expense.id : '');
       setTranslateX(shouldOpen ? -ACTION_WIDTH : 0, true);
