@@ -468,15 +468,17 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const baseTranslatePercent = activeView === 'home' ? 0 : -50;
   const dragTranslatePercent = progress * 50;
   const viewTranslate = baseTranslatePercent + dragTranslatePercent;
-
-  const isAnyModalOpen = isFormOpen || isImageSourceModalOpen || isVoiceModalOpen || isConfirmDeleteModalOpen || isConfirmDeleteRecurringModalOpen || isMultipleExpensesModalOpen || isDateModalOpen || isParsingImage || !!imageForAnalysis || isRecurringScreenOpen;
+  
+  const isAnyModalOpenForFab = isFormOpen || isImageSourceModalOpen || isVoiceModalOpen || isConfirmDeleteModalOpen || isConfirmDeleteRecurringModalOpen || isMultipleExpensesModalOpen || isDateModalOpen || isParsingImage || !!imageForAnalysis || isRecurringScreenOpen;
+  
+  const isOverlayActiveForHistory = isCalculatorContainerOpen || isFormOpen || isConfirmDeleteModalOpen || isImageSourceModalOpen || isVoiceModalOpen || isMultipleExpensesModalOpen || isParsingImage || !!imageForAnalysis;
 
   const fabStyle: React.CSSProperties = {
     transform: activeView === 'history' ? 'translateY(-70px)' : 'translateY(0)',
-    opacity: isAnyModalOpen ? 0 : 1,
-    visibility: isAnyModalOpen ? 'hidden' : 'visible',
-    pointerEvents: isAnyModalOpen ? 'none' : 'auto',
-    transition: `transform 0.25s cubic-bezier(0.22, 0.61, 0.36, 1), opacity 0.2s ease-out, visibility 0s linear ${isAnyModalOpen ? '0.2s' : '0s'}`
+    opacity: isAnyModalOpenForFab ? 0 : 1,
+    visibility: isAnyModalOpenForFab ? 'hidden' : 'visible',
+    pointerEvents: isAnyModalOpenForFab ? 'none' : 'auto',
+    transition: `transform 0.25s cubic-bezier(0.22, 0.61, 0.36, 1), opacity 0.2s ease-out, visibility 0s linear ${isAnyModalOpenForFab ? '0.2s' : '0s'}`
   };
 
   return (
@@ -529,6 +531,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
                       isActive={activeView === 'history'}
                       onDateModalStateChange={setIsDateModalOpen}
                       isPageSwiping={isSwiping}
+                      isOverlayActive={isOverlayActiveForHistory}
                     />
                 </div>
             </div>

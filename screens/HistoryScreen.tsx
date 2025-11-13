@@ -18,17 +18,9 @@ interface ExpenseItemProps {
   isOpen: boolean;
   onOpen: (id: string) => void;
   onInteractionChange: (isInteracting: boolean) => void;
-  onNavigateHome: () => void;
-  isPageSwiping: boolean;
 }
 
 const ACTION_WIDTH = 72;
-
-// Soglie per apertura/chiusura + flick
-const OPEN_SNAP  = 0.20;  // ≥20% verso sinistra → apri
-const CLOSE_SNAP = 0.50;  // ≤50% verso destra quando aperto → chiudi
-const OPEN_VX    = -0.08; // px/ms
-const CLOSE_VX   =  0.18; // px/ms
 
 /* ==================== ExpenseItem ==================== */
 const ExpenseItem: React.FC<ExpenseItemProps> = ({
@@ -39,189 +31,180 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
   isOpen,
   onOpen,
   onInteractionChange,
-  onNavigateHome,
-  isPageSwiping,
 }) => {
   const tapBridge = useTapBridge();
-
   const style = getCategoryStyle(expense.category);
   const accountName = accounts.find(a => a.id === expense.accountId)?.name || 'Sconosciuto';
 
   const itemRef = useRef<HTMLDivElement>(null);
-  const dragState = useRef({
-    isDragging: false,
-    isLocked: false,
+  const gesture = useRef({
+    id: null as number | null,
     startX: 0,
     startY: 0,
-    lastX: 0,
-    lastT: 0,
-    initialTranslateX: 0,
-    pointerId: null as number | null,
+    isDragging: false,
+    isHorizontal: false,
+    wasHorizontal: false, // Tracks if a horizontal drag has started
+    initialX: 0,
+    currentX: 0,
+    t0: 0,
   });
-  const animTimer = useRef<number | null>(null);
 
-  const setTranslateX = useCallback((x: number, animated: boolean) => {
+  const setX = useCallback((x: number, animate: boolean) => {
     const el = itemRef.current;
     if (!el) return;
-    el.style.transition = animated ? 'transform 0.2s cubic-bezier(0.22,0.61,0.36,1)' : 'none';
+    el.style.transition = animate ? `transform 0.25s cubic-bezier(0.1, 0.7, 0.5, 1)` : 'none';
     el.style.transform = `translateX(${x}px)`;
   }, []);
 
-  // Se il pager swipa la pagina, abortisci il drag dell'item
-  useEffect(() => {
-    if (isPageSwiping && dragState.current.isDragging) {
-      dragState.current.isDragging = false;
-      dragState.current.isLocked = false;
-      dragState.current.pointerId = null;
-      setTranslateX(0, true);
-      onInteractionChange(false);
+  const snapTo = useCallback((open: boolean) => {
+    onInteractionChange(true);
+    const targetX = open ? -ACTION_WIDTH : 0;
+    setX(targetX, true);
+    
+    const el = itemRef.current;
+    const animationFallback = setTimeout(() => {
+        if (open !== isOpen) onOpen(open ? expense.id : '');
+        onInteractionChange(false);
+    }, 300);
+
+    if (el) {
+        const onEnd = () => {
+            clearTimeout(animationFallback);
+            if (open !== isOpen) onOpen(open ? expense.id : '');
+            onInteractionChange(false);
+            el.removeEventListener('transitionend', onEnd);
+        };
+        el.addEventListener('transitionend', onEnd);
     }
-  }, [isPageSwiping, onInteractionChange, setTranslateX]);
+  }, [expense.id, isOpen, onInteractionChange, onOpen, setX]);
+
+  // Sync with external state (isOpen)
+  useEffect(() => {
+    if (gesture.current.isDragging) return;
+    const targetX = isOpen ? -ACTION_WIDTH : 0;
+    setX(targetX, true);
+  }, [isOpen, setX]);
 
   const handlePointerDown = (e: React.PointerEvent) => {
     tapBridge.onPointerDown(e);
-    const el = itemRef.current;
-    if (!el) return;
-    if ((e.target as HTMLElement).closest('button')) return;
+    if ((e.target as HTMLElement).closest('button') || gesture.current.id !== null) return;
+    if (!itemRef.current) return;
 
-    if (animTimer.current) { clearTimeout(animTimer.current); animTimer.current = null; }
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
 
-    el.style.transition = 'none';
-    const m = new DOMMatrixReadOnly(getComputedStyle(el).transform);
-    const currentX = m.m41;
-
-    dragState.current = {
-      isDragging: true,
-      isLocked: false,
-      startX: e.clientX,
-      startY: e.clientY,
-      lastX: e.clientX,
-      lastT: performance.now(),
-      initialTranslateX: currentX || 0,
-      pointerId: e.pointerId,
-    };
-
-    // Se già aperto, blocca subito il pager: la chiusura è "locale"
-    if (isOpen) {
-      dragState.current.isLocked = true;
-      try { el.setPointerCapture(e.pointerId); } catch {}
-      onInteractionChange(true);
-    }
+    const g = gesture.current;
+    g.id = e.pointerId;
+    g.startX = e.clientX;
+    g.startY = e.clientY;
+    g.isDragging = false;
+    g.isHorizontal = false;
+    g.wasHorizontal = false;
+    g.initialX = isOpen ? -ACTION_WIDTH : 0;
+    g.currentX = g.initialX;
+    g.t0 = performance.now();
+    
+    itemRef.current.style.transition = 'none';
+    onInteractionChange(true);
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
     tapBridge.onPointerMove(e);
-    const ds = dragState.current;
-    const el = itemRef.current;
-    if (!ds.isDragging || ds.pointerId !== e.pointerId || !el) return;
+    const g = gesture.current;
+    if (g.id !== e.pointerId) return;
 
-    const dx = e.clientX - ds.startX;
-    const dy = e.clientY - ds.startY;
+    const dx = e.clientX - g.startX;
+    const dy = e.clientY - g.startY;
 
-    if (!ds.isLocked) {
-      const SLOP = 6;
-      if (Math.abs(dx) < SLOP && Math.abs(dy) < SLOP) return;
+    if (!g.isDragging) {
+      if (Math.hypot(dx, dy) > 8) { // Slop
+        g.isDragging = true;
+        g.isHorizontal = Math.abs(dx) > Math.abs(dy) * 2; // Stricter check
 
-      // Follow immediato a sinistra: lock appena superi lo slop
-      if (dx < -SLOP) {
-        ds.isLocked = true;
-        try { el.setPointerCapture(ds.pointerId!); } catch {}
-        onInteractionChange(true);
-      } else if (dx > SLOP) {
-        // Destra: se chiuso → cedi al pager; se aperto → lock per chiudere senza spostare la pagina
-        if (!isOpen) {
-          ds.isDragging = false;
-          ds.pointerId = null;
-          return; // lascia il pager
-        }
-        ds.isLocked = true;
-        try { el.setPointerCapture(ds.pointerId!); } catch {}
-        onInteractionChange(true);
-      } else {
-        if (Math.abs(dy) > Math.abs(dx) * 1.2) {
-          ds.isDragging = false;
-          ds.pointerId = null;
-          return;
+        if (!g.isHorizontal) {
+            // Vertical scroll detected. Release capture, which will fire onPointerCancel.
+            (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+            g.id = null;
+            g.isDragging = false;
+            return;
         }
       }
     }
 
-    if (e.cancelable) e.preventDefault();
+    if (g.isDragging && g.isHorizontal) {
+        g.wasHorizontal = true; // Mark that a horizontal drag has occurred
+        if (e.cancelable) e.preventDefault();
+        
+        let newX = g.initialX + dx;
+        
+        // Clamp motion to bounds, removing the elastic effect.
+        if (newX > 0) {
+            newX = 0;
+        } else if (newX < -ACTION_WIDTH) {
+            newX = -ACTION_WIDTH;
+        }
 
-    // Limiti con elasticità
-    let nx = ds.initialTranslateX + dx;
-    if (nx > 0) nx = Math.tanh(nx / 100) * 60;
-    if (nx < -ACTION_WIDTH) {
-      const over = -ACTION_WIDTH - nx;
-      nx = -ACTION_WIDTH - Math.tanh(over / 100) * 60;
+        g.currentX = newX;
+        setX(newX, false);
     }
-
-    setTranslateX(nx, false); // segue il dito
-    ds.lastX = e.clientX;
-    ds.lastT = performance.now();
   };
-
+  
   const handlePointerUp = (e: React.PointerEvent) => {
     tapBridge.onPointerUp(e);
-    const ds = dragState.current;
-    const el = itemRef.current;
-    if (!ds.isDragging || ds.pointerId !== e.pointerId || !el) return;
+    const g = gesture.current;
+    if (g.id !== e.pointerId) return;
 
-    if (ds.isLocked) {
-      try { el.releasePointerCapture(ds.pointerId!); } catch {}
-    }
-
-    const dt = Math.max(1, performance.now() - ds.lastT);
-    const vx = (e.clientX - ds.lastX) / dt; // px/ms
-    const cur = new DOMMatrixReadOnly(getComputedStyle(el).transform).m41;
-    const progress = Math.min(1, Math.max(0, Math.abs(cur) / ACTION_WIDTH)); // 0..1
-
-    // Follow + flick
-    let open = isOpen;
-    if (!isOpen) {
-      open = (vx <= OPEN_VX) || (progress >= OPEN_SNAP);
-    } else {
-      open = !((vx >= CLOSE_VX) || (progress <= CLOSE_SNAP));
-    }
-
-    onInteractionChange(true);
-    setTranslateX(open ? -ACTION_WIDTH : 0, true);
-    animTimer.current = window.setTimeout(() => {
-      if (open !== isOpen) onOpen(open ? expense.id : '');
+    (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    g.id = null;
+    
+    if (!g.isDragging) { // This was a tap
       onInteractionChange(false);
-      animTimer.current = null;
-    }, 210);
-
-    ds.isDragging = false;
-    ds.isLocked = false;
-    ds.pointerId = null;
+      return;
+    }
+    
+    g.isDragging = false;
+    
+    if (!g.wasHorizontal) {
+        // If no horizontal drag occurred, it was likely a vertical scroll attempt that got cancelled.
+        // The pointercancel handler would have already dealt with it, but as a fallback, we snap back.
+        snapTo(isOpen);
+        return;
+    }
+    
+    const duration = Math.max(1, performance.now() - g.t0);
+    const dx = e.clientX - g.startX;
+    const velocity = dx / duration;
+    
+    // Predictive closing logic based on final position and velocity
+    const predictedX = g.currentX + velocity * 150; // Predict 150ms into the future
+    const shouldOpen = predictedX < -ACTION_WIDTH / 2;
+    
+    snapTo(shouldOpen);
   };
 
   const handlePointerCancel = (e: React.PointerEvent) => {
-    tapBridge.onPointerCancel?.(e as any);
-    const ds = dragState.current;
-    const el = itemRef.current;
-    if (!ds.isDragging || ds.pointerId !== e.pointerId || !el) return;
+      tapBridge.onPointerCancel?.(e as any);
+      const g = gesture.current;
+      if (g.id !== e.pointerId) return;
+      
+      try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch {}
+      
+      // Always snap back to a valid state on cancel to prevent getting stuck.
+      snapTo(isOpen);
 
-    try { el.releasePointerCapture(ds.pointerId!); } catch {}
-    ds.isDragging = false;
-    ds.isLocked = false;
-    ds.pointerId = null;
-
-    onInteractionChange(true);
-    setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
-    animTimer.current = window.setTimeout(() => {
-      onInteractionChange(false);
-      animTimer.current = null;
-    }, 210);
+      g.id = null;
+      g.isDragging = false;
+      g.wasHorizontal = false;
   };
-
-  // Allinea quando cambia isOpen dall'esterno
-  useEffect(() => {
-    if (!dragState.current.isDragging) {
-      setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
+  
+  const handleClick = () => {
+    if (gesture.current.isDragging || gesture.current.wasHorizontal) return;
+    onInteractionChange(false);
+    if (isOpen) {
+      snapTo(false);
+    } else {
+      onEdit(expense);
     }
-  }, [isOpen, setTranslateX]);
+  };
 
   return (
     <div className="relative bg-white overflow-hidden">
@@ -231,6 +214,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
           onClick={() => onDelete(expense.id)}
           className="w-[72px] h-full flex flex-col items-center justify-center bg-red-500 text-white hover:bg-red-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white"
           aria-label="Elimina spesa"
+          {...tapBridge}
         >
           <TrashIcon className="w-6 h-6" />
           <span className="text-xs mt-1">Elimina</span>
@@ -244,9 +228,10 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}
-        onClickCapture={(e) => tapBridge.onClickCapture(e as any)}
+        onClickCapture={tapBridge.onClickCapture}
+        onClick={handleClick}
         className="relative flex items-center gap-4 py-3 px-4 bg-white z-10 cursor-pointer"
-        style={{ touchAction: 'pan-y' }}
+        style={{ touchAction: 'pan-y', willChange: 'transform' }}
       >
         <span className={`w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center ${style.bgColor}`}>
           <style.Icon className={`w-6 h-6 ${style.color}`} />
@@ -276,9 +261,10 @@ interface HistoryScreenProps {
   onItemStateChange: (state: { isOpen: boolean; isInteracting: boolean }) => void;
   isEditingOrDeleting: boolean;
   onNavigateHome: () => void;
-  isActive: boolean; // true solo nella pagina "Storico"
+  isActive: boolean;
   onDateModalStateChange: (isOpen: boolean) => void;
-  isPageSwiping: boolean; // dal pager esterno
+  isPageSwiping: boolean;
+  isOverlayActive: boolean;
 }
 
 interface ExpenseGroup {
@@ -322,6 +308,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
   isActive,
   onDateModalStateChange,
   isPageSwiping,
+  isOverlayActive,
 }) => {
   const tapBridge = useTapBridge();
 
@@ -336,43 +323,35 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
     return d;
   });
 
-  // ⬇️ UNA SOLA DICHIARAZIONE (niente duplicati più in basso)
   const [openItemId, setOpenItemId] = useState<string | null>(null);
   const [isInteracting, setIsInteracting] = useState(false);
 
-  const autoCloseTimerRef = useRef<number | null>(null);
-  const prevIsEditingOrDeleting = useRef(isEditingOrDeleting);
+  const autoCloseRef = useRef<number | null>(null);
+  const prevOpRef = useRef(isEditingOrDeleting);
 
   useEffect(() => {
-    if (prevIsEditingOrDeleting.current && !isEditingOrDeleting) {
-      setOpenItemId(null);
-    }
-    prevIsEditingOrDeleting.current = isEditingOrDeleting;
+    if (prevOpRef.current && !isEditingOrDeleting) setOpenItemId(null);
+    prevOpRef.current = isEditingOrDeleting;
   }, [isEditingOrDeleting]);
 
-  useEffect(() => {
-    if (!isActive) setOpenItemId(null);
-  }, [isActive]);
+  useEffect(() => { if (!isActive) setOpenItemId(null); }, [isActive]);
 
   useEffect(() => {
     onItemStateChange({ isOpen: openItemId !== null, isInteracting });
   }, [openItemId, isInteracting, onItemStateChange]);
 
   useEffect(() => {
-    if (autoCloseTimerRef.current) clearTimeout(autoCloseTimerRef.current);
+    if (autoCloseRef.current) clearTimeout(autoCloseRef.current);
     if (openItemId && !isEditingOrDeleting) {
-      autoCloseTimerRef.current = window.setTimeout(() => setOpenItemId(null), 5000);
+      autoCloseRef.current = window.setTimeout(() => setOpenItemId(null), 5000);
     }
-    return () => {
-      if (autoCloseTimerRef.current) clearTimeout(autoCloseTimerRef.current);
-    };
+    return () => { if (autoCloseRef.current) clearTimeout(autoCloseRef.current); };
   }, [openItemId, isEditingOrDeleting]);
 
   const filteredExpenses = useMemo(() => {
     if (activeFilterMode === 'period') {
       const start = new Date(periodDate); start.setHours(0,0,0,0);
       const end = new Date(periodDate); end.setHours(23,59,59,999);
-
       switch (periodType) {
         case 'day': break;
         case 'week': {
@@ -393,9 +372,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
           end.setMonth(0, 0);
           break;
       }
-
-      const t0 = start.getTime();
-      const t1 = end.getTime();
+      const t0 = start.getTime(); const t1 = end.getTime();
       return expenses.filter(e => {
         const d = parseLocalYYYYMMDD(e.date);
         if (isNaN(d.getTime())) return false;
@@ -406,8 +383,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
 
     if (activeFilterMode === 'custom' && customRange.start && customRange.end) {
       const t0 = parseLocalYYYYMMDD(customRange.start!).getTime();
-      const endDay = parseLocalYYYYMMDD(customRange.end!);
-      endDay.setDate(endDay.getDate() + 1);
+      const endDay = parseLocalYYYYMMDD(customRange.end!); endDay.setDate(endDay.getDate() + 1);
       const t1 = endDay.getTime();
       return expenses.filter(e => {
         const d = parseLocalYYYYMMDD(e.date);
@@ -419,8 +395,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
 
     if (dateFilter === 'all') return expenses;
 
-    const startDate = new Date();
-    startDate.setHours(0, 0, 0, 0);
+    const startDate = new Date(); startDate.setHours(0,0,0,0);
     switch (dateFilter) {
       case '7d': startDate.setDate(startDate.getDate() - 6); break;
       case '30d': startDate.setDate(startDate.getDate() - 29); break;
@@ -428,11 +403,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
       case '1y': startDate.setFullYear(startDate.getFullYear() - 1); break;
     }
     const t0 = startDate.getTime();
-
-    return expenses.filter(e => {
-      const d = parseLocalYYYYMMDD(e.date);
-      return !isNaN(d.getTime()) && d.getTime() >= t0;
-    });
+    return expenses.filter(e => { const d = parseLocalYYYYMMDD(e.date); return !isNaN(d.getTime()) && d.getTime() >= t0; });
   }, [expenses, activeFilterMode, dateFilter, customRange, periodType, periodDate]);
 
   const groupedExpenses = useMemo(() => {
@@ -480,7 +451,6 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
                 {group.label}
               </h2>
 
-              {/* niente data-no-page-swipe: lo swipe verso Home funziona sopra la lista */}
               <div className="bg-white rounded-xl shadow-md mx-2 overflow-hidden">
                 {group.expenses.map((expense, index) => (
                   <React.Fragment key={expense.id}>
@@ -493,8 +463,6 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
                       isOpen={openItemId === expense.id}
                       onOpen={handleOpenItem}
                       onInteractionChange={handleInteractionChange}
-                      onNavigateHome={onNavigateHome}
-                      isPageSwiping={isPageSwiping}
                     />
                   </React.Fragment>
                 ))}
@@ -510,7 +478,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
       </div>
 
       <HistoryFilterCard
-        isActive={isActive}
+        isActive={isActive && !isOverlayActive}
         onSelectQuickFilter={(value) => { setDateFilter(value); setActiveFilterMode('quick'); }}
         currentQuickFilter={dateFilter}
         onCustomRangeChange={(range) => { setCustomRange(range); setActiveFilterMode('custom'); }}

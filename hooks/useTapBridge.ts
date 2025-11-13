@@ -89,10 +89,23 @@ export function useTapBridge(opts: Options = {}) {
     }
   }, []);
 
+  // FIX: Added onPointerCancel handler to reset gesture state when canceled.
+  const onPointerCancel = useCallback((e: React.PointerEvent) => {
+    const state = stateRef.current;
+    if (state.id === e.pointerId) {
+      // Reset the state to cancel the tap gesture
+      state.id = null;
+      state.moved = false;
+      state.target = null;
+      state.suppressNextClick = false;
+    }
+  }, []);
+
   return {
     onPointerDown,
     onPointerMove,
     onPointerUp,
+    onPointerCancel,
     onClickCapture,
   };
 }

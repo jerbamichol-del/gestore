@@ -7,6 +7,7 @@ import { getCategoryStyle } from '../utils/categoryStyles';
 import { LockClosedIcon } from './icons/LockClosedIcon';
 import { ArrowPathIcon } from './icons/ArrowPathIcon';
 import { ChevronRightIcon } from './icons/ChevronRightIcon';
+import { useTapBridge } from '../hooks/useTapBridge';
 
 const categoryHexColors: Record<string, string> = {
     'Alimentari': '#16a34a', // green-600
@@ -61,6 +62,7 @@ interface DashboardProps {
 
 const Dashboard: React.FC<DashboardProps> = ({ expenses, onLogout, onNavigateToRecurring, isPageSwiping }) => {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const tapBridge = useTapBridge();
   const activeIndex = selectedIndex;
 
   const handleLegendItemClick = (index: number, event: React.MouseEvent) => {
@@ -161,6 +163,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, onLogout, onNavigateToR
             onClick={onNavigateToRecurring}
             style={{ touchAction: 'manipulation' }}
             className="w-full flex items-center justify-between gap-4 px-6 py-4 text-left font-semibold text-slate-800 bg-white rounded-2xl shadow-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all"
+            {...tapBridge}
         >
             <div className="flex items-center gap-4">
                 <span className="w-10 h-10 rounded-xl flex items-center justify-center bg-indigo-100">

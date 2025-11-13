@@ -6,6 +6,7 @@ import { ArrowLeftIcon } from '../components/icons/ArrowLeftIcon';
 import { TrashIcon } from '../components/icons/TrashIcon';
 import { CalendarDaysIcon } from '../components/icons/CalendarDaysIcon';
 import ConfirmationModal from '../components/ConfirmationModal';
+import { useTapBridge } from '../hooks/useTapBridge';
 
 const ACTION_WIDTH = 72;
 
@@ -38,6 +39,7 @@ const RecurringExpenseItem: React.FC<{
     const style = getCategoryStyle(expense.category);
     const accountName = accounts.find(a => a.id === expense.accountId)?.name || 'Sconosciuto';
     const itemRef = useRef<HTMLDivElement>(null);
+    const tapBridge = useTapBridge();
 
     const dragState = useRef({
       isDragging: false,
@@ -47,6 +49,7 @@ const RecurringExpenseItem: React.FC<{
       startTime: 0,
       initialTranslateX: 0,
       pointerId: null as number | null,
+      wasHorizontal: false,
     });
 
     const setTranslateX = useCallback((x: number, animated: boolean) => {
@@ -62,6 +65,7 @@ const RecurringExpenseItem: React.FC<{
     }, [isOpen, setTranslateX]);
 
     const handlePointerDown = (e: React.PointerEvent) => {
+      tapBridge.onPointerDown(e);
       if ((e.target as HTMLElement).closest('button') || !itemRef.current) return;
       
       itemRef.current.style.transition = 'none';
@@ -69,13 +73,14 @@ const RecurringExpenseItem: React.FC<{
       const currentX = m.m41;
 
       dragState.current = {
-        isDragging: true, 
+        isDragging: false, 
         isLocked: false,
         startX: e.clientX, 
         startY: e.clientY, 
         startTime: performance.now(),
         initialTranslateX: currentX, 
         pointerId: e.pointerId,
+        wasHorizontal: false,
       };
       
       try { itemRef.current.setPointerCapture(e.pointerId); } catch (err) {
@@ -84,67 +89,55 @@ const RecurringExpenseItem: React.FC<{
     };
 
     const handlePointerMove = (e: React.PointerEvent) => {
+      tapBridge.onPointerMove(e);
       const ds = dragState.current;
-      if (!ds.isDragging || e.pointerId !== ds.pointerId) return;
+      if (ds.pointerId !== e.pointerId) return;
 
       const dx = e.clientX - ds.startX;
       const dy = e.clientY - ds.startY;
-
-      if (!ds.isLocked) {
-        const SLOP = 8;
-        if (Math.abs(dx) <= SLOP && Math.abs(dy) <= SLOP) return;
-        
-        const horizontal = Math.abs(dx) > Math.abs(dy) * 2;
-
-        if (!horizontal) {
-          ds.isDragging = false;
-          if (ds.pointerId !== null) itemRef.current?.releasePointerCapture(ds.pointerId);
-          ds.pointerId = null;
-          return;
-        }
-
-        const wasOpen = ds.initialTranslateX < -1 || isOpen;
-        if (dx > 0 && !wasOpen) {
-          ds.isDragging = false;
-          if (ds.pointerId !== null) itemRef.current?.releasePointerCapture(ds.pointerId);
-          ds.pointerId = null;
-          return;
-        }
-        ds.isLocked = true;
-      }
       
-      if (e.cancelable) e.preventDefault();
+      if (!ds.isDragging) {
+        if (Math.hypot(dx, dy) > 8) { // Slop
+          ds.isDragging = true;
+          ds.isLocked = Math.abs(dx) > Math.abs(dy) * 2;
+          if (!ds.isLocked) {
+             if (ds.pointerId !== null) itemRef.current?.releasePointerCapture(ds.pointerId);
+             ds.pointerId = null;
+             ds.isDragging = false;
+             return;
+          }
+        } else {
+          return;
+        }
+      }
 
-      let x = ds.initialTranslateX + dx;
-      if (x > 0) x = Math.tanh(x / 50) * 25;
-      if (x < -ACTION_WIDTH) x = -ACTION_WIDTH - Math.tanh((Math.abs(x) - ACTION_WIDTH) / 50) * 25;
-      setTranslateX(x, false);
+      if (ds.isDragging && ds.isLocked) {
+        ds.wasHorizontal = true;
+        if (e.cancelable) e.preventDefault();
+  
+        let x = ds.initialTranslateX + dx;
+        if (x > 0) x = Math.tanh(x / 50) * 25;
+        if (x < -ACTION_WIDTH) x = -ACTION_WIDTH - Math.tanh((Math.abs(x) - ACTION_WIDTH) / 50) * 25;
+        setTranslateX(x, false);
+      }
     };
 
     const handlePointerUp = (e: React.PointerEvent) => {
+      tapBridge.onPointerUp(e);
       const ds = dragState.current;
-      if (!ds.isDragging || e.pointerId !== ds.pointerId) return;
+      if (ds.pointerId !== e.pointerId) return;
       
       if (ds.pointerId !== null) itemRef.current?.releasePointerCapture(ds.pointerId);
       
-      const wasLocked = ds.isLocked;
-      const dx = e.clientX - ds.startX;
-      const dy = e.clientY - ds.startY;
-      const dist = Math.hypot(dx, dy);
-      const duration = performance.now() - ds.startTime;
-      const isTap = dist < 10 && duration < 250;
-      
+      const wasDragging = ds.isDragging;
       ds.isDragging = false;
-      ds.isLocked = false;
       ds.pointerId = null;
 
-      if (isTap) {
-        setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
-        if (isOpen) { onOpen(''); } else { onEdit(expense); }
-        return;
-      }
-      
-      if (wasLocked) {
+      if (!wasDragging) return;
+
+      if (ds.wasHorizontal) {
+        const duration = performance.now() - ds.startTime;
+        const dx = e.clientX - ds.startX;
         const endX = new DOMMatrixReadOnly(window.getComputedStyle(itemRef.current!).transform).m41;
         const velocity = dx / (duration || 1);
         const shouldOpen = (endX < -ACTION_WIDTH / 2) || (velocity < -0.3 && dx < -20);
@@ -156,13 +149,23 @@ const RecurringExpenseItem: React.FC<{
     };
     
     const handlePointerCancel = (e: React.PointerEvent) => {
+      tapBridge.onPointerCancel?.(e as any);
       const ds = dragState.current;
-      if (!ds.isDragging || e.pointerId !== ds.pointerId) return;
+      if (ds.pointerId !== e.pointerId) return;
       if (ds.pointerId !== null) itemRef.current?.releasePointerCapture(ds.pointerId);
       ds.isDragging = false;
       ds.isLocked = false;
       ds.pointerId = null;
       setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
+    };
+
+    const handleClick = () => {
+        if (dragState.current.isDragging || dragState.current.wasHorizontal) return;
+        if (isOpen) {
+            onOpen('');
+        } else {
+            onEdit(expense);
+        }
     };
 
     return (
@@ -172,6 +175,7 @@ const RecurringExpenseItem: React.FC<{
                     onClick={() => onDeleteRequest(expense.id)}
                     className="w-[72px] h-full flex flex-col items-center justify-center bg-red-500 text-white hover:bg-red-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white"
                     aria-label="Elimina spesa ricorrente"
+                    {...tapBridge}
                 >
                     <TrashIcon className="w-6 h-6" />
                     <span className="text-xs mt-1">Elimina</span>
@@ -183,6 +187,8 @@ const RecurringExpenseItem: React.FC<{
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
                 onPointerCancel={handlePointerCancel}
+                onClickCapture={tapBridge.onClickCapture}
+                onClick={handleClick}
                 className="relative flex items-center gap-4 py-3 px-4 bg-white z-10 cursor-pointer"
                 style={{ touchAction: 'pan-y' }}
             >
