@@ -12,7 +12,6 @@ import { formatCurrency } from '../components/icons/formatters';
 import { TrashIcon } from '../components/icons/TrashIcon';
 import { HistoryFilterCard } from '../components/HistoryFilterCard';
 import { ArrowLeftIcon } from '../components/icons/ArrowLeftIcon';
-import { useTapBridge } from '../hooks/useTapBridge';
 
 type DateFilter = 'all' | '7d' | '30d' | '6m' | '1y';
 type PeriodType = 'day' | 'week' | 'month' | 'year';
@@ -42,7 +41,6 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
   const accountName =
     accounts.find((a) => a.id === expense.accountId)?.name || 'Sconosciuto';
   const itemRef = useRef<HTMLDivElement>(null);
-  const tapBridge = useTapBridge();
 
   const dragState = useRef({
     isDragging: false,
@@ -197,7 +195,6 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
           onClick={() => onDelete(expense.id)}
           className="w-[72px] h-full flex flex-col items-center justify-center bg-red-600 text-white text-xs font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white"
           aria-label="Elimina spesa"
-          {...tapBridge}
         >
           <TrashIcon className="w-6 h-6" />
           <span className="text-xs mt-1">Elimina</span>
@@ -323,7 +320,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
   const handleClose = () => {
     setOpenItemId(null);
     setIsAnimatingIn(false);
-    setTimeout(onClose, 300);
+    setTimeout(onClose, 210);
   };
 
   const handleDateModalStateChange = useCallback(
@@ -474,8 +471,12 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
 
   return (
     <div
-      className={`fixed inset-0 bg-slate-100 z-50 transform transition-transform duration-300 ease-in-out ${isAnimatingIn ? 'translate-y-0' : 'translate-y-full'}`}
-      style={{ touchAction: 'pan-y' }}
+      className={`
+        fixed inset-y-0 w-full bg-slate-100 
+        transition-all duration-200 ease-in-out 
+        z-20
+      `}
+      style={{ left: isAnimatingIn ? '0%' : '100%', touchAction: 'pan-y' }}
     >
       <header className="sticky top-0 z-20 flex items-center gap-4 p-4 bg-white/80 backdrop-blur-sm shadow-sm">
         <button
