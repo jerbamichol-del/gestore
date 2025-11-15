@@ -325,7 +325,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
 
   // Altezza pannello e posizione chiusa
   const OPEN_HEIGHT_VH = 40; // pannello aperto = 40% viewport
-  const PEEK_PX = 66;        // come hai impostato tu
+  const PEEK_PX = 70;        // come hai impostato tu
   const [openHeight, setOpenHeight] = useState(0);
   const [closedY, setClosedY] = useState(0);
   const [translateY, setTranslateY] = useState(0);
