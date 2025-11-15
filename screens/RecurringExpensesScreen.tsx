@@ -65,7 +65,6 @@ const RecurringExpenseItem: React.FC<{
     }, [isOpen, setTranslateX]);
 
     const handlePointerDown = (e: React.PointerEvent) => {
-      tapBridge.onPointerDown(e);
       if ((e.target as HTMLElement).closest('button') || !itemRef.current) return;
       
       itemRef.current.style.transition = 'none';
@@ -89,7 +88,6 @@ const RecurringExpenseItem: React.FC<{
     };
 
     const handlePointerMove = (e: React.PointerEvent) => {
-      tapBridge.onPointerMove(e);
       const ds = dragState.current;
       if (ds.pointerId !== e.pointerId) return;
 
@@ -123,7 +121,6 @@ const RecurringExpenseItem: React.FC<{
     };
 
     const handlePointerUp = (e: React.PointerEvent) => {
-      tapBridge.onPointerUp(e);
       const ds = dragState.current;
       if (ds.pointerId !== e.pointerId) return;
       
@@ -149,7 +146,6 @@ const RecurringExpenseItem: React.FC<{
     };
     
     const handlePointerCancel = (e: React.PointerEvent) => {
-      tapBridge.onPointerCancel?.(e as any);
       const ds = dragState.current;
       if (ds.pointerId !== e.pointerId) return;
       if (ds.pointerId !== null) itemRef.current?.releasePointerCapture(ds.pointerId);
@@ -187,7 +183,6 @@ const RecurringExpenseItem: React.FC<{
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
                 onPointerCancel={handlePointerCancel}
-                onClickCapture={tapBridge.onClickCapture}
                 onClick={handleClick}
                 className="relative flex items-center gap-4 py-3 px-4 bg-white z-10 cursor-pointer"
                 style={{ touchAction: 'pan-y' }}
@@ -259,7 +254,7 @@ const RecurringExpensesScreen: React.FC<RecurringExpensesScreenProps> = ({ recur
 
   return (
     <div 
-      className={`fixed inset-0 z-50 bg-slate-100 transform transition-transform duration-300 ease-in-out ${isAnimatingIn ? 'translate-x-0' : 'translate-x-full'}`}
+      className={`fixed inset-0 z-50 bg-slate-100 transform transition-transform duration-300 ease-in-out ${isAnimatingIn ? 'translate-y-0' : 'translate-y-full'}`}
       style={{ touchAction: 'pan-y' }}
     >
       <header className="sticky top-0 z-20 flex items-center gap-4 p-4 bg-white/80 backdrop-blur-sm shadow-sm">

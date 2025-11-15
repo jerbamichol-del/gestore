@@ -1,10 +1,7 @@
-
-
 import React, { useState, useEffect, useRef } from 'react';
 import { XMarkIcon } from './icons/XMarkIcon';
 import { CheckCircleIcon } from './icons/CheckCircleIcon';
 import { useSheetDragControlled } from '../hooks/useSheetDragControlled';
-import { useTapBridge } from '../hooks/useTapBridge';
 
 interface Option {
     value: string;
@@ -26,7 +23,6 @@ interface SelectionMenuProps {
 const SelectionMenu: React.FC<SelectionMenuProps> = ({ isOpen, onClose, title, options, selectedValue, onSelect }) => {
   const [isMounted, setIsMounted] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-  const tapBridgeHandlers = useTapBridge();
 
   const { dragY, transitionMs, easing, handleTransitionEnd } =
     useSheetDragControlled(menuRef, { onClose }, {
@@ -102,7 +98,6 @@ const SelectionMenu: React.FC<SelectionMenuProps> = ({ isOpen, onClose, title, o
           willChange: 'transform',
           overscrollBehaviorY: 'contain'
         }}
-        {...tapBridgeHandlers}
       >
         <header className="flex justify-between items-center p-4 border-b border-slate-200 flex-shrink-0">
           <div className="flex-1 text-center">

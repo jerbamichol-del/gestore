@@ -3,10 +3,9 @@ import { CheckIcon } from './icons/CheckIcon';
 
 interface SuccessIndicatorProps {
   show: boolean;
-  style?: React.CSSProperties;
 }
 
-const SuccessIndicator: React.FC<SuccessIndicatorProps> = ({ show, style }) => {
+const SuccessIndicator: React.FC<SuccessIndicatorProps> = ({ show }) => {
   return (
     <div
       role="status"
@@ -17,7 +16,6 @@ const SuccessIndicator: React.FC<SuccessIndicatorProps> = ({ show, style }) => {
         bottom: `calc(2rem + env(safe-area-inset-bottom, 0px))`,
         right: `calc(6.5rem + env(safe-area-inset-right, 0px))`,
         transition: 'transform 0.25s cubic-bezier(0.22, 0.61, 0.36, 1), opacity 0.25s ease-in-out, transform 0.25s ease-in-out',
-        ...style
       }}
     >
       <CheckIcon className="w-10 h-10" />

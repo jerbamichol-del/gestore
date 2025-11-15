@@ -196,7 +196,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
 
   const transformStyle = isDesktop ? {} : {
     transform: `translateX(${finalTranslate}%)`,
-    transition: isSwiping ? 'none' : 'transform 0.08s ease-out',
+    transition: isSwiping ? 'none' : 'transform 0.25s ease-out',
     willChange: 'transform',
   };
 

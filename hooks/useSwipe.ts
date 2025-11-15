@@ -8,6 +8,16 @@ type SwipeOpts = {
   disableDrag?: (intent: 'left' | 'right') => boolean;
 };
 
+type SwipeState = {
+  pointerId: number | null;
+  startX: number;
+  startY: number;
+  isSwiping: boolean;
+  dir: 'left' | 'right' | null;
+  blockedByIgnore: boolean;
+  blockedByDisable: boolean;
+};
+
 export function useSwipe(
   ref: React.RefObject<HTMLElement>,
   handlers: { onSwipeLeft?: () => void; onSwipeRight?: () => void },
@@ -16,126 +26,137 @@ export function useSwipe(
   const {
     enabled = true,
     slop = 10,
-    threshold = 32,
+    threshold = 80,
     ignoreSelector,
     disableDrag,
   } = opts;
 
-  const state = React.useRef({
-    pointerId: null as number | null,
-    startX: 0,
-    startY: 0,
-    dx: 0,
-    armed: false,
-    intent: null as null | 'left' | 'right',
-  }).current;
-
   const [progress, setProgress] = React.useState(0);
   const [isSwiping, setIsSwiping] = React.useState(false);
 
-  const handlersRef = React.useRef(handlers);
-  handlersRef.current = handlers;
+  const stateRef = React.useRef<SwipeState>({
+    pointerId: null,
+    startX: 0,
+    startY: 0,
+    isSwiping: false,
+    dir: null,
+    blockedByIgnore: false,
+    blockedByDisable: false,
+  });
 
   const resetState = React.useCallback(() => {
-    state.pointerId = null;
-    state.armed = false;
-    state.intent = null;
-    state.dx = 0;
-    setIsSwiping(false);
+    const s = stateRef.current;
+    s.pointerId = null;
+    s.startX = 0;
+    s.startY = 0;
+    s.isSwiping = false;
+    s.dir = null;
+    s.blockedByIgnore = false;
+    s.blockedByDisable = false;
     setProgress(0);
-  }, [state]);
+    setIsSwiping(false);
+  }, []);
 
   React.useEffect(() => {
     const root = ref.current;
-    if (!root || !enabled) {
-      // If the hook is disabled (e.g., modal is closed), ensure we reset
-      // the internal state. This prevents an interrupted gesture from leaving
-      // the state "dirty", which would block future swipes.
+    if (!root) return;
+
+    if (!enabled) {
       resetState();
       return;
     }
 
-    const onDown = (e: PointerEvent) => {
-      if (
-        e.button !== 0 ||
-        state.pointerId !== null ||
-        (ignoreSelector && (e.target as HTMLElement).closest(ignoreSelector))
-      ) {
+    const onDown = (ev: PointerEvent) => {
+      if (!enabled) return;
+
+      const s = stateRef.current;
+      if (s.pointerId !== null) return; // already a gesture in progress
+
+      const target = ev.target as HTMLElement | null;
+      if (ignoreSelector && target && target.closest(ignoreSelector)) {
+        s.pointerId = ev.pointerId;
+        s.blockedByIgnore = true;
+        s.blockedByDisable = false;
+        s.isSwiping = false;
+        s.dir = null;
         return;
       }
-      state.pointerId = e.pointerId;
-      state.startX = e.clientX;
-      state.startY = e.clientY;
-      state.dx = 0;
-      state.armed = false;
-      state.intent = null;
+
+      s.pointerId = ev.pointerId;
+      s.startX = ev.clientX;
+      s.startY = ev.clientY;
+      s.isSwiping = false;
+      s.dir = null;
+      s.blockedByIgnore = false;
+      s.blockedByDisable = false;
     };
 
-    const onMove = (e: PointerEvent) => {
-      if (state.pointerId !== e.pointerId) return;
+    const onMove = (ev: PointerEvent) => {
+      const s = stateRef.current;
+      if (s.pointerId !== ev.pointerId) return;
+      if (s.blockedByIgnore || s.blockedByDisable) return;
+      if (!enabled) return;
 
-      const dx = e.clientX - state.startX;
-      const dy = e.clientY - state.startY;
+      const dx = ev.clientX - s.startX;
+      const dy = ev.clientY - s.startY;
 
-      if (!state.armed) {
-        if (Math.abs(dx) > slop && Math.abs(dx) > Math.abs(dy) * 2) {
-          state.armed = true;
-          setIsSwiping(true);
-          state.intent = dx < 0 ? 'left' : 'right';
-          try {
-            root.setPointerCapture(e.pointerId);
-          } catch {}
-        } else if (Math.abs(dy) > slop) {
-          state.pointerId = null; // It's a vertical scroll, release
+      if (!s.isSwiping) {
+        const dist = Math.hypot(dx, dy);
+        if (dist < slop) return;
+
+        // If vertical movement is dominant, let the browser handle scrolling
+        if (Math.abs(dy) > Math.abs(dx) * 2) {
+          resetState();
+          return;
         }
-        if (!state.armed) return;
+
+        const intent: 'left' | 'right' = dx < 0 ? 'left' : 'right';
+
+        if (disableDrag && disableDrag(intent)) {
+          s.blockedByDisable = true;
+          resetState();
+          return;
+        }
+
+        s.isSwiping = true;
+        s.dir = intent;
+        setIsSwiping(true);
       }
 
-      state.dx = dx;
-      const hasHandler =
-        (state.intent === 'left' && handlersRef.current.onSwipeLeft) ||
-        (state.intent === 'right' && handlersRef.current.onSwipeRight);
+      if (!s.isSwiping) return;
       
-      if (!hasHandler) return;
-
-      const screenWidth = root.offsetWidth;
-      if (screenWidth > 0) {
-        const p = Math.max(-1, Math.min(1, dx / screenWidth));
-        if (state.intent && disableDrag?.(state.intent)) {
-          setProgress(0);
-        } else {
-          setProgress(p);
-        }
+      const containerWidth = ref.current?.offsetWidth || window.innerWidth;
+      if (containerWidth > 0) {
+        const currentDx = ev.clientX - s.startX;
+        const progressValue = currentDx / containerWidth;
+        setProgress(progressValue);
       }
     };
 
-    const onUp = (e: PointerEvent) => {
-      if (state.pointerId !== e.pointerId) return;
+    const onUp = (ev: PointerEvent) => {
+      const s = stateRef.current;
+      if (s.pointerId !== ev.pointerId) return;
 
-      if (state.armed) {
-        try {
-          root.releasePointerCapture(e.pointerId);
-        } catch {}
+      const canTrigger =
+        s.isSwiping && !s.blockedByIgnore && !s.blockedByDisable;
 
-        if (Math.abs(state.dx) >= threshold) {
-          if (state.intent === 'left' && handlersRef.current.onSwipeLeft) {
-            handlersRef.current.onSwipeLeft();
-          } else if (state.intent === 'right' && handlersRef.current.onSwipeRight) {
-            handlersRef.current.onSwipeRight();
-          }
+      if (canTrigger) {
+        const dx = ev.clientX - s.startX;
+        if (Math.abs(dx) >= threshold) {
+            if (dx < 0 && handlers.onSwipeLeft) {
+                handlers.onSwipeLeft();
+            } else if (dx > 0 && handlers.onSwipeRight) {
+                handlers.onSwipeRight();
+            }
         }
       }
-      
+
       resetState();
     };
 
-    const onCancel = (e: PointerEvent) => {
-      if (state.pointerId !== e.pointerId) return;
-      if (state.armed) {
-        try {
-          root.releasePointerCapture(e.pointerId);
-        } catch {}
-      }
+    const onCancel = (ev: PointerEvent) => {
+      const s = stateRef.current;
+      if (s.pointerId !== ev.pointerId) return;
       resetState();
     };
 
@@ -150,7 +171,17 @@ export function useSwipe(
       root.removeEventListener('pointerup', onUp as any);
       root.removeEventListener('pointercancel', onCancel as any);
     };
-  }, [ref, enabled, slop, threshold, ignoreSelector, disableDrag, resetState, state]);
+  }, [
+    ref,
+    enabled,
+    slop,
+    threshold,
+    ignoreSelector,
+    disableDrag,
+    handlers.onSwipeLeft,
+    handlers.onSwipeRight,
+    resetState,
+  ]);
 
   return { progress, isSwiping };
 }

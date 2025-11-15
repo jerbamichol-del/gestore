@@ -1,12 +1,12 @@
 
+
+
 import React, { useMemo, useState } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Sector } from 'recharts';
 import { Expense } from '../types';
 import { formatCurrency } from './icons/formatters';
 import { getCategoryStyle } from '../utils/categoryStyles';
 import { LockClosedIcon } from './icons/LockClosedIcon';
-import { ArrowPathIcon } from './icons/ArrowPathIcon';
-import { ChevronRightIcon } from './icons/ChevronRightIcon';
 import { useTapBridge } from '../hooks/useTapBridge';
 
 const categoryHexColors: Record<string, string> = {
@@ -57,10 +57,10 @@ interface DashboardProps {
   expenses: Expense[];
   onLogout: () => void;
   onNavigateToRecurring: () => void;
-  isPageSwiping?: boolean;
+  onNavigateToHistory: () => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ expenses, onLogout, onNavigateToRecurring, isPageSwiping }) => {
+const Dashboard: React.FC<DashboardProps> = ({ expenses, onLogout, onNavigateToRecurring, onNavigateToHistory }) => {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const tapBridge = useTapBridge();
   const activeIndex = selectedIndex;
@@ -103,7 +103,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, onLogout, onNavigateToR
   }, [expenses]);
   
   return (
-    <>
+    <div className="p-4 md:p-6 space-y-6">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-1 bg-white p-6 rounded-2xl shadow-lg flex flex-col justify-between">
                 <div>
@@ -126,6 +126,25 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, onLogout, onNavigateToR
                     <div>
                         <h4 className="text-sm font-medium text-slate-500">Oggi</h4>
                         <p className="text-xl font-bold text-slate-800">{formatCurrency(dailyTotal)}</p>
+                    </div>
+                    <div className="mt-4 grid grid-cols-2 gap-3">
+                        <button
+                            onClick={onNavigateToRecurring}
+                            style={{ touchAction: 'manipulation' }}
+                            className="flex items-center justify-center py-2 px-3 text-center font-semibold text-slate-900 bg-amber-100 rounded-xl hover:bg-amber-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition-all"
+                            {...tapBridge}
+                        >
+                            <span className="text-sm">Spese Ricorrenti</span>
+                        </button>
+
+                        <button
+                            onClick={onNavigateToHistory}
+                            style={{ touchAction: 'manipulation' }}
+                            className="flex items-center justify-center py-2 px-3 text-center font-semibold text-slate-900 bg-amber-100 rounded-xl hover:bg-amber-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition-all"
+                            {...tapBridge}
+                        >
+                            <span className="text-sm">Storico Spese</span>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -158,29 +177,11 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, onLogout, onNavigateToR
                 ) : <p className="text-center text-slate-500 flex-grow flex items-center justify-center">Nessuna spesa registrata.</p>}
             </div>
         </div>
-        
-        <button
-            onClick={onNavigateToRecurring}
-            style={{ touchAction: 'manipulation' }}
-            className="w-full flex items-center justify-between gap-4 px-6 py-4 text-left font-semibold text-slate-800 bg-white rounded-2xl shadow-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all"
-            {...tapBridge}
-        >
-            <div className="flex items-center gap-4">
-                <span className="w-10 h-10 rounded-xl flex items-center justify-center bg-indigo-100">
-                    <ArrowPathIcon className="w-6 h-6 text-indigo-600" />
-                </span>
-                <div>
-                    <span className="text-base">Spese Ricorrenti</span>
-                    <p className="text-sm font-normal text-slate-500">Gestisci abbonamenti e pagamenti fissi</p>
-                </div>
-            </div>
-            <ChevronRightIcon className="w-6 h-6 text-slate-400" />
-        </button>
 
         <div className="bg-white p-6 rounded-2xl shadow-lg">
             <h3 className="text-xl font-bold text-slate-700 mb-2 text-center">Spese per Categoria</h3>
             {categoryData.length > 0 ? (
-                <div className={`relative cursor-pointer ${isPageSwiping ? 'pointer-events-none' : ''}`} onClick={handleChartBackgroundClick}>
+                <div className="relative cursor-pointer" onClick={handleChartBackgroundClick}>
                     <ResponsiveContainer width="100%" height={300}>
                         <PieChart>
                         <Pie
@@ -239,7 +240,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, onLogout, onNavigateToR
                 </div>
             )}
         </div>
-    </>
+    </div>
   );
 };
 

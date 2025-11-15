@@ -4,7 +4,6 @@ import { Expense, Account } from '../types';
 import CalculatorInputScreen from './CalculatorInputScreen';
 import TransactionDetailPage from './TransactionDetailPage';
 import { useSwipe } from '../hooks/useSwipe';
-import { useTapBridge } from '../hooks/useTapBridge';
 
 interface CalculatorContainerProps {
   isOpen: boolean;
@@ -58,7 +57,6 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   const [swipeReady, setSwipeReady] = useState(false);
 
   const timeoutsRef = useRef<number[]>([]);
-  const tapBridgeHandlers = useTapBridge();
 
   const addTimeout = useCallback((timeout: number) => {
     timeoutsRef.current.push(timeout);
@@ -196,7 +194,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
 
   const transformStyle = isDesktop ? {} : {
     transform: `translateX(${finalTranslate}%)`,
-    transition: isSwiping ? 'none' : 'transform 0.08s ease-out',
+    transition: isSwiping ? 'none' : 'transform 0.25s ease-out',
     willChange: 'transform',
   };
 
@@ -208,7 +206,6 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
       aria-modal="true"
       role="dialog"
       style={{ touchAction: 'pan-y' }}
-      {...tapBridgeHandlers}
     >
       <div
         ref={containerRef}

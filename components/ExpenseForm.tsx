@@ -200,7 +200,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
   
   const forceClose = () => {
     setIsAnimating(false);
-    setTimeout(onClose, 300);
+    setTimeout(onClose, 80);
   };
   
   const handleClose = () => {
@@ -252,7 +252,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
       
       const closableTimer = setTimeout(() => {
         setIsClosableByBackdrop(true);
-      }, 300);
+      }, 80);
       
       return () => {
         clearTimeout(animTimer);
@@ -525,13 +525,13 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
   
   return (
     <div
-      className={`fixed inset-0 z-[51] transition-opacity duration-300 ease-in-out ${isAnimating ? 'opacity-100' : 'opacity-0'} bg-slate-900/60 backdrop-blur-sm`}
+      className={`fixed inset-0 z-[51] transition-opacity duration-75 ease-in-out ${isAnimating ? 'opacity-100' : 'opacity-0'} bg-slate-900/60 backdrop-blur-sm`}
       onClick={handleBackdropClick}
       aria-modal="true"
       role="dialog"
     >
       <div
-        className={`bg-slate-50 w-full h-full flex flex-col absolute bottom-0 transform transition-transform duration-300 ease-in-out ${isAnimating ? 'translate-y-0' : 'translate-y-full'}`}
+        className={`bg-slate-50 w-full h-full flex flex-col absolute bottom-0 transform transition-transform duration-75 ease-in-out ${isAnimating ? 'translate-y-0' : 'translate-y-full'}`}
         onClick={(e) => e.stopPropagation()}
         style={{ touchAction: 'pan-y' }}
         {...tapBridgeHandlers}

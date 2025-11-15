@@ -1,9 +1,17 @@
-import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
+// screens/HistoryScreen.tsx
+import React, {
+  useMemo,
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+} from 'react';
 import { Expense, Account } from '../types';
 import { getCategoryStyle } from '../utils/categoryStyles';
 import { formatCurrency } from '../components/icons/formatters';
 import { TrashIcon } from '../components/icons/TrashIcon';
 import { HistoryFilterCard } from '../components/HistoryFilterCard';
+import { ArrowLeftIcon } from '../components/icons/ArrowLeftIcon';
 import { useTapBridge } from '../hooks/useTapBridge';
 
 type DateFilter = 'all' | '7d' | '30d' | '6m' | '1y';
@@ -17,7 +25,6 @@ interface ExpenseItemProps {
   onDelete: (id: string) => void;
   isOpen: boolean;
   onOpen: (id: string) => void;
-  onInteractionChange: (isInteracting: boolean) => void;
 }
 
 const ACTION_WIDTH = 72;
@@ -30,177 +37,154 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
   onDelete,
   isOpen,
   onOpen,
-  onInteractionChange,
 }) => {
-  const tapBridge = useTapBridge();
   const style = getCategoryStyle(expense.category);
-  const accountName = accounts.find(a => a.id === expense.accountId)?.name || 'Sconosciuto';
-
+  const accountName =
+    accounts.find((a) => a.id === expense.accountId)?.name || 'Sconosciuto';
   const itemRef = useRef<HTMLDivElement>(null);
-  const gesture = useRef({
-    id: null as number | null,
+  const tapBridge = useTapBridge();
+
+  const dragState = useRef({
+    isDragging: false,
+    isLocked: false,
     startX: 0,
     startY: 0,
-    isDragging: false,
-    isHorizontal: false,
-    wasHorizontal: false, // Tracks if a horizontal drag has started
-    initialX: 0,
-    currentX: 0,
-    t0: 0,
+    startTime: 0,
+    initialTranslateX: 0,
+    pointerId: null as number | null,
+    wasHorizontal: false,
   });
 
-  const setX = useCallback((x: number, animate: boolean) => {
-    const el = itemRef.current;
-    if (!el) return;
-    el.style.transition = animate ? `transform 0.25s cubic-bezier(0.1, 0.7, 0.5, 1)` : 'none';
-    el.style.transform = `translateX(${x}px)`;
+  const setTranslateX = useCallback((x: number, animated: boolean) => {
+    if (!itemRef.current) return;
+    itemRef.current.style.transition = animated
+      ? 'transform 0.2s cubic-bezier(0.22,0.61,0.36,1)'
+      : 'none';
+    itemRef.current.style.transform = `translateX(${x}px)`;
   }, []);
 
-  const snapTo = useCallback((open: boolean) => {
-    onInteractionChange(true);
-    const targetX = open ? -ACTION_WIDTH : 0;
-    setX(targetX, true);
-    
-    const el = itemRef.current;
-    const animationFallback = setTimeout(() => {
-        if (open !== isOpen) onOpen(open ? expense.id : '');
-        onInteractionChange(false);
-    }, 300);
-
-    if (el) {
-        const onEnd = () => {
-            clearTimeout(animationFallback);
-            if (open !== isOpen) onOpen(open ? expense.id : '');
-            onInteractionChange(false);
-            el.removeEventListener('transitionend', onEnd);
-        };
-        el.addEventListener('transitionend', onEnd);
-    }
-  }, [expense.id, isOpen, onInteractionChange, onOpen, setX]);
-
-  // Sync with external state (isOpen)
   useEffect(() => {
-    if (gesture.current.isDragging) return;
-    const targetX = isOpen ? -ACTION_WIDTH : 0;
-    setX(targetX, true);
-  }, [isOpen, setX]);
+    if (!dragState.current.isDragging) {
+      setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
+    }
+  }, [isOpen, setTranslateX]);
 
   const handlePointerDown = (e: React.PointerEvent) => {
-    tapBridge.onPointerDown(e);
-    if ((e.target as HTMLElement).closest('button') || gesture.current.id !== null) return;
-    if (!itemRef.current) return;
+    if ((e.target as HTMLElement).closest('button') || !itemRef.current) return;
 
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-
-    const g = gesture.current;
-    g.id = e.pointerId;
-    g.startX = e.clientX;
-    g.startY = e.clientY;
-    g.isDragging = false;
-    g.isHorizontal = false;
-    g.wasHorizontal = false;
-    g.initialX = isOpen ? -ACTION_WIDTH : 0;
-    g.currentX = g.initialX;
-    g.t0 = performance.now();
-    
     itemRef.current.style.transition = 'none';
-    onInteractionChange(true);
+    const m = new DOMMatrixReadOnly(
+      window.getComputedStyle(itemRef.current).transform,
+    );
+    const currentX = m.m41;
+
+    dragState.current = {
+      isDragging: false,
+      isLocked: false,
+      startX: e.clientX,
+      startY: e.clientY,
+      startTime: performance.now(),
+      initialTranslateX: currentX,
+      pointerId: e.pointerId,
+      wasHorizontal: false,
+    };
+
+    try {
+      itemRef.current.setPointerCapture(e.pointerId);
+    } catch (err) {
+      console.warn('Could not capture pointer: ', err);
+    }
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
-    tapBridge.onPointerMove(e);
-    const g = gesture.current;
-    if (g.id !== e.pointerId) return;
+    const ds = dragState.current;
+    if (ds.pointerId !== e.pointerId) return;
 
-    const dx = e.clientX - g.startX;
-    const dy = e.clientY - g.startY;
+    const dx = e.clientX - ds.startX;
+    const dy = e.clientY - ds.startY;
 
-    if (!g.isDragging) {
-      if (Math.hypot(dx, dy) > 8) { // Slop
-        g.isDragging = true;
-        g.isHorizontal = Math.abs(dx) > Math.abs(dy) * 2; // Stricter check
-
-        if (!g.isHorizontal) {
-            // Vertical scroll detected. Release capture, which will fire onPointerCancel.
-            (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-            g.id = null;
-            g.isDragging = false;
-            return;
+    if (!ds.isDragging) {
+      if (Math.hypot(dx, dy) > 8) {
+        // Slop
+        ds.isDragging = true;
+        ds.isLocked = Math.abs(dx) > Math.abs(dy) * 2;
+        if (!ds.isLocked) {
+          if (ds.pointerId !== null)
+            itemRef.current?.releasePointerCapture(ds.pointerId);
+          ds.pointerId = null;
+          ds.isDragging = false;
+          return;
+        } else {
+          e.stopPropagation();
         }
+      } else {
+        return;
       }
     }
 
-    if (g.isDragging && g.isHorizontal) {
-        g.wasHorizontal = true; // Mark that a horizontal drag has occurred
-        if (e.cancelable) e.preventDefault();
-        
-        let newX = g.initialX + dx;
-        
-        // Clamp motion to bounds, removing the elastic effect.
-        if (newX > 0) {
-            newX = 0;
-        } else if (newX < -ACTION_WIDTH) {
-            newX = -ACTION_WIDTH;
-        }
+    if (ds.isDragging && ds.isLocked) {
+      ds.wasHorizontal = true;
+      if (e.cancelable) e.preventDefault();
+      e.stopPropagation();
 
-        g.currentX = newX;
-        setX(newX, false);
+      let x = ds.initialTranslateX + dx;
+      if (x > 0) x = Math.tanh(x / 50) * 25;
+      if (x < -ACTION_WIDTH)
+        x = -ACTION_WIDTH - Math.tanh((Math.abs(x) - ACTION_WIDTH) / 50) * 25;
+      setTranslateX(x, false);
     }
   };
-  
-  const handlePointerUp = (e: React.PointerEvent) => {
-    tapBridge.onPointerUp(e);
-    const g = gesture.current;
-    if (g.id !== e.pointerId) return;
 
-    (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-    g.id = null;
-    
-    if (!g.isDragging) { // This was a tap
-      onInteractionChange(false);
-      return;
+  const handlePointerUp = (e: React.PointerEvent) => {
+    const ds = dragState.current;
+    if (ds.pointerId !== e.pointerId) return;
+
+    if (ds.pointerId !== null)
+      itemRef.current?.releasePointerCapture(ds.pointerId);
+
+    const wasDragging = ds.isDragging;
+    const wasHorizontal = ds.wasHorizontal;
+
+    // Reset state early per gestione click
+    ds.isDragging = false;
+    ds.pointerId = null;
+
+    if (wasDragging && wasHorizontal) {
+      const duration = performance.now() - ds.startTime;
+      const dx = e.clientX - ds.startX;
+      const endX = new DOMMatrixReadOnly(
+        window.getComputedStyle(itemRef.current!).transform,
+      ).m41;
+      const velocity = dx / (duration || 1);
+      const shouldOpen =
+        endX < -ACTION_WIDTH / 2 || (velocity < -0.3 && dx < -20);
+      onOpen(shouldOpen ? expense.id : '');
+      setTranslateX(shouldOpen ? -ACTION_WIDTH : 0, true);
     }
-    
-    g.isDragging = false;
-    
-    if (!g.wasHorizontal) {
-        // If no horizontal drag occurred, it was likely a vertical scroll attempt that got cancelled.
-        // The pointercancel handler would have already dealt with it, but as a fallback, we snap back.
-        snapTo(isOpen);
-        return;
-    }
-    
-    const duration = Math.max(1, performance.now() - g.t0);
-    const dx = e.clientX - g.startX;
-    const velocity = dx / duration;
-    
-    // Predictive closing logic based on final position and velocity
-    const predictedX = g.currentX + velocity * 150; // Predict 150ms into the future
-    const shouldOpen = predictedX < -ACTION_WIDTH / 2;
-    
-    snapTo(shouldOpen);
+
+    // Evita click subito dopo swipe
+    setTimeout(() => {
+      dragState.current.wasHorizontal = false;
+    }, 0);
   };
 
   const handlePointerCancel = (e: React.PointerEvent) => {
-      tapBridge.onPointerCancel?.(e as any);
-      const g = gesture.current;
-      if (g.id !== e.pointerId) return;
-      
-      try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch {}
-      
-      // Always snap back to a valid state on cancel to prevent getting stuck.
-      snapTo(isOpen);
+    const ds = dragState.current;
+    if (ds.pointerId !== e.pointerId) return;
 
-      g.id = null;
-      g.isDragging = false;
-      g.wasHorizontal = false;
+    if (ds.pointerId !== null)
+      itemRef.current?.releasePointerCapture(ds.pointerId);
+    ds.isDragging = false;
+    ds.isLocked = false;
+    ds.pointerId = null;
+    ds.wasHorizontal = false;
+    setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
   };
-  
+
   const handleClick = () => {
-    if (gesture.current.isDragging || gesture.current.wasHorizontal) return;
-    onInteractionChange(false);
+    if (dragState.current.isDragging || dragState.current.wasHorizontal) return;
     if (isOpen) {
-      snapTo(false);
+      onOpen('');
     } else {
       onEdit(expense);
     }
@@ -208,11 +192,10 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
 
   return (
     <div className="relative bg-white overflow-hidden">
-      {/* azioni a destra */}
       <div className="absolute top-0 right-0 h-full flex items-center z-0">
         <button
           onClick={() => onDelete(expense.id)}
-          className="w-[72px] h-full flex flex-col items-center justify-center bg-red-500 text-white hover:bg-red-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white"
+          className="w-[72px] h-full flex flex-col items-center justify-center bg-red-600 text-white text-xs font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white"
           aria-label="Elimina spesa"
           {...tapBridge}
         >
@@ -220,27 +203,30 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
           <span className="text-xs mt-1">Elimina</span>
         </button>
       </div>
-
-      {/* contenuto swipeable */}
       <div
         ref={itemRef}
+        data-expense-swipe="1"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}
-        onClickCapture={tapBridge.onClickCapture}
         onClick={handleClick}
         className="relative flex items-center gap-4 py-3 px-4 bg-white z-10 cursor-pointer"
-        style={{ touchAction: 'pan-y', willChange: 'transform' }}
+        style={{ touchAction: 'pan-y' }}
       >
-        <span className={`w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center ${style.bgColor}`}>
+        <span
+          className={`w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center ${style.bgColor}`}
+        >
           <style.Icon className={`w-6 h-6 ${style.color}`} />
         </span>
         <div className="flex-grow min-w-0">
           <p className="font-semibold text-slate-800 truncate">
             {expense.subcategory || style.label} • {accountName}
           </p>
-          <p className="text-sm text-slate-500 truncate" title={expense.description}>
+          <p
+            className="text-sm text-slate-500 truncate"
+            title={expense.description}
+          >
             {expense.description || 'Senza descrizione'}
           </p>
         </div>
@@ -258,13 +244,9 @@ interface HistoryScreenProps {
   accounts: Account[];
   onEditExpense: (expense: Expense) => void;
   onDeleteExpense: (id: string) => void;
-  onItemStateChange: (state: { isOpen: boolean; isInteracting: boolean }) => void;
   isEditingOrDeleting: boolean;
-  onNavigateHome: () => void;
-  isActive: boolean;
   onDateModalStateChange: (isOpen: boolean) => void;
-  isPageSwiping: boolean;
-  isOverlayActive: boolean;
+  onClose: () => void;
 }
 
 interface ExpenseGroup {
@@ -275,11 +257,16 @@ interface ExpenseGroup {
 }
 
 const getISOWeek = (date: Date): [number, number] => {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const d = new Date(
+    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()),
+  );
   const dayNum = d.getUTCDay() || 7;
   d.setUTCDate(d.getUTCDate() + 4 - dayNum);
   const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  return [d.getUTCFullYear(), Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)];
+  return [
+    d.getUTCFullYear(),
+    Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7),
+  ];
 };
 
 const getWeekLabel = (y: number, w: number) => {
@@ -302,19 +289,18 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
   accounts,
   onEditExpense,
   onDeleteExpense,
-  onItemStateChange,
   isEditingOrDeleting,
-  onNavigateHome,
-  isActive,
   onDateModalStateChange,
-  isPageSwiping,
-  isOverlayActive,
+  onClose,
 }) => {
-  const tapBridge = useTapBridge();
-
-  const [activeFilterMode, setActiveFilterMode] = useState<ActiveFilterMode>('quick');
+  const [isAnimatingIn, setIsAnimatingIn] = useState(false);
+  const [activeFilterMode, setActiveFilterMode] =
+    useState<ActiveFilterMode>('quick');
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
-  const [customRange, setCustomRange] = useState<{ start: string | null; end: string | null }>({ start: null, end: null });
+  const [customRange, setCustomRange] = useState<{
+    start: string | null;
+    end: string | null;
+  }>({ start: null, end: null });
 
   const [periodType, setPeriodType] = useState<PeriodType>('week');
   const [periodDate, setPeriodDate] = useState<Date>(() => {
@@ -324,36 +310,63 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
   });
 
   const [openItemId, setOpenItemId] = useState<string | null>(null);
-  const [isInteracting, setIsInteracting] = useState(false);
+  const [isInternalDateModalOpen, setIsInternalDateModalOpen] = useState(false);
 
   const autoCloseRef = useRef<number | null>(null);
   const prevOpRef = useRef(isEditingOrDeleting);
 
   useEffect(() => {
-    if (prevOpRef.current && !isEditingOrDeleting) setOpenItemId(null);
+    const timer = setTimeout(() => setIsAnimatingIn(true), 10);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const handleClose = () => {
+    setOpenItemId(null);
+    setIsAnimatingIn(false);
+    setTimeout(onClose, 300);
+  };
+
+  const handleDateModalStateChange = useCallback(
+    (isOpen: boolean) => {
+      setIsInternalDateModalOpen(isOpen);
+      onDateModalStateChange(isOpen);
+    },
+    [onDateModalStateChange],
+  );
+
+  // Quando finisce modifica/eliminazione (OK o Annulla), resettiamo card aperta
+  useEffect(() => {
+    if (prevOpRef.current && !isEditingOrDeleting) {
+      setOpenItemId(null);
+    }
     prevOpRef.current = isEditingOrDeleting;
   }, [isEditingOrDeleting]);
 
-  useEffect(() => { if (!isActive) setOpenItemId(null); }, [isActive]);
-
   useEffect(() => {
-    onItemStateChange({ isOpen: openItemId !== null, isInteracting });
-  }, [openItemId, isInteracting, onItemStateChange]);
+    if (!isAnimatingIn) {
+      setOpenItemId(null);
+    }
+  }, [isAnimatingIn]);
 
   useEffect(() => {
     if (autoCloseRef.current) clearTimeout(autoCloseRef.current);
     if (openItemId && !isEditingOrDeleting) {
       autoCloseRef.current = window.setTimeout(() => setOpenItemId(null), 5000);
     }
-    return () => { if (autoCloseRef.current) clearTimeout(autoCloseRef.current); };
+    return () => {
+      if (autoCloseRef.current) clearTimeout(autoCloseRef.current);
+    };
   }, [openItemId, isEditingOrDeleting]);
 
   const filteredExpenses = useMemo(() => {
     if (activeFilterMode === 'period') {
-      const start = new Date(periodDate); start.setHours(0,0,0,0);
-      const end = new Date(periodDate); end.setHours(23,59,59,999);
+      const start = new Date(periodDate);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(periodDate);
+      end.setHours(23, 59, 59, 999);
       switch (periodType) {
-        case 'day': break;
+        case 'day':
+          break;
         case 'week': {
           const day = start.getDay();
           const diff = start.getDate() - day + (day === 0 ? -6 : 1);
@@ -372,8 +385,9 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
           end.setMonth(0, 0);
           break;
       }
-      const t0 = start.getTime(); const t1 = end.getTime();
-      return expenses.filter(e => {
+      const t0 = start.getTime();
+      const t1 = end.getTime();
+      return expenses.filter((e) => {
         const d = parseLocalYYYYMMDD(e.date);
         if (isNaN(d.getTime())) return false;
         const t = d.getTime();
@@ -382,10 +396,11 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
     }
 
     if (activeFilterMode === 'custom' && customRange.start && customRange.end) {
-      const t0 = parseLocalYYYYMMDD(customRange.start!).getTime();
-      const endDay = parseLocalYYYYMMDD(customRange.end!); endDay.setDate(endDay.getDate() + 1);
+      const t0 = parseLocalYYYYMMDD(customRange.start).getTime();
+      const endDay = parseLocalYYYYMMDD(customRange.end);
+      endDay.setDate(endDay.getDate() + 1);
       const t1 = endDay.getTime();
-      return expenses.filter(e => {
+      return expenses.filter((e) => {
         const d = parseLocalYYYYMMDD(e.date);
         if (isNaN(d.getTime())) return false;
         const t = d.getTime();
@@ -395,23 +410,41 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
 
     if (dateFilter === 'all') return expenses;
 
-    const startDate = new Date(); startDate.setHours(0,0,0,0);
+    const startDate = new Date();
+    startDate.setHours(0, 0, 0, 0);
     switch (dateFilter) {
-      case '7d': startDate.setDate(startDate.getDate() - 6); break;
-      case '30d': startDate.setDate(startDate.getDate() - 29); break;
-      case '6m': startDate.setMonth(startDate.getMonth() - 6); break;
-      case '1y': startDate.setFullYear(startDate.getFullYear() - 1); break;
+      case '7d':
+        startDate.setDate(startDate.getDate() - 6);
+        break;
+      case '30d':
+        startDate.setDate(startDate.getDate() - 29);
+        break;
+      case '6m':
+        startDate.setMonth(startDate.getMonth() - 6);
+        break;
+      case '1y':
+        startDate.setFullYear(startDate.getFullYear() - 1);
+        break;
     }
     const t0 = startDate.getTime();
-    return expenses.filter(e => { const d = parseLocalYYYYMMDD(e.date); return !isNaN(d.getTime()) && d.getTime() >= t0; });
+    return expenses.filter((e) => {
+      const d = parseLocalYYYYMMDD(e.date);
+      return !isNaN(d.getTime()) && d.getTime() >= t0;
+    });
   }, [expenses, activeFilterMode, dateFilter, customRange, periodType, periodDate]);
 
   const groupedExpenses = useMemo(() => {
     const sorted = [...filteredExpenses].sort((a, b) => {
       const db = parseLocalYYYYMMDD(b.date);
       const da = parseLocalYYYYMMDD(a.date);
-      if (b.time) { const [h, m] = b.time.split(':').map(Number); if (!isNaN(h) && !isNaN(m)) db.setHours(h, m); }
-      if (a.time) { const [h, m] = a.time.split(':').map(Number); if (!isNaN(h) && !isNaN(m)) da.setHours(h, m); }
+      if (b.time) {
+        const [h, m] = b.time.split(':').map(Number);
+        if (!isNaN(h) && !isNaN(m)) db.setHours(h, m);
+      }
+      if (a.time) {
+        const [h, m] = a.time.split(':').map(Number);
+        if (!isNaN(h) && !isNaN(m)) da.setHours(h, m);
+      }
       return db.getTime() - da.getTime();
     });
 
@@ -420,76 +453,110 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
       if (isNaN(d.getTime())) return acc;
       const [y, w] = getISOWeek(d);
       const key = `${y}-${w}`;
-      if (!acc[key]) acc[key] = { year: y, week: w, label: getWeekLabel(y, w), expenses: [] };
+      if (!acc[key]) {
+        acc[key] = {
+          year: y,
+          week: w,
+          label: getWeekLabel(y, w),
+          expenses: [],
+        };
+      }
       acc[key].expenses.push(e);
       return acc;
     }, {});
   }, [filteredExpenses]);
 
   const expenseGroups = (Object.values(groupedExpenses) as ExpenseGroup[]).sort(
-    (a, b) => (a.year !== b.year ? b.year - a.year : b.week - a.week)
+    (a, b) => (a.year !== b.year ? b.year - a.year : b.week - a.week),
   );
 
   const handleOpenItem = (id: string) => setOpenItemId(id || null);
-  const handleInteractionChange = (v: boolean) => setIsInteracting(v);
 
   return (
-    <div className="h-full flex flex-col bg-slate-100" style={{ touchAction: 'pan-y' }}>
-      <div
-        className="flex-1 overflow-y-auto pb-36"
-        style={{ touchAction: 'pan-y' }}
-        onPointerDownCapture={(e) => tapBridge.onPointerDown(e)}
-        onPointerMoveCapture={(e) => tapBridge.onPointerMove(e)}
-        onPointerUpCapture={(e) => tapBridge.onPointerUp(e)}
-        onPointerCancelCapture={(e) => tapBridge.onPointerCancel?.(e as any)}
-        onClickCapture={(e) => tapBridge.onClickCapture(e as any)}
-      >
-        {expenseGroups.length > 0 ? (
-          expenseGroups.map(group => (
-            <div key={group.label} className="mb-6 last:mb-0">
-              <h2 className="font-bold text-slate-800 text-lg px-4 py-2 sticky top-0 bg-slate-100/80 backdrop-blur-sm z-10">
-                {group.label}
-              </h2>
+    <div
+      className={`fixed inset-0 bg-slate-100 z-50 transform transition-transform duration-300 ease-in-out ${isAnimatingIn ? 'translate-y-0' : 'translate-y-full'}`}
+      style={{ touchAction: 'pan-y' }}
+    >
+      <header className="sticky top-0 z-20 flex items-center gap-4 p-4 bg-white/80 backdrop-blur-sm shadow-sm">
+        <button
+          onClick={handleClose}
+          className="p-2 rounded-full hover:bg-slate-200 transition-colors"
+          aria-label="Indietro"
+        >
+          <ArrowLeftIcon className="w-6 h-6 text-slate-700" />
+        </button>
+        <h1 className="text-xl font-bold text-slate-800">Storico Spese</h1>
+      </header>
 
-              <div className="bg-white rounded-xl shadow-md mx-2 overflow-hidden">
-                {group.expenses.map((expense, index) => (
-                  <React.Fragment key={expense.id}>
-                    {index > 0 && <hr className="border-t border-slate-200 ml-16" />}
-                    <ExpenseItem
-                      expense={expense}
-                      accounts={accounts}
-                      onEdit={onEditExpense}
-                      onDelete={onDeleteExpense}
-                      isOpen={openItemId === expense.id}
-                      onOpen={handleOpenItem}
-                      onInteractionChange={handleInteractionChange}
-                    />
-                  </React.Fragment>
-                ))}
+      <main
+        className="overflow-y-auto h-[calc(100%-68px)]"
+        style={{ touchAction: 'pan-y' }}
+      >
+        <div
+          className="flex-1 overflow-y-auto pb-36"
+          style={{ touchAction: 'pan-y' }}
+        >
+          {expenseGroups.length > 0 ? (
+            expenseGroups.map((group) => (
+              <div key={group.label} className="mb-6 last:mb-0">
+                <h2 className="font-bold text-slate-800 text-lg px-4 py-2 sticky top-0 bg-slate-100/80 backdrop-blur-sm z-10">
+                  {group.label}
+                </h2>
+
+                <div className="bg-white rounded-xl shadow-md mx-2 overflow-hidden">
+                  {group.expenses.map((expense, index) => (
+                    <React.Fragment key={expense.id}>
+                      {index > 0 && (
+                        <hr className="border-t border-slate-200 ml-16" />
+                      )}
+                      <ExpenseItem
+                        expense={expense}
+                        accounts={accounts}
+                        onEdit={onEditExpense}
+                        onDelete={onDeleteExpense}
+                        isOpen={openItemId === expense.id}
+                        onOpen={handleOpenItem}
+                      />
+                    </React.Fragment>
+                  ))}
+                </div>
               </div>
+            ))
+          ) : (
+            <div className="text-center text-slate-500 pt-20 px-6">
+              <p className="text-lg font-semibold">Nessuna spesa trovata</p>
+              <p className="mt-2">
+                Prova a modificare i filtri o aggiungi una nuova spesa dalla
+                schermata Home.
+              </p>
             </div>
-          ))
-        ) : (
-          <div className="text-center text-slate-500 pt-20 px-6">
-            <p className="text-lg font-semibold">Nessuna spesa trovata</p>
-            <p className="mt-2">Prova a modificare i filtri o aggiungi una nuova spesa dalla schermata Home.</p>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      </main>
 
       <HistoryFilterCard
-        isActive={isActive && !isOverlayActive}
-        onSelectQuickFilter={(value) => { setDateFilter(value); setActiveFilterMode('quick'); }}
+        isActive={isAnimatingIn && !isInternalDateModalOpen}
+        onSelectQuickFilter={(value) => {
+          setDateFilter(value);
+          setActiveFilterMode('quick');
+        }}
         currentQuickFilter={dateFilter}
-        onCustomRangeChange={(range) => { setCustomRange(range); setActiveFilterMode('custom'); }}
+        onCustomRangeChange={(range) => {
+          setCustomRange(range);
+          setActiveFilterMode('custom');
+        }}
         currentCustomRange={customRange}
         isCustomRangeActive={activeFilterMode === 'custom'}
-        onDateModalStateChange={onDateModalStateChange}
+        onDateModalStateChange={handleDateModalStateChange}
         periodType={periodType}
         periodDate={periodDate}
         onSelectPeriodType={(type) => {
           setPeriodType(type);
-          setPeriodDate(() => { const d = new Date(); d.setHours(0,0,0,0); return d; });
+          setPeriodDate(() => {
+            const d = new Date();
+            d.setHours(0, 0, 0, 0);
+            return d;
+          });
           setActiveFilterMode('period');
         }}
         onSetPeriodDate={setPeriodDate}

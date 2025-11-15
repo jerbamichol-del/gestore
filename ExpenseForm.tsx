@@ -1,9 +1,3 @@
-
-
-
-
-
-
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Expense, Account, CATEGORIES } from '../types';
 import { XMarkIcon } from './icons/XMarkIcon';
@@ -19,7 +13,6 @@ import { CalendarDaysIcon } from './icons/CalendarDaysIcon';
 import { ChevronDownIcon } from './icons/ChevronDownIcon';
 import { formatDate } from './icons/formatters';
 import ConfirmationModal from './ConfirmationModal';
-import { useTapBridge } from '../hooks/useTapBridge';
 
 
 interface ExpenseFormProps {
@@ -172,7 +165,6 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
   const amountInputRef = useRef<HTMLInputElement>(null);
   const descriptionInputRef = useRef<HTMLInputElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
-  const tapBridgeHandlers = useTapBridge();
 
   const isEditing = !!initialData;
   const isSingleRecurring = formData.frequency === 'recurring' && formData.recurrenceEndType === 'count' && formData.recurrenceCount === 1;
@@ -539,7 +531,6 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
         className={`bg-slate-50 w-full h-full flex flex-col absolute bottom-0 transform transition-transform duration-300 ease-in-out ${isAnimating ? 'translate-y-0' : 'translate-y-full'}`}
         onClick={(e) => e.stopPropagation()}
         style={{ touchAction: 'pan-y' }}
-        {...tapBridgeHandlers}
       >
         <header className="flex justify-between items-center p-6 border-b border-slate-200 flex-shrink-0">
           <h2 ref={titleRef} tabIndex={-1} className="text-2xl font-bold text-slate-800 focus:outline-none">{isEditing ? 'Modifica Spesa' : 'Aggiungi Spesa'}</h2>

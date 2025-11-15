@@ -298,11 +298,14 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
     }
   }, [currentValue, operator, previousValue, shouldResetCurrentValue, calculate]);
 
+  const canSubmit = useMemo(() => (parseFloat(currentValue.replace(/\./g, '').replace(',', '.')) || 0) > 0, [currentValue]);
+
   const handleSubmit = useCallback(() => {
-    if ((formData.amount ?? 0) > 0) {
-      onSubmit({ ...formData, category: formData.category || 'Altro' } as Omit<Expense, 'id'>);
+    const amount = parseFloat(currentValue.replace(/\./g, '').replace(',', '.')) || 0;
+    if (amount > 0) {
+      onSubmit({ ...formData, amount, category: formData.category || 'Altro' } as Omit<Expense, 'id'>);
     }
-  }, [formData, onSubmit]);
+  }, [currentValue, formData, onSubmit]);
 
   const handleSelectChange = useCallback((field: keyof Omit<Expense, 'id'>, value: string) => {
     const updated = { [field]: value } as Partial<Omit<Expense, 'id'>>;
@@ -310,8 +313,6 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
     onFormChange(updated);
     setActiveMenu(null);
   }, [onFormChange]);
-
-  const canSubmit = (formData.amount ?? 0) > 0;
 
   const categoryOptions = useMemo(() => 
     Object.keys(CATEGORIES).map(cat => ({
