@@ -1,8 +1,9 @@
 name: Sync dal repo AI Studio (solo se ci sono modifiche)
 
 on:
-  # lo puoi avviare a mano da Actions → "Run workflow"
   workflow_dispatch:
+  schedule:
+    - cron: "*/5 * * * *"
   
 jobs:
   sync:
