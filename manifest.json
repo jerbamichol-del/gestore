@@ -3,7 +3,6 @@
   "short_name": "Gestore Spese",
   "description": "Una semplice applicazione per tracciare le spese, con funzionalità offline.",
   "start_url": "/gestore/",
-  "scope": "/gestore/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#f1f5f9",
@@ -35,5 +34,6 @@
       ]
     }
   },
-  "id": "/gestore/"
+  "id": "/gestore/",
+  "scope": "/gestore/"
 }
