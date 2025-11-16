@@ -1,89 +1,47 @@
-name: Sync dal repo AI Studio (solo se ci sono modifiche)
+name: Sync from AI Studio source
 
 on:
-  workflow_dispatch:
-  schedule:
-    - cron: "*/5 * * * *"  # ogni 5 minuti
-
-permissions:
-  contents: write
+  workflow_dispatch: {}
 
 jobs:
   sync:
     runs-on: ubuntu-latest
 
     env:
-      SOURCE_REPO: jerbamichol-del/gestore-ai-studio-source  # nuova repo AI Studio
+      SOURCE_REPO: jerbamichol-del/gestore-ai-studio-source
       SOURCE_BRANCH: main
-      TARGET_BRANCH: main
-      SOURCE_REPO_TOKEN: ${{ secrets.SOURCE_REPO_TOKEN }}
 
     steps:
-      - name: Checkout gestore (repo target)
+      - name: Checkout gestore
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ env.TARGET_BRANCH }}
 
-      - name: Leggi ultimo SHA sorgente applicato (se esiste)
-        id: prev_sha
-        run: |
-          if [ -f .ai_source_sha ]; then
-            LAST_SHA=$(cat .ai_source_sha)
-          else
-            LAST_SHA=""
-          fi
-          echo "last_sha=${LAST_SHA}" >> $GITHUB_OUTPUT
-          echo "Ultimo SHA sincronizzato: ${LAST_SHA}"
-
-      - name: Clona repo sorgente (NUOVA repo AI Studio)
-        id: src
-        run: |
-          git clone https://x-access-token:${SOURCE_REPO_TOKEN}@github.com/${SOURCE_REPO}.git source
-          cd source
-          git checkout ${SOURCE_BRANCH}
-          NEW_SHA=$(git rev-parse HEAD)
-          echo "new_sha=${NEW_SHA}" >> $GITHUB_OUTPUT
-          echo "Nuovo SHA sorgente: ${NEW_SHA}"
-
-      - name: Esci se il commit sorgente è già stato applicato
-        if: steps.src.outputs.new_sha == steps.prev_sha.outputs.last_sha
-        run: |
-          echo "Nessuna modifica nuova nella repo AI Studio (SHA ${steps.src.outputs.new_sha}), non faccio nulla."
-          exit 0
-
-      - name: Copia codice da repo sorgente (senza toccare .github)
-        run: |
-          RSYNC_EXIT=0
-          rsync -av --delete \
-            --exclude=".git" \
-            --exclude=".github" \
-            source/ ./ || RSYNC_EXIT=$?
-
-          if [ "$RSYNC_EXIT" != "0" ] && [ "$RSYNC_EXIT" != "24" ]; then
-            echo "rsync fallito con codice $RSYNC_EXIT"
-            exit $RSYNC_EXIT
-          fi
-
-          if [ "$RSYNC_EXIT" = "24" ]; then
-            echo "rsync ha dato codice 24 (file vanished). Lo ignoro e vado avanti."
-          fi
-
-          # Salva il nuovo SHA sorgente applicato
-          echo "${{ steps.src.outputs.new_sha }}" > .ai_source_sha
-
-          # Elimina la cartella source per non committarla come submodule
-          rm -rf source
-
-      - name: Commit & push delle modifiche
+      - name: Configura git
         run: |
           git config user.name "ai-studio-sync"
           git config user.email "ai-studio-sync@users.noreply.github.com"
 
+      - name: Clona repo AI Studio
+        run: |
+          rm -rf .ai_src
+          git clone --depth=1 \
+            https://x-access-token:${{ secrets.SOURCE_REPO_TOKEN }}@github.com/${SOURCE_REPO}.git \
+            .ai_src
+
+      - name: Sincronizza file dalla repo AI Studio
+        run: |
+          rsync -av --delete \
+            --exclude=".git" \
+            --exclude=".github" \
+            .ai_src/ ./
+
+      - name: Commit & push se ci sono modifiche
+        run: |
           if git status --porcelain | grep .; then
             git add .
-            git commit -m "Sync da repo AI Studio"
-            git push origin ${TARGET_BRANCH}
+            git commit -m "Sync from AI Studio source"
+            git push origin HEAD
           else
-            echo "Dopo la copia non risultano cambi, non pusho."
+            echo "Nessuna modifica da sincronizzare."
           fi
