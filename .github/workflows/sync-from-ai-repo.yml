@@ -1,16 +1,20 @@
 name: Sync dal repo AI Studio (solo se ci sono modifiche)
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:         # puoi lanciarlo a mano da Actions
   schedule:
-    - cron: "*/5 * * * *"  # ogni 5 minuti
+    - cron: "*/5 * * * *"    # ogni 5 minuti
+
+# Serve per permettere al GITHUB_TOKEN di fare git push
+permissions:
+  contents: write
 
 jobs:
   sync:
     runs-on: ubuntu-latest
 
     env:
-      SOURCE_REPO: jerbamichol-del/gestore-ai-studio-source  # 👈 nuova repo AI Studio
+      SOURCE_REPO: jerbamichol-del/gestore-ai-studio-source  # nuova repo AI Studio
       SOURCE_BRANCH: main
       TARGET_BRANCH: main
       SOURCE_REPO_TOKEN: ${{ secrets.SOURCE_REPO_TOKEN }}
@@ -57,6 +61,8 @@ jobs:
             source/ ./
           # Salva il nuovo SHA sorgente applicato
           echo "${{ steps.src.outputs.new_sha }}" > .ai_source_sha
+          # Elimina la cartella source per non committarla come submodule
+          rm -rf source
 
       - name: Commit & push delle modifiche
         run: |
