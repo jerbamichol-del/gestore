@@ -1,11 +1,10 @@
 name: Sync dal repo AI Studio (solo se ci sono modifiche)
 
 on:
-  workflow_dispatch:         # puoi lanciarlo a mano da Actions
+  workflow_dispatch:
   schedule:
-    - cron: "*/5 * * * *"    # ogni 5 minuti
+    - cron: "*/5 * * * *"  # ogni 5 minuti
 
-# Serve per permettere al GITHUB_TOKEN di fare git push
 permissions:
   contents: write
 
@@ -55,12 +54,24 @@ jobs:
 
       - name: Copia codice da repo sorgente (senza toccare .github)
         run: |
+          RSYNC_EXIT=0
           rsync -av --delete \
             --exclude=".git" \
             --exclude=".github" \
-            source/ ./
+            source/ ./ || RSYNC_EXIT=$?
+
+          if [ "$RSYNC_EXIT" != "0" ] && [ "$RSYNC_EXIT" != "24" ]; then
+            echo "rsync fallito con codice $RSYNC_EXIT"
+            exit $RSYNC_EXIT
+          fi
+
+          if [ "$RSYNC_EXIT" = "24" ]; then
+            echo "rsync ha dato codice 24 (file vanished). Lo ignoro e vado avanti."
+          fi
+
           # Salva il nuovo SHA sorgente applicato
           echo "${{ steps.src.outputs.new_sha }}" > .ai_source_sha
+
           # Elimina la cartella source per non committarla come submodule
           rm -rf source
 
