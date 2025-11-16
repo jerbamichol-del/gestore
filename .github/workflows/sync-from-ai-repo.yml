@@ -3,14 +3,14 @@ name: Sync dal repo AI Studio (solo se ci sono modifiche)
 on:
   workflow_dispatch:
   schedule:
-    - cron: "*/5 * * * *"
-  
+    - cron: "*/5 * * * *"  # ogni 5 minuti
+
 jobs:
   sync:
     runs-on: ubuntu-latest
 
     env:
-      SOURCE_REPO: jerbamichol-del/gestore-ai-studio-source
+      SOURCE_REPO: jerbamichol-del/gestore-ai-studio-source  # 👈 nuova repo AI Studio
       SOURCE_BRANCH: main
       TARGET_BRANCH: main
       SOURCE_REPO_TOKEN: ${{ secrets.SOURCE_REPO_TOKEN }}
@@ -22,29 +22,31 @@ jobs:
           fetch-depth: 0
           ref: ${{ env.TARGET_BRANCH }}
 
+      - name: Leggi ultimo SHA sorgente applicato (se esiste)
+        id: prev_sha
+        run: |
+          if [ -f .ai_source_sha ]; then
+            LAST_SHA=$(cat .ai_source_sha)
+          else
+            LAST_SHA=""
+          fi
+          echo "last_sha=${LAST_SHA}" >> $GITHUB_OUTPUT
+          echo "Ultimo SHA sincronizzato: ${LAST_SHA}"
+
       - name: Clona repo sorgente (NUOVA repo AI Studio)
+        id: src
         run: |
           git clone https://x-access-token:${SOURCE_REPO_TOKEN}@github.com/${SOURCE_REPO}.git source
           cd source
           git checkout ${SOURCE_BRANCH}
-          git rev-parse HEAD > ../.ai_source_sha_new
+          NEW_SHA=$(git rev-parse HEAD)
+          echo "new_sha=${NEW_SHA}" >> $GITHUB_OUTPUT
+          echo "Nuovo SHA sorgente: ${NEW_SHA}"
 
-      - name: Leggi ultimo SHA sincronizzato (se esiste)
-        id: check_sha
+      - name: Esci se il commit sorgente è già stato applicato
+        if: steps.src.outputs.new_sha == steps.prev_sha.outputs.last_sha
         run: |
-          if [ -f .ai_source_sha ]; then
-            echo "last_sha=$(cat .ai_source_sha)" >> $GITHUB_OUTPUT
-          else
-            echo "last_sha=" >> $GITHUB_OUTPUT
-          fi
-          echo "new_sha=$(cat .ai_source_sha_new)" >> $GITHUB_OUTPUT
-          echo "Ultimo SHA noto: ${{ steps.check_sha.outputs.last_sha }}"
-          echo "Nuovo SHA sorgente: ${{ steps.check_sha.outputs.new_sha }}"
-
-      - name: Esci se non ci sono cambi nella repo sorgente
-        if: steps.check_sha.outputs.last_sha == steps.check_sha.outputs.new_sha
-        run: |
-          echo "Nessuna modifica nella repo AI Studio, non faccio nulla."
+          echo "Nessuna modifica nuova nella repo AI Studio (SHA ${steps.src.outputs.new_sha}), non faccio nulla."
           exit 0
 
       - name: Copia codice da repo sorgente (senza toccare .github)
@@ -53,7 +55,8 @@ jobs:
             --exclude=".git" \
             --exclude=".github" \
             source/ ./
-          mv .ai_source_sha_new .ai_source_sha
+          # Salva il nuovo SHA sorgente applicato
+          echo "${{ steps.src.outputs.new_sha }}" > .ai_source_sha
 
       - name: Commit & push delle modifiche
         run: |
@@ -65,5 +68,5 @@ jobs:
             git commit -m "Sync da repo AI Studio"
             git push origin ${TARGET_BRANCH}
           else
-            echo "Dopo la copia non risultano cambi (strano ma possibile), non pusho."
+            echo "Dopo la copia non risultano cambi, non pusho."
           fi
