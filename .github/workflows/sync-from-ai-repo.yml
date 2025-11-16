@@ -22,19 +22,19 @@ jobs:
           git config user.name "ai-studio-sync"
           git config user.email "ai-studio-sync@users.noreply.github.com"
 
-      - name: Clona repo AI Studio
+      - name: Clona repo AI Studio in cartella esterna
         run: |
-          rm -rf .ai_src
+          rm -rf ../ai_src
           git clone --depth=1 \
             https://x-access-token:${{ secrets.SOURCE_REPO_TOKEN }}@github.com/${SOURCE_REPO}.git \
-            .ai_src
+            ../ai_src
 
       - name: Sincronizza file dalla repo AI Studio
         run: |
           rsync -av --delete \
             --exclude=".git" \
             --exclude=".github" \
-            .ai_src/ ./
+            ../ai_src/ ./
 
       - name: Commit & push se ci sono modifiche
         run: |
