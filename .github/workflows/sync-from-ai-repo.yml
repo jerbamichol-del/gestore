@@ -1,0 +1,69 @@
+name: Sync dal repo AI Studio (solo se ci sono modifiche)
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/5 * * * *"
+  
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    env:
+      SOURCE_REPO: jerbamichol-del/gestore-ai-studio-source
+      SOURCE_BRANCH: main
+      TARGET_BRANCH: main
+      SOURCE_REPO_TOKEN: ${{ secrets.SOURCE_REPO_TOKEN }}
+
+    steps:
+      - name: Checkout gestore (repo target)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ env.TARGET_BRANCH }}
+
+      - name: Clona repo sorgente (NUOVA repo AI Studio)
+        run: |
+          git clone https://x-access-token:${SOURCE_REPO_TOKEN}@github.com/${SOURCE_REPO}.git source
+          cd source
+          git checkout ${SOURCE_BRANCH}
+          git rev-parse HEAD > ../.ai_source_sha_new
+
+      - name: Leggi ultimo SHA sincronizzato (se esiste)
+        id: check_sha
+        run: |
+          if [ -f .ai_source_sha ]; then
+            echo "last_sha=$(cat .ai_source_sha)" >> $GITHUB_OUTPUT
+          else
+            echo "last_sha=" >> $GITHUB_OUTPUT
+          fi
+          echo "new_sha=$(cat .ai_source_sha_new)" >> $GITHUB_OUTPUT
+          echo "Ultimo SHA noto: ${{ steps.check_sha.outputs.last_sha }}"
+          echo "Nuovo SHA sorgente: ${{ steps.check_sha.outputs.new_sha }}"
+
+      - name: Esci se non ci sono cambi nella repo sorgente
+        if: steps.check_sha.outputs.last_sha == steps.check_sha.outputs.new_sha
+        run: |
+          echo "Nessuna modifica nella repo AI Studio, non faccio nulla."
+          exit 0
+
+      - name: Copia codice da repo sorgente (senza toccare .github)
+        run: |
+          rsync -av --delete \
+            --exclude=".git" \
+            --exclude=".github" \
+            source/ ./
+          mv .ai_source_sha_new .ai_source_sha
+
+      - name: Commit & push delle modifiche
+        run: |
+          git config user.name "ai-studio-sync"
+          git config user.email "ai-studio-sync@users.noreply.github.com"
+
+          if git status --porcelain | grep .; then
+            git add .
+            git commit -m "Sync da repo AI Studio"
+            git push origin ${TARGET_BRANCH}
+          else
+            echo "Dopo la copia non risultano cambi (strano ma possibile), non pusho."
+          fi
