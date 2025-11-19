@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Expense, Account } from '../types';
 import { getCategoryStyle } from '../utils/categoryStyles';
-import { formatCurrency } from '../components/icons/formatters';
+import { formatCurrency, formatDate } from '../components/icons/formatters';
 import { ArrowLeftIcon } from '../components/icons/ArrowLeftIcon';
 import { TrashIcon } from '../components/icons/TrashIcon';
 import { CalendarDaysIcon } from '../components/icons/CalendarDaysIcon';
@@ -9,6 +10,36 @@ import ConfirmationModal from '../components/ConfirmationModal';
 import { useTapBridge } from '../hooks/useTapBridge';
 
 const ACTION_WIDTH = 72;
+
+const parseLocalYYYYMMDD = (dateString: string | null | undefined): Date | null => {
+  if (!dateString) return null;
+  const parts = dateString.split('-').map(Number);
+  return new Date(parts[0], parts[1] - 1, parts[2]);
+};
+
+const calculateNextDueDate = (template: Expense, fromDate: Date): Date | null => {
+  if (template.frequency !== 'recurring' || !template.recurrence) return null;
+  const interval = template.recurrenceInterval || 1;
+  const nextDate = new Date(fromDate);
+
+  switch (template.recurrence) {
+    case 'daily':
+      nextDate.setDate(nextDate.getDate() + interval);
+      break;
+    case 'weekly':
+      nextDate.setDate(nextDate.getDate() + 7 * interval);
+      break;
+    case 'monthly':
+      nextDate.setMonth(nextDate.getMonth() + interval);
+      break;
+    case 'yearly':
+      nextDate.setFullYear(nextDate.getFullYear() + interval);
+      break;
+    default:
+      return null;
+  }
+  return nextDate;
+};
 
 const recurrenceLabels: Record<string, string> = {
   daily: 'Ogni Giorno',
@@ -40,6 +71,13 @@ const RecurringExpenseItem: React.FC<{
     const accountName = accounts.find(a => a.id === expense.accountId)?.name || 'Sconosciuto';
     const itemRef = useRef<HTMLDivElement>(null);
     const tapBridge = useTapBridge();
+
+    const nextDueDate = useMemo(() => {
+        const baseDate = parseLocalYYYYMMDD(expense.lastGeneratedDate || expense.date);
+        if (!baseDate) return null;
+        if (!expense.lastGeneratedDate) return baseDate;
+        return calculateNextDueDate(expense, baseDate);
+    }, [expense]);
 
     const dragState = useRef({
       isDragging: false,
@@ -194,7 +232,13 @@ const RecurringExpenseItem: React.FC<{
                     <p className="font-semibold text-slate-800 truncate">{expense.description || 'Senza descrizione'}</p>
                     <p className="text-sm text-slate-500 truncate">{getRecurrenceSummary(expense)} • {accountName}</p>
                 </div>
-                <p className="font-bold text-slate-900 text-lg text-right shrink-0 whitespace-nowrap min-w-[90px]">{formatCurrency(Number(expense.amount) || 0)}</p>
+                
+                <div className="flex flex-col items-end shrink-0 min-w-[90px]">
+                    <p className="font-bold text-slate-900 text-lg text-right whitespace-nowrap">{formatCurrency(Number(expense.amount) || 0)}</p>
+                    {nextDueDate && (
+                        <p className="text-xs font-medium text-slate-500 mt-0.5">{formatDate(nextDueDate)}</p>
+                    )}
+                </div>
             </div>
         </div>
     );
@@ -208,37 +252,6 @@ interface RecurringExpensesScreenProps {
   onEdit: (expense: Expense) => void;
   onDelete: (id: string) => void;
 }
-
-const parseLocalYYYYMMDD = (dateString: string | null | undefined): Date | null => {
-  if (!dateString) return null;
-  const parts = dateString.split('-').map(Number);
-  return new Date(parts[0], parts[1] - 1, parts[2]);
-};
-
-const calculateNextDueDate = (template: Expense, fromDate: Date): Date | null => {
-  if (template.frequency !== 'recurring' || !template.recurrence) return null;
-  const interval = template.recurrenceInterval || 1;
-  const nextDate = new Date(fromDate);
-
-  switch (template.recurrence) {
-    case 'daily':
-      nextDate.setDate(nextDate.getDate() + interval);
-      break;
-    case 'weekly':
-      nextDate.setDate(nextDate.getDate() + 7 * interval);
-      break;
-    case 'monthly':
-      nextDate.setMonth(nextDate.getMonth() + interval);
-      break;
-    case 'yearly':
-      nextDate.setFullYear(nextDate.getFullYear() + interval);
-      break;
-    default:
-      return null;
-  }
-  return nextDate;
-};
-
 
 const RecurringExpensesScreen: React.FC<RecurringExpensesScreenProps> = ({ recurringExpenses, expenses, accounts, onClose, onEdit, onDelete }) => {
   const [isAnimatingIn, setIsAnimatingIn] = useState(false);
