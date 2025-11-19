@@ -1,3 +1,4 @@
+
 import React, {
   useState,
   useRef,
@@ -6,11 +7,9 @@ import React, {
   useLayoutEffect,
 } from 'react';
 import { createPortal } from 'react-dom';
-import { DateRangePickerModal } from './DateRangePickerModal';
 import { ChevronLeftIcon } from './icons/ChevronLeftIcon';
 import { ChevronRightIcon } from './icons/ChevronRightIcon';
 import { ChevronDownIcon } from './icons/ChevronDownIcon';
-import { useSwipe } from '../hooks/useSwipe';
 import { useTapBridge } from '../hooks/useTapBridge';
 import SmoothPullTab from './SmoothPullTab';
 
@@ -33,18 +32,6 @@ interface HistoryFilterCardProps {
   isPeriodFilterActive: boolean;
   onOpenStateChange: (isOpen: boolean) => void;
 }
-
-const fmtBtn = (iso: string) => {
-  if (!iso) return '';
-  const [y, m, d] = iso.split('-').map(Number);
-  return new Intl.DateTimeFormat('it-IT', {
-    day: '2-digit',
-    month: 'short',
-    year: '2-digit',
-  })
-    .format(new Date(y, m - 1, d))
-    .replace('.', '');
-};
 
 /* -------------------- QuickFilterControl -------------------- */
 const QuickFilterControl: React.FC<{
@@ -72,7 +59,7 @@ const QuickFilterControl: React.FC<{
           <button
             key={f.value}
             onClick={() => onSelect(f.value)}
-            style={{ touchAction: 'none' }} // swipe pagina continua a funzionare
+            type="button"
             className={
               'flex-1 flex items-center justify-center px-2 text-center font-semibold text-sm transition-colors duration-200 focus:outline-none ' +
               (i > 0 ? 'border-l ' : '') +
@@ -93,31 +80,85 @@ const QuickFilterControl: React.FC<{
 
 /* -------------------- CustomDateRangeInputs -------------------- */
 const CustomDateRangeInputs: React.FC<{
-  onClick: () => void;
   range: { start: string | null; end: string | null };
+  onChange: (range: { start: string | null; end: string | null }) => void;
   isActive: boolean;
-}> = ({ onClick, range, isActive }) => {
-  const has = !!(range.start && range.end);
-  const txt = has ? `${fmtBtn(range.start!)} - ${fmtBtn(range.end!)}` : 'Imposta periodo';
+}> = ({ range, onChange, isActive }) => {
+  const textColor = isActive ? 'text-indigo-700' : 'text-slate-700';
+  const textSize = 'text-sm font-semibold';
+
+  const formatDate = (iso: string) => {
+    if (!iso) return '';
+    const [y, m, d] = iso.split('-').map(Number);
+    const date = new Date(y, m - 1, d);
+    return date.toLocaleDateString('it-IT', {
+      day: 'numeric',
+      month: 'short',
+      year: '2-digit'
+    });
+  };
+
+  const handleChange = (field: 'start' | 'end', value: string) => {
+      onChange({ ...range, [field]: value || null });
+  };
+
+  const handleInputClick = (e: React.MouseEvent<HTMLInputElement>) => {
+    // Force show picker on click to ensure responsiveness even if touch events are complex
+    try {
+      if (typeof (e.currentTarget as any).showPicker === 'function') {
+        (e.currentTarget as any).showPicker();
+      }
+    } catch (err) {
+      // Ignore if browser prevents it or doesn't support it
+    }
+  };
 
   return (
     <div
       className={
-        'border h-10 transition-colors rounded-lg ' +
-        (isActive ? 'border-indigo-600' : 'border-slate-400')
+        'w-full h-10 flex border rounded-lg overflow-hidden transition-colors relative ' +
+        (isActive ? 'border-indigo-600 bg-indigo-50' : 'border-slate-400 bg-slate-100')
       }
     >
-      <button
-        onClick={onClick}
-        style={{ touchAction: 'none' }}
-        className={
-          'w-full h-full flex items-center justify-center gap-2 px-2 hover:bg-slate-200 transition-colors focus:outline-none rounded-lg ' +
-          (isActive ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-700')
-        }
-        aria-label="Seleziona intervallo di date"
-      >
-        <span className="text-sm font-semibold pointer-events-none">{txt}</span>
-      </button>
+      {/* Start Date Input Wrapper */}
+      <label className="relative flex-1 h-full group cursor-pointer block">
+         {/* Visual Text (Centered) */}
+         <div className={`absolute inset-0 flex items-center justify-center z-0 pointer-events-none ${textSize} ${textColor}`}>
+            {range.start ? formatDate(range.start) : 'Dal'}
+         </div>
+         
+         {/* Invisible Native Input on top */}
+         <input
+          type="date"
+          value={range.start || ''}
+          onChange={(e) => handleChange('start', e.target.value)}
+          onClick={handleInputClick}
+          onBlur={(e) => e.target.blur()}
+          className="absolute inset-0 w-full h-full opacity-0 z-20 cursor-pointer"
+          style={{ touchAction: 'none' }}
+        />
+      </label>
+      
+      <div className={`w-px my-1 ${isActive ? 'bg-indigo-200' : 'bg-slate-300'}`} />
+      
+      {/* End Date Input Wrapper */}
+      <label className="relative flex-1 h-full group cursor-pointer block">
+        {/* Visual Text (Centered) */}
+        <div className={`absolute inset-0 flex items-center justify-center z-0 pointer-events-none ${textSize} ${textColor}`}>
+            {range.end ? formatDate(range.end) : 'Al'}
+         </div>
+         
+         {/* Invisible Native Input on top */}
+         <input
+          type="date"
+          value={range.end || ''}
+          onChange={(e) => handleChange('end', e.target.value)}
+          onClick={handleInputClick}
+          onBlur={(e) => e.target.blur()}
+          className="absolute inset-0 w-full h-full opacity-0 z-20 cursor-pointer"
+          style={{ touchAction: 'none' }}
+        />
+      </label>
     </div>
   );
 };
@@ -254,7 +295,7 @@ const PeriodNavigator: React.FC<{
     >
       <button
         onClick={() => step(-1)}
-        style={{ touchAction: 'none' }}
+        type="button"
         className="h-full px-4 hover:bg-slate-100 rounded-l-lg"
         aria-label="Periodo precedente"
       >
@@ -262,7 +303,7 @@ const PeriodNavigator: React.FC<{
       </button>
       <button
         onClick={() => onMenuToggle(!isMenuOpen)}
-        style={{ touchAction: 'none' }}
+        type="button"
         className={
           'flex-1 h-full text-sm font-semibold ' +
           (isActive
@@ -275,7 +316,7 @@ const PeriodNavigator: React.FC<{
       </button>
       <button
         onClick={() => step(+1)}
-        style={{ touchAction: 'none' }}
+        type="button"
         className="h-full px-4 hover:bg-slate-100 rounded-r-lg"
         aria-label="Periodo successivo"
       >
@@ -292,7 +333,7 @@ const PeriodNavigator: React.FC<{
                 onTypeChange(v);
                 onMenuToggle(false);
               }}
-              style={{ touchAction: 'none' }}
+              type="button"
               className={
                 'w-full text-left px-4 py-2 text-sm font-semibold rounded-lg ' +
                 (isActive && periodType === v
@@ -320,7 +361,6 @@ const PeriodNavigator: React.FC<{
 export const PEEK_PX = 70;
 
 export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
-  const [isDateModalOpen, setIsDateModalOpen] = useState(false);
   const [isPeriodMenuOpen, setIsPeriodMenuOpen] = useState(false);
   const [activeViewIndex, setActiveViewIndex] = useState(0);
 
@@ -334,13 +374,17 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
   const [laidOut, setLaidOut] = useState(false);
   const [anim, setAnim] = useState(false);
 
-  // drag stato semplificato
+  // Stato swipe orizzontale
+  const [swipeOffset, setSwipeOffset] = useState(0);
+  const [isSwipeAnimating, setIsSwipeAnimating] = useState(false);
+
+  // drag stato unificato (verticale e orizzontale)
   const dragRef = useRef<{
     active: boolean;
     direction: 'none' | 'vertical' | 'horizontal';
     startX: number;
     startY: number;
-    startTranslateY: number;
+    startTranslateY: number; // per verticale
     lastY: number;
     lastT: number;
   }>({
@@ -352,16 +396,6 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
     lastY: 0,
     lastT: 0,
   });
-
-  const [swipeEnabled, setSwipeEnabled] = useState(true);
-  const rafRemount = useRef(0);
-  const remountSwipe = useCallback(() => {
-    if (rafRemount.current) cancelAnimationFrame(rafRemount.current);
-    setSwipeEnabled(false);
-    rafRemount.current = requestAnimationFrame(() => {
-      requestAnimationFrame(() => setSwipeEnabled(true));
-    });
-  }, []);
 
   // misura e calcola posizione chiusa
   useLayoutEffect(() => {
@@ -397,11 +431,6 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.isActive]);
 
-  useEffect(() => {
-    props.onDateModalStateChange?.(isDateModalOpen);
-  }, [isDateModalOpen, props.onDateModalStateChange]);
-
-  // tuoi valori
   const SPEED = 0.05;
   const MIN_TOGGLE_DRAG = 10; // px minimi per considerare "scatto" apri/chiudi
 
@@ -441,35 +470,21 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
   );
 
   const isPanelOpen = laidOut && translateY < (closedY || 0) / 2;
-  
+
   const { onOpenStateChange } = props;
   useEffect(() => {
     onOpenStateChange(isPanelOpen);
   }, [isPanelOpen, onOpenStateChange]);
 
-
-  // blocco scroll body quando il pannello è aperto
-  const overlayOpen =
-    props.isActive &&
-    laidOut &&
-    translateY < Math.max(0, (closedY || 0) - 1) &&
-    !isDateModalOpen;
-
-  useEffect(() => {
-    if (!overlayOpen) return;
-    const prev = document.documentElement.style.overflow;
-    document.documentElement.style.overflow = 'hidden';
-    return () => {
-      document.documentElement.style.overflow = prev;
-    };
-  }, [overlayOpen]);
-
-  /* ---- drag verticale pannello (segue il dito) ---- */
-
+  // Gestore Pointer Down principale
   const handlePointerDown = (e: React.PointerEvent) => {
-    tapBridge.onPointerDown(e as any);
-    if (!props.isActive || isDateModalOpen) return;
+    if (!props.isActive) return;
 
+    // Attiviamo SEMPRE TapBridge nel pannello.
+    // In questo modo gestiamo correttamente i "tap" anche se focus/stato erano altrove.
+    tapBridge.onPointerDown(e as any);
+
+    // 2. Inizializziamo il drag tracker
     dragRef.current = {
       active: true,
       direction: 'none',
@@ -479,12 +494,14 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
       lastY: e.clientY,
       lastT: performance.now(),
     };
+
     if (anim) setAnim(false);
+    if (isSwipeAnimating) setIsSwipeAnimating(false);
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
     tapBridge.onPointerMove(e as any);
-    if (!props.isActive || isDateModalOpen) return;
+    if (!props.isActive) return;
 
     const d = dragRef.current;
     if (!d.active) return;
@@ -492,18 +509,25 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
     const dx = e.clientX - d.startX;
     const dy = e.clientY - d.startY;
 
+    // Se non abbiamo ancora deciso la direzione
     if (d.direction === 'none') {
       const dist2 = dx * dx + dy * dy;
-      if (dist2 < 16) return; // ~4px di slop
+      // Soglia minima di movimento (slop)
+      if (dist2 < 100) return; 
+      
       if (Math.abs(dy) > Math.abs(dx)) {
         d.direction = 'vertical';
       } else {
+        // Se menu aperto, non swipare orizzontalmente
+        if (isPeriodMenuOpen) {
+            d.active = false;
+            return;
+        }
         d.direction = 'horizontal';
-        d.active = false; // lascia passare lo swipe orizzontale
-        return;
       }
     }
 
+    // Gestione Drag Verticale (Pannello)
     if (d.direction === 'vertical') {
       if (e.cancelable) e.preventDefault();
       const now = performance.now();
@@ -512,149 +536,149 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
       d.lastY = e.clientY;
       d.lastT = now;
     }
+    
+    // Gestione Drag Orizzontale (Filtri)
+    else if (d.direction === 'horizontal') {
+       if (e.cancelable) e.preventDefault();
+       setSwipeOffset(dx);
+    }
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
     tapBridge.onPointerUp(e as any);
     const d = dragRef.current;
+    
     if (!d.active) {
-      d.direction = 'none';
-      return;
-    }
-
-    if (d.direction !== 'vertical') {
-      d.active = false;
+      // Reset generico se non attivo
       d.direction = 'none';
       return;
     }
 
     d.active = false;
 
-    const totalDy = e.clientY - d.startY;
-    const startPos = d.startTranslateY;
-    const max = closedY || 0;
-    const endPos = clampY(startPos + totalDy);
+    // Fine Drag Verticale
+    if (d.direction === 'vertical') {
+        const totalDy = e.clientY - d.startY;
+        const startPos = d.startTranslateY;
+        const max = closedY || 0;
+        const endPos = clampY(startPos + totalDy);
 
-    // 🔴 distanza minima per toggle immediato (indipendente dalla velocità)
-    if (Math.abs(totalDy) >= MIN_TOGGLE_DRAG) {
-      // da quasi CHIUSO verso SU -> apri
-      if (totalDy < 0 && startPos >= max * 0.7) {
-        d.direction = 'none';
-        setAnim(true);
-        setTranslateY(0);
-        return;
-      }
-      // da quasi APERTO verso GIÙ -> chiudi
-      if (totalDy > 0 && startPos <= max * 0.3) {
-        d.direction = 'none';
-        setAnim(true);
-        setTranslateY(max);
-        return;
-      }
+        if (Math.abs(totalDy) >= MIN_TOGGLE_DRAG) {
+            if (totalDy < 0 && startPos >= max * 0.7) {
+                d.direction = 'none';
+                setAnim(true);
+                setTranslateY(0);
+                return;
+            }
+            if (totalDy > 0 && startPos <= max * 0.3) {
+                d.direction = 'none';
+                setAnim(true);
+                setTranslateY(max);
+                return;
+            }
+        }
+
+        const now = performance.now();
+        const dt = Math.max(1, now - d.lastT);
+        const vy = (e.clientY - d.lastY) / dt;
+        snapTo(vy, endPos);
+    } 
+    
+    // Fine Drag Orizzontale
+    else if (d.direction === 'horizontal') {
+        const dx = e.clientX - d.startX;
+        const threshold = 40; // Reduced swipe threshold (was 80)
+        
+        if (dx < -threshold && activeViewIndex < 2) {
+            setActiveViewIndex(prev => prev + 1);
+        } else if (dx > threshold && activeViewIndex > 0) {
+            setActiveViewIndex(prev => prev - 1);
+        }
+        
+        // Reset offset e attiva animazione di snap
+        setIsSwipeAnimating(true);
+        setSwipeOffset(0);
     }
 
-    const now = performance.now();
-    const dt = Math.max(1, now - d.lastT);
-    const vy = (e.clientY - d.lastY) / dt;
     d.direction = 'none';
-    snapTo(vy, endPos);
   };
 
   const handlePointerCancel = (e: React.PointerEvent) => {
     tapBridge.onPointerCancel?.(e as any);
     const d = dragRef.current;
-    if (!d.active) {
-      d.direction = 'none';
-      return;
-    }
     d.active = false;
     d.direction = 'none';
+    
+    // Reset vertical
     snapTo(0);
+    
+    // Reset horizontal
+    setIsSwipeAnimating(true);
+    setSwipeOffset(0);
   };
 
   const handleClickCapture = (e: React.MouseEvent) => {
     tapBridge.onClickCapture(e as any);
   };
 
-  /* ------------ Swipe orizzontale interno (3 viste) ------------ */
-
-  const swipeWrapperRef = useRef<HTMLDivElement>(null);
-  const changeView = useCallback((i: number) => setActiveViewIndex(i), []);
-  const { progress, isSwiping } = useSwipe(
-    swipeWrapperRef,
-    {
-      onSwipeLeft: () => changeView(Math.min(2, activeViewIndex + 1)),
-      onSwipeRight: () => changeView(Math.max(0, activeViewIndex - 1)),
-    },
-    {
-      enabled:
-        swipeEnabled && props.isActive && !isPeriodMenuOpen && !isDateModalOpen,
-      threshold: 28,
-      slop: 8,
-      disableDrag: () =>
-        dragRef.current.direction === 'vertical' || dragRef.current.active,
-    },
-  );
-
-  const isQuickFilterActive =
-    !props.isPeriodFilterActive && !props.isCustomRangeActive;
-  const tx = -activeViewIndex * (100 / 3) + progress * (100 / 3);
-  const listTransform = `translateX(${tx}%)`;
-
   const handleQuickSelect = useCallback(
     (v: DateFilter) => {
       props.onSelectQuickFilter(v);
-      remountSwipe();
     },
-    [props.onSelectQuickFilter, remountSwipe],
+    [props.onSelectQuickFilter],
   );
 
   const handlePeriodDateChange = useCallback(
     (date: Date) => {
       props.onSetPeriodDate(date);
-      remountSwipe();
     },
-    [props.onSetPeriodDate, remountSwipe],
+    [props.onSetPeriodDate],
   );
 
   const handlePeriodTypeChange = useCallback(
     (type: PeriodType) => {
       props.onSelectPeriodType(type);
-      remountSwipe();
     },
-    [props.onSelectPeriodType, remountSwipe],
+    [props.onSelectPeriodType],
+  );
+  
+  const handleCustomRangeChange = useCallback(
+    (range: { start: string | null; end: string | null }) => {
+      props.onCustomRangeChange(range);
+    },
+    [props.onCustomRangeChange]
   );
 
+  // Calcolo posizione Y finale
   const yForStyle = laidOut
     ? clampY(translateY)
-    : openHeight ||
-      (typeof window !== 'undefined'
-        ? (window.innerHeight * OPEN_HEIGHT_VH) / 100
-        : 0);
+    : openHeight || (typeof window !== 'undefined' ? (window.innerHeight * OPEN_HEIGHT_VH) / 100 : 0);
+    
+  // Calcolo traslazione orizzontale lista
+  const listTx = -activeViewIndex * (100 / 3); // base position %
+  // Aggiungiamo swipeOffset in pixel usando calc
+  const listTransform = `translateX(calc(${listTx}% + ${swipeOffset}px))`;
 
-  const filterBarRef = useRef<HTMLDivElement>(null);
+  const isQuickFilterActive = !props.isPeriodFilterActive && !props.isCustomRangeActive;
 
   const panel = (
     <div
-      onPointerDownCapture={handlePointerDown}
-      onPointerMoveCapture={handlePointerMove}
-      onPointerUpCapture={handlePointerUp}
-      onPointerCancelCapture={handlePointerCancel}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerCancel}
       onClickCapture={handleClickCapture}
       data-no-page-swipe="true"
       className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-[0_-8px_20px_-5px_rgba(0,0,0,0.08)] z-[1000]"
       style={{
         height: `${OPEN_HEIGHT_VH}vh`,
         transform: `translate3d(0, ${yForStyle}px, 0)`,
-        // animazione pannello 0,08s
-        transition: anim
-          ? 'transform 0.08s cubic-bezier(0.22, 0.61, 0.36, 1)'
-          : 'none',
-        touchAction: 'none',
+        transition: anim ? 'transform 0.08s cubic-bezier(0.22, 0.61, 0.36, 1)' : 'none',
+        touchAction: 'none', 
         backfaceVisibility: 'hidden',
         willChange: 'transform',
-        opacity: laidOut && !isDateModalOpen ? 1 : 0,
-        pointerEvents: laidOut && !isDateModalOpen ? 'auto' : 'none',
+        opacity: laidOut ? 1 : 0,
+        pointerEvents: laidOut ? 'auto' : 'none',
       }}
       onTransitionEnd={() => setAnim(false)}
     >
@@ -674,20 +698,17 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
         />
       </div>
 
-      <div ref={filterBarRef} className="pt-1">
+      <div className="pt-1">
         <div
-          ref={swipeWrapperRef}
-          className={
-            'relative ' + (isPeriodMenuOpen ? 'overflow-visible' : 'overflow-hidden')
-          }
-          style={{ touchAction: 'none' }}
+          className={'relative ' + (isPeriodMenuOpen ? 'overflow-visible' : 'overflow-hidden')}
         >
           <div
             className="w-[300%] flex"
             style={{
               transform: listTransform,
-              transition: isSwiping ? 'none' : 'transform 0.08s ease-out',
+              transition: isSwipeAnimating ? 'transform 0.2s cubic-bezier(0.22, 0.61, 0.36, 1)' : 'none',
             }}
+            onTransitionEnd={() => setIsSwipeAnimating(false)}
           >
             {/* QUICK */}
             <div className="w-1/3 px-4 py-1">
@@ -715,21 +736,21 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
             {/* RANGE CUSTOM */}
             <div className="w-1/3 px-4 py-1">
               <CustomDateRangeInputs
-                onClick={() => setIsDateModalOpen(true)}
                 range={props.currentCustomRange}
+                onChange={handleCustomRangeChange}
                 isActive={props.isCustomRangeActive}
               />
             </div>
           </div>
         </div>
 
-        {/* pallini di paging – vicini al bordo inferiore */}
+        {/* pallini di paging */}
         <div className="flex justify-center items-center pt-1 pb-2 gap-2">
           {[0, 1, 2].map((i) => (
             <button
               key={i}
               onClick={() => setActiveViewIndex(i)}
-              style={{ touchAction: 'none' }}
+              type="button"
               className={
                 'w-2.5 h-2.5 rounded-full transition-colors ' +
                 (activeViewIndex === i
@@ -750,16 +771,6 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
   return (
     <>
       {props.isActive && createPortal(panel, document.body)}
-
-      <DateRangePickerModal
-        isOpen={isDateModalOpen}
-        onClose={() => setIsDateModalOpen(false)}
-        initialRange={props.currentCustomRange}
-        onApply={(range) => {
-          props.onCustomRangeChange(range);
-          setIsDateModalOpen(false);
-        }}
-      />
     </>
   );
 };
