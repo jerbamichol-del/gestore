@@ -207,7 +207,7 @@ const RecurringExpenseItem: React.FC<{
             <div className="absolute top-0 right-0 h-full flex items-center z-0">
                 <button
                     onClick={() => onDeleteRequest(expense.id)}
-                    className="w-[72px] h-full flex flex-col items-center justify-center bg-red-500 text-white hover:bg-red-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white"
+                    className="w-[72px] h-full flex flex-col items-center justify-center bg-red-500 text-white hover:bg-red-600 transition-colors focus:outline-none focus:visible:ring-2 focus-visible:ring-inset focus-visible:ring-white"
                     aria-label="Elimina spesa programmata"
                     {...tapBridge}
                 >
@@ -236,7 +236,9 @@ const RecurringExpenseItem: React.FC<{
                 <div className="flex flex-col items-end shrink-0 min-w-[90px]">
                     <p className="font-bold text-slate-900 text-lg text-right whitespace-nowrap">{formatCurrency(Number(expense.amount) || 0)}</p>
                     {nextDueDate && (
-                        <p className="text-xs font-medium text-slate-500 mt-0.5">{formatDate(nextDueDate)}</p>
+                         <div className="text-sm font-medium text-slate-500 mt-1 whitespace-nowrap">
+                            {formatDate(nextDueDate)}
+                         </div>
                     )}
                 </div>
             </div>
