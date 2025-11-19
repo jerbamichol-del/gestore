@@ -8,7 +8,7 @@ import { CreditCardIcon } from './icons/CreditCardIcon';
 import { ClockIcon } from './icons/ClockIcon';
 import { ChevronDownIcon } from './icons/ChevronDownIcon';
 import { XMarkIcon } from './icons/XMarkIcon';
-import { CurrencyEuroIcon } from './icons/CurrencyEuroIcon';
+import { formatCurrency } from './icons/formatters';
 import SelectionMenu from './SelectionMenu';
 
 interface TransactionDetailPageProps {
@@ -179,11 +179,9 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
   dateError,
 }) => {
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const amountInputRef = useRef<HTMLInputElement>(null);
   const descriptionInputRef = useRef<HTMLInputElement>(null);
 
   const [activeMenu, setActiveMenu] = useState<'account' | null>(null);
-  const [isAmountFocused, setIsAmountFocused] = useState(false);
 
   const [isFrequencyModalOpen, setIsFrequencyModalOpen] = useState(false);
   const [isFrequencyModalAnimating, setIsFrequencyModalAnimating] = useState(false);
@@ -203,17 +201,6 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     formData.recurrenceEndType === 'count' &&
     formData.recurrenceCount === 1;
 
-  // Derive amountStr dal formData.amount (previene race condition)
-  const [amountStr, setAmountStr] = useState('');
-  useEffect(() => {
-    if (!isAmountFocused) {
-      const formatted = formData.amount === undefined || formData.amount === 0 
-        ? '' 
-        : String(formData.amount).replace('.', ',');
-      setAmountStr(formatted);
-    }
-  }, [formData.amount, isAmountFocused]);
-
   // Inizializza time in useEffect per evitare hydration mismatch
   useEffect(() => {
     if (!formData.time && !formData.frequency) {
@@ -228,7 +215,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
   useEffect(() => {
     handleKeyboardClose.current = () => {
       const activeEl = document.activeElement;
-      if (activeEl === amountInputRef.current || activeEl === descriptionInputRef.current) {
+      if (activeEl === descriptionInputRef.current) {
         (activeEl as HTMLElement).blur();
       }
     };
@@ -299,19 +286,6 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
       return;
     }
 
-    if (name === 'amount') {
-      let s = value.replace(/[^0-9,]/g, '');
-      const parts = s.split(',');
-      if (parts.length > 2) s = parts[0] + ',' + parts.slice(1).join('');
-      if (parts[1]?.length > 2) s = parts[0] + ',' + parts[1].slice(0, 2);
-      setAmountStr(s);
-
-      const num = parseFloat(s.replace(',', '.'));
-      const next = isNaN(num) ? 0 : num;
-      onFormChange({ amount: next });
-      return;
-    }
-
     onFormChange({ [name]: value });
   };
 
@@ -348,8 +322,6 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
       up.frequency = 'recurring';
       up.time = undefined;
       if (!formData.recurrence) up.recurrence = 'monthly';
-      // FIX: This comparison appears to be unintentional because the types '"recurring"' and '"single"' have no overlap.
-      // The logic inside the `else` block of the original faulty `if` was correct for the 'recurring' case.
       up.recurrenceEndType = 'forever';
       up.recurrenceCount = undefined;
       up.recurrenceEndDate = undefined;
@@ -485,29 +457,16 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
       </header>
 
       <main className="flex-1 p-4 flex flex-col overflow-y-auto" style={{ touchAction: 'pan-y' }}>
-        <div className="space-y-4">
-          {/* Importo */}
-          <div>
-            <label htmlFor="amount" className="block text-base font-medium text-slate-700 mb-1">Importo</label>
-            <div className="relative">
-              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                <CurrencyEuroIcon className="h-5 w-5 text-slate-400" />
-              </div>
-              <input
-                ref={amountInputRef}
-                id="amount"
-                name="amount"
-                type="text"
-                inputMode="decimal"
-                value={amountStr}
-                onChange={handleInputChange}
-                onFocus={() => setIsAmountFocused(true)}
-                onBlur={() => setIsAmountFocused(false)}
-                className="block w-full rounded-md border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-base text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-                placeholder="0,00"
-                enterKeyHint="done"
-                onKeyDown={(e) => { if (e.key === 'Enter') { (e.currentTarget as HTMLInputElement).blur(); e.preventDefault(); } }}
-              />
+        <div className="space-y-2">
+          {/* Importo Display */}
+          <div className="flex justify-center items-center py-0">
+            <div className="relative flex items-baseline justify-center text-indigo-600">
+                <span className="text-[2.6rem] leading-none font-bold tracking-tighter relative z-10">
+                    {formatCurrency(formData.amount || 0).replace(/[^0-9,.]/g, '')}
+                </span>
+                <span className="text-3xl font-medium text-indigo-400 opacity-70 absolute" style={{ right: '100%', marginRight: '8px', top: '4px' }}>
+                    €
+                </span>
             </div>
           </div>
 
@@ -588,7 +547,6 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
         <div className="mt-auto pt-6">
           <button
             type="button"
-            // FIX: The onClick handler should call onSubmit with the current form data.
             onClick={() => onSubmit(formData as Omit<Expense, 'id'>)}
             disabled={(formData.amount ?? 0) <= 0}
             className="w-full px-4 py-3 text-base font-semibold text-white bg-indigo-600 rounded-lg shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors disabled:bg-indigo-300 disabled:cursor-not-allowed disabled:active:scale-100"
@@ -711,9 +669,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
                 onClick={() => setTempMonthlyRecurrenceType('dayOfMonth')}
                 className="flex items-center gap-3 p-2 cursor-pointer rounded-lg hover:bg-slate-100"
               >
-                <div className="w-5 h-5 rounded-full border-2 border-slate-400 flex items-center justify-center">
-                  {tempMonthlyRecurrenceType === 'dayOfMonth' && <div className="w-2.5 h-2.5 bg-indigo-600 rounded-full" />}
-                </div>
+                <div className="w-5 h-5 rounded-full border-2 border-slate-400 flex items-center justify-center flex-shrink-0">{tempMonthlyRecurrenceType === 'dayOfMonth' && <div className="w-2.5 h-2.5 bg-indigo-600 rounded-full" />}</div>
                 <span className="text-sm font-medium text-slate-700">Lo stesso giorno di ogni mese</span>
               </div>
 
@@ -723,9 +679,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
                 onClick={() => setTempMonthlyRecurrenceType('dayOfWeek')}
                 className="flex items-center gap-3 p-2 cursor-pointer rounded-lg hover:bg-slate-100"
               >
-                <div className="w-5 h-5 rounded-full border-2 border-slate-400 flex items-center justify-center">
-                  {tempMonthlyRecurrenceType === 'dayOfWeek' && <div className="w-2.5 h-2.5 bg-indigo-600 rounded-full" />}
-                </div>
+                <div className="w-5 h-5 rounded-full border-2 border-slate-400 flex items-center justify-center flex-shrink-0">{tempMonthlyRecurrenceType === 'dayOfWeek' && <div className="w-2.5 h-2.5 bg-indigo-600 rounded-full" />}</div>
                 <span className="text-sm font-medium text-slate-700">{dynamicMonthlyDayOfWeekLabel}</span>
               </div>
             </div>
@@ -746,7 +700,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
                 </button>
 
                 {isRecurrenceEndOptionsOpen && (
-                  <div className="absolute top-full mt-1 w-full bg-white border border-slate-200 shadow-lg rounded-lg z-20 p-2 space-y-1">
+                  <div className="absolute top-full mt-1 w-full bg-white border border-slate-200 shadow-lg rounded-lg z-20 p-2 space-y-1 animate-fade-in-down">
                     {(['forever','date','count'] as const).map(k => (
                       <button
                         key={k}
