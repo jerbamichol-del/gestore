@@ -44,6 +44,9 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
   const itemRef = useRef<HTMLDivElement>(null);
   const tapBridge = useTapBridge();
 
+  const isRecurringInstance = !!expense.recurringExpenseId;
+  const itemBgClass = isRecurringInstance ? 'bg-amber-50' : 'bg-white';
+
   const dragState = useRef({
     isDragging: false,
     isLocked: false,
@@ -190,7 +193,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
   };
 
   return (
-    <div className="relative bg-white overflow-hidden">
+    <div className={`relative ${itemBgClass} overflow-hidden`}>
       <div className="absolute top-0 right-0 h-full flex items-center z-0">
         <button
           onClick={() => onDelete(expense.id)}
@@ -210,9 +213,14 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}
         onClick={handleClick}
-        className="relative flex items-center gap-4 py-3 px-4 bg-white z-10 cursor-pointer"
+        className={`relative flex items-center gap-4 py-3 px-4 ${itemBgClass} z-10 cursor-pointer`}
         style={{ touchAction: 'pan-y' }}
       >
+        {isRecurringInstance && (
+          <span className="absolute top-1.5 right-1.5 w-5 h-5 bg-amber-200 text-amber-800 text-xs font-bold rounded-full flex items-center justify-center border-2 border-amber-50" title="Spesa Programmata">
+            P
+          </span>
+        )}
         <span
           className={`w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center ${style.bgColor}`}
         >
@@ -255,6 +263,7 @@ interface ExpenseGroup {
   week: number;
   label: string;
   expenses: Expense[];
+  total: number;
 }
 
 const getISOWeek = (date: Date): [number, number] => {
@@ -462,9 +471,11 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
           week: w,
           label: getWeekLabel(y, w),
           expenses: [],
+          total: 0,
         };
       }
       acc[key].expenses.push(e);
+      acc[key].total += Number(e.amount) || 0;
       return acc;
     }, {});
   }, [filteredExpenses]);
@@ -504,9 +515,12 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
           {expenseGroups.length > 0 ? (
             expenseGroups.map((group) => (
               <div key={group.label} className="mb-6 last:mb-0">
-                <h2 className="font-bold text-slate-800 text-lg px-4 py-2 sticky top-0 bg-slate-100/80 backdrop-blur-sm z-10">
-                  {group.label}
-                </h2>
+                <div className="flex items-center justify-between font-bold text-slate-800 text-lg px-4 py-2 sticky top-0 bg-slate-100/80 backdrop-blur-sm z-10">
+                  <h2>{group.label}</h2>
+                  <p className="font-bold text-indigo-600 text-xl">
+                    {formatCurrency(group.total)}
+                  </p>
+                </div>
 
                 <div className="bg-white rounded-xl shadow-md mx-2 overflow-hidden">
                   {group.expenses.map((expense, index) => (

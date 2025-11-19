@@ -119,6 +119,83 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const [recurringExpenses, setRecurringExpenses] = useLocalStorage<Expense[]>('recurring_expenses_v1', []);
   const [accounts, setAccounts] = useLocalStorage<Account[]>('accounts_v1', DEFAULT_ACCOUNTS);
 
+  // ================== Migrazione dati localStorage (vecchie chiavi) ==================
+  const hasRunMigrationRef = useRef(false);
+
+  useEffect(() => {
+    if (hasRunMigrationRef.current) return;
+    hasRunMigrationRef.current = true;
+
+    if (typeof window === 'undefined') return;
+
+    try {
+      // Migra SPESE se la chiave nuova è vuota
+      if (!expenses || expenses.length === 0) {
+        const legacyExpenseKeys = ['expenses_v1', 'expenses', 'spese', 'spese_v1'];
+
+        for (const key of legacyExpenseKeys) {
+          const raw = window.localStorage.getItem(key);
+          if (!raw) continue;
+
+          try {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              console.log('[MIGRAZIONE] Trovate spese su', key, '→ le copio in expenses_v2');
+              setExpenses(parsed as Expense[]);
+              break;
+            }
+          } catch (e) {
+            console.warn('[MIGRAZIONE] Errore leggendo', key, e);
+          }
+        }
+      }
+
+      // Migra CONTI se la chiave nuova è vuota o default
+      if (!accounts || accounts.length === 0 || accounts === DEFAULT_ACCOUNTS) {
+        const legacyAccountKeys = ['accounts', 'conti'];
+
+        for (const key of legacyAccountKeys) {
+          const raw = window.localStorage.getItem(key);
+          if (!raw) continue;
+
+          try {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              console.log('[MIGRAZIONE] Trovati conti su', key, '→ li copio in accounts_v1');
+              setAccounts(parsed as Account[]);
+              break;
+            }
+          } catch (e) {
+            console.warn('[MIGRAZIONE] Errore leggendo', key, e);
+          }
+        }
+      }
+
+      // Migra SPESE RICORRENTI se la chiave nuova è vuota
+      if (!recurringExpenses || recurringExpenses.length === 0) {
+        const legacyRecurringKeys = ['recurring_expenses', 'ricorrenti', 'recurring'];
+
+        for (const key of legacyRecurringKeys) {
+          const raw = window.localStorage.getItem(key);
+          if (!raw) continue;
+
+          try {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              console.log('[MIGRAZIONE] Trovate ricorrenti su', key, '→ le copio in recurring_expenses_v1');
+              setRecurringExpenses(parsed as Expense[]);
+              break;
+            }
+          } catch (e) {
+            console.warn('[MIGRAZIONE] Errore leggendo', key, e);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[MIGRAZIONE] Errore generale di migrazione dati locali', err);
+    }
+  }, [expenses, accounts, recurringExpenses, setExpenses, setAccounts, setRecurringExpenses]);
+
   // Modal States
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isCalculatorContainerOpen, setIsCalculatorContainerOpen] = useState(false);
@@ -154,13 +231,13 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const [showSuccessIndicator, setShowSuccessIndicator] = useState(false);
   const successIndicatorTimerRef = useRef<number | null>(null);
 
-  // ================== Generazione spese ricorrenti ==================
+  // ================== Generazione spese programmate ==================
   useEffect(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     const newExpenses: Expense[] = [];
-    const updatedTemplates: Expense[] = [];
+    const templatesToUpdate: Expense[] = [];
 
     recurringExpenses.forEach(template => {
       if (!template.date) {
@@ -200,6 +277,8 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         const nextDueDateString = toYYYYMMDD(nextDue);
         const instanceExists = expenses.some(
           exp => exp.recurringExpenseId === template.id && exp.date === nextDueDateString,
+        ) || newExpenses.some(
+          exp => exp.recurringExpenseId === template.id && exp.date === nextDueDateString,
         );
 
         if (!instanceExists) {
@@ -219,19 +298,19 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       }
 
       if (updatedTemplate.lastGeneratedDate && updatedTemplate.lastGeneratedDate !== template.lastGeneratedDate) {
-        updatedTemplates.push(updatedTemplate);
+        templatesToUpdate.push(updatedTemplate);
       }
     });
 
     if (newExpenses.length > 0) {
       setExpenses(prev => [...newExpenses, ...prev]);
     }
-    if (updatedTemplates.length > 0) {
+    if (templatesToUpdate.length > 0) {
       setRecurringExpenses(prev =>
-        prev.map(t => updatedTemplates.find(ut => ut.id === t.id) || t),
+        prev.map(t => templatesToUpdate.find(ut => ut.id === t.id) || t),
       );
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [recurringExpenses, expenses, setExpenses, setRecurringExpenses]);
 
   // ================== Success indicator ==================
   const triggerSuccessIndicator = useCallback(() => {
@@ -414,7 +493,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       data.id === editingRecurringExpense.id &&
       data.frequency !== 'recurring'
     ) {
-      // convertita da ricorrente a singola
+      // convertita da programmata a singola
       setRecurringExpenses(prev => prev.filter(e => e.id !== editingRecurringExpense.id));
 
       const newSingleExpenseData: Omit<Expense, 'id'> = {
@@ -489,7 +568,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
   const deleteRecurringExpense = (id: string) => {
     setRecurringExpenses(prev => prev.filter(e => e.id !== id));
-    setToast({ message: 'Spesa ricorrente eliminata.', type: 'info' });
+    setToast({ message: 'Spesa programmata eliminata.', type: 'info' });
   };
 
   // ================== Immagini / AI ==================
@@ -610,24 +689,25 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       </div>
 
       <main className={`flex-grow bg-slate-100`}>
-          <div className="w-full h-full overflow-y-auto space-y-6" style={{ touchAction: 'pan-y' }}>
-            <Dashboard
-              expenses={expenses}
-              onLogout={onLogout}
-              onNavigateToRecurring={() => setIsRecurringScreenOpen(true)}
-              onNavigateToHistory={() => setIsHistoryScreenOpen(true)}
-            />
-            <PendingImages
-              images={pendingImages}
-              onAnalyze={image => handleAnalyzeImage(image, true)}
-              onDelete={async id => {
-                await deleteImageFromQueue(id);
-                refreshPendingImages();
-              }}
-              isOnline={isOnline}
-              syncingImageId={syncingImageId}
-            />
-          </div>
+        <div className="w-full h-full overflow-y-auto space-y-6" style={{ touchAction: 'pan-y' }}>
+          <Dashboard
+            expenses={expenses}
+            recurringExpenses={recurringExpenses}
+            onLogout={onLogout}
+            onNavigateToRecurring={() => setIsRecurringScreenOpen(true)}
+            onNavigateToHistory={() => setIsHistoryScreenOpen(true)}
+          />
+          <PendingImages
+            images={pendingImages}
+            onAnalyze={image => handleAnalyzeImage(image, true)}
+            onDelete={async id => {
+              await deleteImageFromQueue(id);
+              refreshPendingImages();
+            }}
+            isOnline={isOnline}
+            syncingImageId={syncingImageId}
+          />
+        </div>
       </main>
 
       {!isCalculatorContainerOpen && (
@@ -775,7 +855,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         accounts={accounts}
         onConfirm={handleMultipleExpensesSubmit}
       />
-      
+
       {isHistoryScreenOpen && (
         <HistoryScreen
           expenses={expenses}
@@ -793,13 +873,14 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       {isRecurringScreenOpen && (
         <RecurringExpensesScreen
           recurringExpenses={recurringExpenses}
+          expenses={expenses}
           accounts={accounts}
           onClose={() => { setIsRecurringScreenOpen(false); }}
           onEdit={openRecurringEditForm}
           onDelete={deleteRecurringExpense}
         />
       )}
-      
+
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
