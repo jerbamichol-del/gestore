@@ -2,15 +2,17 @@
 import React from 'react';
 import { PhotoIcon } from './icons/PhotoIcon';
 import { ArrowDownOnSquareIcon } from './icons/ArrowDownOnSquareIcon';
+import { LockClosedIcon } from './icons/LockClosedIcon';
 
 interface HeaderProps {
     pendingSyncs: number;
     isOnline: boolean;
     onInstallClick: () => void;
     installPromptEvent: any;
+    onLogout: () => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ pendingSyncs, isOnline, onInstallClick, installPromptEvent }) => {
+const Header: React.FC<HeaderProps> = ({ pendingSyncs, isOnline, onInstallClick, installPromptEvent, onLogout }) => {
   return (
     <header className="bg-white shadow-md sticky top-0 z-20">
       <div>
@@ -23,7 +25,7 @@ const Header: React.FC<HeaderProps> = ({ pendingSyncs, isOnline, onInstallClick,
                           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-500 opacity-75"></span>
                           <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
                       </span>
-                      <span>Offline</span>
+                      <span className="hidden sm:inline">Offline</span>
                   </div>
               )}
               {pendingSyncs > 0 && (
@@ -40,9 +42,17 @@ const Header: React.FC<HeaderProps> = ({ pendingSyncs, isOnline, onInstallClick,
                       title="Installa App"
                   >
                       <ArrowDownOnSquareIcon className="w-5 h-5" />
-                      <span>Installa</span>
+                      <span className="hidden sm:inline">Installa</span>
                   </button>
               )}
+              <button
+                  onClick={onLogout}
+                  className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-100 rounded-full transition-colors"
+                  aria-label="Logout"
+                  title="Logout"
+              >
+                  <LockClosedIcon className="w-6 h-6" />
+              </button>
           </div>
         </div>
       </div>
