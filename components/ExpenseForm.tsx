@@ -491,7 +491,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
         <label className={`block text-base font-medium mb-1 transition-colors ${disabled ? 'text-slate-400' : 'text-slate-700'}`}>{label}</label>
         <button
           type="button"
-          onClick={onClick}
+          onClick={(e) => { e.stopPropagation(); onClick(); }}
           aria-label={ariaLabel}
           disabled={disabled}
           className={`w-full flex items-center justify-center text-center gap-2 px-3 py-2.5 text-base font-semibold rounded-lg border shadow-sm focus:outline-none focus:ring-0 transition-colors ${
