@@ -16,6 +16,7 @@ import {
   setBiometricsOptOut,
 } from '../services/biometrics';
 
+// helper snooze/lock dal service (li importo a runtime per evitare cicli in build)
 type BioHelpers = {
   isBiometricSnoozed: () => boolean;
   setBiometricSnooze: () => void;
@@ -25,20 +26,9 @@ type BioHelpers = {
 // lock di sessione per evitare doppio avvio (StrictMode / re-render)
 const BIO_AUTOPROMPT_LOCK_KEY = 'bio.autoprompt.lock';
 const hasAutoPromptLock = () => {
-  try {
-    return sessionStorage.getItem(BIO_AUTOPROMPT_LOCK_KEY) === '1';
-  } catch {
-    return false;
-  }
+  try { return sessionStorage.getItem(BIO_AUTOPROMPT_LOCK_KEY) === '1'; } catch { return false; }
 };
-const setAutoPromptLock = () => {
-  try {
-    sessionStorage.setItem(BIO_AUTOPROMPT_LOCK_KEY, '1');
-  } catch {}
-};
-
-// email usata con la biometria (per auto-prompt anche sulla schermata email)
-const BIOMETRIC_LAST_EMAIL_KEY = 'bio.last_email';
+const setAutoPromptLock = () => { try { sessionStorage.setItem(BIO_AUTOPROMPT_LOCK_KEY, '1'); } catch {} };
 
 interface LoginScreenProps {
   onLoginSuccess: (token: string, email: string) => void;
@@ -53,10 +43,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
   onGoToForgotPassword,
   onGoToForgotEmail,
 }) => {
-  const [activeEmail, setActiveEmail] = useLocalStorage<string | null>(
-    'last_active_user_email',
-    null,
-  );
+  const [activeEmail, setActiveEmail] = useLocalStorage<string | null>('last_active_user_email', null);
   const [pin, setPin] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -68,81 +55,31 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
   const [bioBusy, setBioBusy] = useState(false);
   const autoStartedRef = useRef(false);
 
-  // email salvata assieme alla biometria (es. da un login precedente)
-  const [biometricEmail, setBiometricEmail] = useState<string | null>(null);
-
-  // carica/stabilisce l'email da usare per la biometria
-  useEffect(() => {
-    // se abbiamo già un utente attivo, quella è l'email biometrica
-    if (activeEmail) {
-      setBiometricEmail(activeEmail);
-      return;
-    }
-
-    // siamo sulla schermata email → proviamo a leggere l'ultima email biometrica salvata
-    try {
-      if (typeof window === 'undefined') return;
-      const raw = window.localStorage.getItem(BIOMETRIC_LAST_EMAIL_KEY);
-      if (!raw || raw === 'null' || raw === 'undefined') {
-        setBiometricEmail(null);
-      } else {
-        setBiometricEmail(raw);
-      }
-    } catch {
-      setBiometricEmail(null);
-    }
-  }, [activeEmail]);
-
-  // verifica stato biometria (supporto / enabled / se mostrare il box)
+  // verifica stato biometria quando entri nella schermata PIN
   useEffect(() => {
     let mounted = true;
-
     (async () => {
       const supported = await isBiometricsAvailable();
       const enabled = isBiometricsEnabled();
-
-      let shouldShow = false;
-
-      if (supported) {
-        if (enabled) {
-          // già attivata → mostra direttamente il pulsante impronta
-          shouldShow = true;
-        } else if (activeEmail) {
-          // decide se proporre l'abilitazione (funzione senza argomenti)
-          try {
-            const offer = await shouldOfferBiometricEnable();
-            shouldShow = offer;
-          } catch {
-            shouldShow = false;
-          }
-        }
-      }
-
+      const offer = await shouldOfferBiometricEnable();
       if (!mounted) return;
-
       setBioSupported(supported);
       setBioEnabled(enabled);
-      setShowEnableBox(shouldShow);
+      setShowEnableBox(offer);
     })();
-
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
   }, [activeEmail]);
 
-  // email effettiva da usare per l'auto-prompt (PIN o schermata email)
-  const autoPromptEmail = activeEmail ?? biometricEmail ?? null;
-
   // Autoprompt biometrico: 1 solo tentativo totale per sessione.
-  // Ora funziona anche se siamo sulla schermata EMAIL, usando autoPromptEmail.
+  // Gli "altri 2 tentativi" li gestisce il foglio di sistema dentro lo stesso prompt.
   useEffect(() => {
-    if (!autoPromptEmail) return;
+    if (!activeEmail) return;
     if (!bioSupported || !bioEnabled) return;
     if (autoStartedRef.current) return;
     if (hasAutoPromptLock()) return;
 
     autoStartedRef.current = true;
-    setAutoPromptLock();
+    setAutoPromptLock(); // blocca eventuale secondo run (StrictMode)
 
     (async () => {
       const { isBiometricSnoozed, setBiometricSnooze, clearBiometricSnooze } =
@@ -152,38 +89,24 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
 
       try {
         setBioBusy(true);
-        const ok = await unlockWithBiometric('Sblocca con impronta / FaceID');
+        const ok = await unlockWithBiometric('Sblocca con impronta / FaceID'); // timeout 60s gestisce retry interno
         setBioBusy(false);
         if (ok) {
           clearBiometricSnooze();
-
-          const normalized = autoPromptEmail.toLowerCase();
-
-          // Salva email biometrica dedicata
-          try {
-            if (typeof window !== 'undefined') {
-              window.localStorage.setItem(BIOMETRIC_LAST_EMAIL_KEY, normalized);
-            }
-          } catch {}
-
-          // Se eravamo sulla schermata email, settiamo anche l'activeEmail
-          if (!activeEmail) {
-            setActiveEmail(normalized);
-          }
-
-          onLoginSuccess('biometric-local', normalized);
+          onLoginSuccess('biometric-local', activeEmail);
         }
       } catch (err: any) {
         setBioBusy(false);
+        // Qualsiasi annullo/timeout/chiusura: metti in snooze e non ripresentare
         const name = err?.name || '';
-        const msg = String(err?.message || '');
+        const msg  = String(err?.message || '');
         if (name === 'NotAllowedError' || name === 'AbortError' || /timeout/i.test(msg)) {
           setBiometricSnooze();
         }
-        // resta sulla schermata corrente
+        // resta su PIN, nessun altro prompt automatico
       }
     })();
-  }, [autoPromptEmail, activeEmail, bioSupported, bioEnabled, onLoginSuccess, setActiveEmail]);
+  }, [activeEmail, bioSupported, bioEnabled, onLoginSuccess]);
 
   // Verifica PIN
   useEffect(() => {
@@ -195,10 +118,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
 
   const handleEmailSubmit = (email: string) => {
     if (email) {
-      const normalized = email.toLowerCase();
-      setActiveEmail(normalized);
+      setActiveEmail(email.toLowerCase());
       setError(null);
-      setBiometricEmail(normalized);
     }
   };
 
@@ -219,91 +140,44 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
     }
   };
 
-  const loginWithBiometrics = async () => {
-    const emailForBio = activeEmail ?? biometricEmail;
-    if (!emailForBio) return;
-
-    try {
-      setBioBusy(true);
-      // FIX: Removed typo 'clearBiometricSnoozed' and duplicate 'clearBiometricSnooze'
-      const { clearBiometricSnooze, setBiometricSnooze } =
-        (await import('../services/biometrics')) as unknown as BioHelpers;
-
-      // login richiesto esplicitamente → azzero lo snooze
-      clearBiometricSnooze();
-
-      const ok = await unlockWithBiometric('Sblocca con impronta / FaceID');
-      setBioBusy(false);
-
-      if (ok) {
-        const normalized = emailForBio.toLowerCase();
-
-        // salva anche qui la mail biometrica
-        try {
-          if (typeof window !== 'undefined') {
-            window.localStorage.setItem(BIOMETRIC_LAST_EMAIL_KEY, normalized);
-          }
-        } catch {}
-
-        if (!activeEmail) {
-          setActiveEmail(normalized);
-        }
-        setBiometricEmail(normalized);
-
-        onLoginSuccess('biometric-local', normalized);
-      }
-    } catch (err) {
-      setBioBusy(false);
-      console.error('Login biometrico fallito', err);
-      const name = (err as any)?.name || '';
-      const msg = String((err as any)?.message || '');
-      if (name === 'NotAllowedError' || name === 'AbortError' || /timeout/i.test(msg)) {
-        const { setBiometricSnooze } =
-          (await import('../services/biometrics')) as unknown as BioHelpers;
-        setBiometricSnooze();
-      }
-    }
-  };
-
+  // Abilita ora (box interno) — tenta 1 prompt manuale; se annulla, niente ripresentazione
   const enableBiometricsNow = async () => {
-    const emailForBio = activeEmail ?? biometricEmail;
-    if (!emailForBio) return;
-
     try {
       setBioBusy(true);
       await registerBiometric('Profilo locale');
       setBioEnabled(true);
+      setShowEnableBox(false);
       setBioBusy(false);
 
-      const normalized = emailForBio.toLowerCase();
-
-      // salva email biometrica dedicata
+      // Tentativo manuale singolo subito dopo l’abilitazione
       try {
-        if (typeof window !== 'undefined') {
-          window.localStorage.setItem(BIOMETRIC_LAST_EMAIL_KEY, normalized);
+        const { clearBiometricSnooze, setBiometricSnooze } =
+          (await import('../services/biometrics')) as unknown as BioHelpers;
+        clearBiometricSnooze(); // consenti il prompt adesso
+        const ok = await unlockWithBiometric('Sblocca con impronta / FaceID');
+        if (ok && activeEmail) {
+          onLoginSuccess('biometric-local', activeEmail);
+          return;
         }
-      } catch {}
-
-      if (!activeEmail) {
-        setActiveEmail(normalized);
+      } catch (err: any) {
+        const name = err?.name || '';
+        const msg  = String(err?.message || '');
+        if (name === 'NotAllowedError' || name === 'AbortError' || /timeout/i.test(msg)) {
+          const { setBiometricSnooze } =
+            (await import('../services/biometrics')) as unknown as BioHelpers;
+          setBiometricSnooze();
+        }
+        // resta su PIN
       }
-      setBiometricEmail(normalized);
-
-      // Tentativo manuale subito dopo l’abilitazione
-      await loginWithBiometrics();
     } catch {
       setBioBusy(false);
       // se annulla in registrazione, resta tutto com’è
     }
   };
 
-  const optOutBiometrics = () => {
-    try {
-      // funzione definita come setBiometricsOptOut(boolean)
-      setBiometricsOptOut(true);
-    } catch {
-      // se fallisce non è la fine del mondo
-    }
+  // Non ora (non riproporre il box)
+  const denyBiometricsOffer = () => {
+    setBiometricsOptOut(true);
     setShowEnableBox(false);
   };
 
@@ -312,7 +186,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
     setPin('');
     setError(null);
     autoStartedRef.current = false;
-    // non resetto il lock globale: niente altro auto-prompt in questa sessione
+    // non resetto il lock: in questa sessione niente altro auto-prompt
   };
 
   const renderContent = () => {
@@ -362,23 +236,45 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
           {isLoading ? (
             <SpinnerIcon className="w-6 h-6 text-indigo-600" />
           ) : (
-            error ||
-            (bioEnabled && bioSupported
-              ? 'Puoi anche usare l’impronta.'
-              : 'Inserisci il tuo PIN di 4 cifre.')
+            error || (bioEnabled && bioSupported ? 'Puoi anche usare l’impronta.' : 'Inserisci il tuo PIN di 4 cifre.')
           )}
         </p>
 
         <PinInput pin={pin} onPinChange={setPin} />
 
-        <div className="mt-4 flex flex-col items-center justify-center gap-y-3">
-          <div className="flex w-full items-center justify-between">
-            <button
-              onClick={handleSwitchUser}
-              className="text-sm font-semibold text-indigo-600 hover:text-indigo-500"
-            >
-              Cambia Utente
-            </button>
+        {/* Box abilitazione biometria (solo se disponibile, non abilitata, non opt-out) */}
+        {showEnableBox && (
+          <div className="mt-4 p-3 rounded-lg border border-slate-200 bg-slate-50 text-left">
+            <p className="text-sm text-slate-700">
+              Vuoi abilitare lo sblocco con impronta / FaceID su questo dispositivo?
+            </p>
+            <div className="flex gap-3 mt-2">
+              <button
+                onClick={enableBiometricsNow}
+                disabled={bioBusy}
+                className="px-4 py-2 text-sm font-semibold text-white bg-indigo-600 rounded-lg shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-indigo-300"
+              >
+                {bioBusy ? 'Attivo…' : 'Abilita ora'}
+              </button>
+              <button
+                onClick={denyBiometricsOffer}
+                disabled={bioBusy}
+                className="px-4 py-2 text-sm font-semibold text-slate-600 bg-white border border-slate-300 rounded-lg hover:bg-slate-100"
+              >
+                Non ora
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="mt-4 flex flex-col sm:flex-row justify-between items-center gap-2">
+          <button
+            onClick={handleSwitchUser}
+            className="text-sm font-semibold text-slate-500 hover:text-slate-800"
+          >
+            Cambia Utente
+          </button>
+          <div className="flex gap-4">
             <button
               onClick={onGoToForgotPassword}
               className="text-sm font-semibold text-indigo-600 hover:text-indigo-500"
@@ -386,32 +282,6 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
               PIN Dimenticato?
             </button>
           </div>
-
-          {showEnableBox && (
-            <div className="mt-3 flex flex-col items-center gap-2">
-              <button
-                onClick={bioEnabled ? loginWithBiometrics : enableBiometricsNow}
-                disabled={bioBusy}
-                className="text-sm font-semibold text-indigo-600 hover:text-indigo-500 disabled:opacity-60"
-              >
-                {bioBusy
-                  ? 'Attendere...'
-                  : bioEnabled
-                  ? 'Accedi con impronta'
-                  : 'Abilita impronta'}
-              </button>
-
-              {!bioEnabled && (
-                <button
-                  type="button"
-                  onClick={optOutBiometrics}
-                  className="text-xs text-slate-400 hover:text-slate-500"
-                >
-                  Non ora
-                </button>
-              )}
-            </div>
-          )}
         </div>
       </div>
     );

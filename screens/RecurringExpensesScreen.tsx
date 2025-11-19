@@ -1,8 +1,7 @@
-
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Expense, Account } from '../types';
 import { getCategoryStyle } from '../utils/categoryStyles';
-import { formatCurrency, formatDate } from '../components/icons/formatters';
+import { formatCurrency } from '../components/icons/formatters';
 import { ArrowLeftIcon } from '../components/icons/ArrowLeftIcon';
 import { TrashIcon } from '../components/icons/TrashIcon';
 import { CalendarDaysIcon } from '../components/icons/CalendarDaysIcon';
@@ -10,36 +9,6 @@ import ConfirmationModal from '../components/ConfirmationModal';
 import { useTapBridge } from '../hooks/useTapBridge';
 
 const ACTION_WIDTH = 72;
-
-const parseLocalYYYYMMDD = (dateString: string | null | undefined): Date | null => {
-  if (!dateString) return null;
-  const parts = dateString.split('-').map(Number);
-  return new Date(parts[0], parts[1] - 1, parts[2]);
-};
-
-const calculateNextDueDate = (template: Expense, fromDate: Date): Date | null => {
-  if (template.frequency !== 'recurring' || !template.recurrence) return null;
-  const interval = template.recurrenceInterval || 1;
-  const nextDate = new Date(fromDate);
-
-  switch (template.recurrence) {
-    case 'daily':
-      nextDate.setDate(nextDate.getDate() + interval);
-      break;
-    case 'weekly':
-      nextDate.setDate(nextDate.getDate() + 7 * interval);
-      break;
-    case 'monthly':
-      nextDate.setMonth(nextDate.getMonth() + interval);
-      break;
-    case 'yearly':
-      nextDate.setFullYear(nextDate.getFullYear() + interval);
-      break;
-    default:
-      return null;
-  }
-  return nextDate;
-};
 
 const recurrenceLabels: Record<string, string> = {
   daily: 'Ogni Giorno',
@@ -50,7 +19,7 @@ const recurrenceLabels: Record<string, string> = {
 
 const getRecurrenceSummary = (expense: Expense): string => {
     if (expense.frequency !== 'recurring' || !expense.recurrence) {
-        return 'Non programmata';
+        return 'Non ricorrente';
     }
     const { recurrence, recurrenceInterval = 1 } = expense;
     if (recurrenceInterval > 1) {
@@ -71,13 +40,6 @@ const RecurringExpenseItem: React.FC<{
     const accountName = accounts.find(a => a.id === expense.accountId)?.name || 'Sconosciuto';
     const itemRef = useRef<HTMLDivElement>(null);
     const tapBridge = useTapBridge();
-
-    const nextDueDate = useMemo(() => {
-        const baseDate = parseLocalYYYYMMDD(expense.lastGeneratedDate || expense.date);
-        if (!baseDate) return null;
-        if (!expense.lastGeneratedDate) return baseDate;
-        return calculateNextDueDate(expense, baseDate);
-    }, [expense]);
 
     const dragState = useRef({
       isDragging: false,
@@ -208,7 +170,7 @@ const RecurringExpenseItem: React.FC<{
                 <button
                     onClick={() => onDeleteRequest(expense.id)}
                     className="w-[72px] h-full flex flex-col items-center justify-center bg-red-500 text-white hover:bg-red-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white"
-                    aria-label="Elimina spesa programmata"
+                    aria-label="Elimina spesa ricorrente"
                     {...tapBridge}
                 >
                     <TrashIcon className="w-6 h-6" />
@@ -232,13 +194,7 @@ const RecurringExpenseItem: React.FC<{
                     <p className="font-semibold text-slate-800 truncate">{expense.description || 'Senza descrizione'}</p>
                     <p className="text-sm text-slate-500 truncate">{getRecurrenceSummary(expense)} • {accountName}</p>
                 </div>
-                
-                <div className="flex flex-col items-end shrink-0 min-w-[90px]">
-                    <p className="font-bold text-slate-900 text-lg text-right whitespace-nowrap">{formatCurrency(Number(expense.amount) || 0)}</p>
-                    {nextDueDate && (
-                        <p className="text-xs font-medium text-slate-500 mt-0.5">{formatDate(nextDueDate)}</p>
-                    )}
-                </div>
+                <p className="font-bold text-slate-900 text-lg text-right shrink-0 whitespace-nowrap min-w-[90px]">{formatCurrency(Number(expense.amount) || 0)}</p>
             </div>
         </div>
     );
@@ -246,55 +202,17 @@ const RecurringExpenseItem: React.FC<{
 
 interface RecurringExpensesScreenProps {
   recurringExpenses: Expense[];
-  expenses: Expense[];
   accounts: Account[];
   onClose: () => void;
   onEdit: (expense: Expense) => void;
   onDelete: (id: string) => void;
 }
 
-const RecurringExpensesScreen: React.FC<RecurringExpensesScreenProps> = ({ recurringExpenses, expenses, accounts, onClose, onEdit, onDelete }) => {
+const RecurringExpensesScreen: React.FC<RecurringExpensesScreenProps> = ({ recurringExpenses, accounts, onClose, onEdit, onDelete }) => {
   const [isAnimatingIn, setIsAnimatingIn] = useState(false);
   const [openItemId, setOpenItemId] = useState<string | null>(null);
   const [expenseToDeleteId, setExpenseToDeleteId] = useState<string | null>(null);
   const [isConfirmDeleteModalOpen, setIsConfirmDeleteModalOpen] = useState(false);
-  const autoCloseRef = useRef<number | null>(null);
-
-  const activeRecurringExpenses = useMemo(() => {
-    return recurringExpenses.filter(template => {
-        if (template.frequency !== 'recurring') {
-            return false;
-        }
-
-        if (!template.recurrenceEndType || template.recurrenceEndType === 'forever') {
-            return true;
-        }
-
-        if (template.recurrenceEndType === 'count') {
-            if (!template.recurrenceCount || template.recurrenceCount <= 0) return true; 
-            const generatedCount = expenses.filter(e => e.recurringExpenseId === template.id).length;
-            return generatedCount < template.recurrenceCount;
-        }
-
-        if (template.recurrenceEndType === 'date') {
-            const endDate = parseLocalYYYYMMDD(template.recurrenceEndDate);
-            if (!endDate) return true;
-
-            const lastDate = parseLocalYYYYMMDD(template.lastGeneratedDate || template.date);
-            if (!lastDate) return true;
-            
-            if (lastDate.getTime() > endDate.getTime()) return false;
-
-            const nextDueDate = calculateNextDueDate(template, lastDate);
-
-            if (!nextDueDate) return false;
-            
-            return nextDueDate.getTime() <= endDate.getTime();
-        }
-
-        return true;
-    });
-  }, [recurringExpenses, expenses]);
 
   useEffect(() => {
     const timer = setTimeout(() => setIsAnimatingIn(true), 10);
@@ -306,16 +224,6 @@ const RecurringExpensesScreen: React.FC<RecurringExpensesScreenProps> = ({ recur
       setOpenItemId(null);
     }
   }, [isAnimatingIn, openItemId]);
-
-  useEffect(() => {
-    if (autoCloseRef.current) clearTimeout(autoCloseRef.current);
-    if (openItemId && !isConfirmDeleteModalOpen) {
-      autoCloseRef.current = window.setTimeout(() => setOpenItemId(null), 5000);
-    }
-    return () => {
-      if (autoCloseRef.current) clearTimeout(autoCloseRef.current);
-    };
-  }, [openItemId, isConfirmDeleteModalOpen]);
 
   const handleClose = () => {
       setOpenItemId(null);
@@ -342,7 +250,7 @@ const RecurringExpensesScreen: React.FC<RecurringExpensesScreenProps> = ({ recur
     setExpenseToDeleteId(null);
   };
   
-  const sortedExpenses = [...activeRecurringExpenses].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const sortedExpenses = [...recurringExpenses].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   return (
     <div 
@@ -353,7 +261,7 @@ const RecurringExpensesScreen: React.FC<RecurringExpensesScreenProps> = ({ recur
         <button onClick={handleClose} className="p-2 rounded-full hover:bg-slate-200 transition-colors" aria-label="Indietro">
           <ArrowLeftIcon className="w-6 h-6 text-slate-700" />
         </button>
-        <h1 className="text-xl font-bold text-slate-800">Spese Programmate</h1>
+        <h1 className="text-xl font-bold text-slate-800">Spese Ricorrenti</h1>
       </header>
       <main className="overflow-y-auto h-[calc(100%-68px)] p-2" style={{ touchAction: 'pan-y' }}>
         {sortedExpenses.length > 0 ? (
@@ -375,8 +283,8 @@ const RecurringExpensesScreen: React.FC<RecurringExpensesScreenProps> = ({ recur
         ) : (
           <div className="text-center text-slate-500 pt-20 px-6">
             <CalendarDaysIcon className="w-16 h-16 mx-auto text-slate-400" />
-            <p className="text-lg font-semibold mt-4">Nessuna spesa programmata attiva</p>
-            <p className="mt-2">Le spese programmate concluse vengono rimosse automaticamente. Puoi crearne di nuove quando aggiungi una spesa.</p>
+            <p className="text-lg font-semibold mt-4">Nessuna spesa ricorrente</p>
+            <p className="mt-2">Puoi creare una spesa ricorrente quando aggiungi una nuova spesa.</p>
           </div>
         )}
       </main>
@@ -387,7 +295,7 @@ const RecurringExpensesScreen: React.FC<RecurringExpensesScreenProps> = ({ recur
         onClose={cancelDelete}
         onConfirm={confirmDelete}
         title="Conferma Eliminazione"
-        message={<>Sei sicuro di voler eliminare questa spesa programmata? <br/>Le spese già generate non verranno cancellate.</>}
+        message={<>Sei sicuro di voler eliminare questa spesa ricorrente? <br/>Le spese già generate non verranno cancellate.</>}
         variant="danger"
       />
     </div>
