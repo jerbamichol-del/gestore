@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Expense, Account } from './types';
 import { useLocalStorage } from './hooks/useLocalStorage';
@@ -685,6 +686,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
           isOnline={isOnline}
           onInstallClick={handleInstallClick}
           installPromptEvent={installPromptEvent}
+          onLogout={onLogout}
         />
       </div>
 
@@ -693,7 +695,6 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
           <Dashboard
             expenses={expenses}
             recurringExpenses={recurringExpenses}
-            onLogout={onLogout}
             onNavigateToRecurring={() => setIsRecurringScreenOpen(true)}
             onNavigateToHistory={() => setIsHistoryScreenOpen(true)}
           />
