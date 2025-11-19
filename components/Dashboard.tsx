@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Sector } from 'recharts';
 import { Expense } from '../types';
@@ -178,7 +179,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onLo
                 <div>
                     <div className="flex justify-between items-center mb-4">
                         <div className="flex items-center gap-2">
-                            <h3 className="text-xl font-bold text-slate-700">Spesa del Mese</h3>
+                            <h3 className="text-xl font-bold text-slate-700">Spesa Mensile</h3>
                         </div>
                         <button
                             onClick={onLogout}
