@@ -4,8 +4,9 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Sector } from 'recharts';
 import { Expense } from '../types';
 import { formatCurrency } from './icons/formatters';
 import { getCategoryStyle } from '../utils/categoryStyles';
-import { LockClosedIcon } from './icons/LockClosedIcon';
 import { useTapBridge } from '../hooks/useTapBridge';
+import { ChevronLeftIcon } from './icons/ChevronLeftIcon';
+import { ChevronRightIcon } from './icons/ChevronRightIcon';
 
 const categoryHexColors: Record<string, string> = {
     'Alimentari': '#16a34a', // green-600
@@ -54,7 +55,6 @@ const renderActiveShape = (props: any) => {
 interface DashboardProps {
   expenses: Expense[];
   recurringExpenses: Expense[];
-  onLogout: () => void;
   onNavigateToRecurring: () => void;
   onNavigateToHistory: () => void;
 }
@@ -90,9 +90,11 @@ const calculateNextDueDate = (template: Expense, fromDate: Date): Date | null =>
   return nextDate;
 };
 
+type ViewMode = 'weekly' | 'monthly' | 'yearly';
 
-const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onLogout, onNavigateToRecurring, onNavigateToHistory }) => {
+const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNavigateToRecurring, onNavigateToHistory }) => {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('monthly');
   const tapBridge = useTapBridge();
   const activeIndex = selectedIndex;
 
@@ -105,26 +107,64 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onLo
     setSelectedIndex(null);
   };
 
-  const { totalExpenses, dailyTotal, categoryData, recurringCountThisMonth } = useMemo(() => {
-    const validExpenses = expenses.filter(e => e.amount != null && !isNaN(Number(e.amount)));
-    
-    const now = new Date();
+  const cycleViewMode = (direction: 'prev' | 'next') => {
+    setViewMode(prev => {
+      if (direction === 'next') {
+        if (prev === 'weekly') return 'monthly';
+        if (prev === 'monthly') return 'yearly';
+        return 'weekly';
+      } else {
+        if (prev === 'weekly') return 'yearly';
+        if (prev === 'monthly') return 'weekly';
+        return 'monthly';
+      }
+    });
+    setSelectedIndex(null); // Reset selection on view change
+  };
 
+  const { totalExpenses, dailyTotal, categoryData, recurringCountInPeriod, periodLabel } = useMemo(() => {
+    const validExpenses = expenses.filter(e => e.amount != null && !isNaN(Number(e.amount)));
+    const now = new Date();
+    
+    // Calculate Daily Total regardless of view mode
     const todayString = now.toISOString().split('T')[0];
     const daily = validExpenses
         .filter(expense => expense.date === todayString)
         .reduce((acc, expense) => acc + Number(expense.amount), 0);
+
+    let start: Date, end: Date, label: string;
+
+    if (viewMode === 'weekly') {
+        const day = now.getDay(); // 0 is Sunday
+        const diff = now.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
+        start = new Date(now);
+        start.setDate(diff);
+        start.setHours(0, 0, 0, 0);
         
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        end = new Date(start);
+        end.setDate(start.getDate() + 6);
+        end.setHours(23, 59, 59, 999);
+        
+        label = "Spesa Settimanale";
+    } else if (viewMode === 'yearly') {
+        start = new Date(now.getFullYear(), 0, 1);
+        end = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
+        label = "Spesa Annuale";
+    } else {
+        // Monthly default
+        start = new Date(now.getFullYear(), now.getMonth(), 1);
+        end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+        label = "Spesa Mensile";
+    }
     
-    const currentMonthExpenses = validExpenses.filter(e => {
+    const periodExpenses = validExpenses.filter(e => {
         const expenseDate = parseLocalYYYYMMDD(e.date);
-        return expenseDate >= startOfMonth && expenseDate <= endOfMonth;
+        return expenseDate >= start && expenseDate <= end;
     });
         
-    const total = currentMonthExpenses.reduce((acc, expense) => acc + Number(expense.amount), 0);
+    const total = periodExpenses.reduce((acc, expense) => acc + Number(expense.amount), 0);
     
+    // Calculate recurring expenses in this period
     let recurringCount = 0;
     recurringExpenses.forEach(template => {
         if (!template.date) return;
@@ -134,7 +174,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onLo
         let generatedThisRun = 0;
 
         while (nextDue) {
-            if (nextDue > endOfMonth) {
+            if (nextDue > end) {
                 break;
             }
 
@@ -145,7 +185,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onLo
                 break;
             }
 
-            if (nextDue >= startOfMonth) {
+            if (nextDue >= start) {
                 recurringCount++;
                 generatedThisRun++;
             }
@@ -154,7 +194,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onLo
         }
     });
         
-    const categoryTotals = currentMonthExpenses.reduce((acc: Record<string, number>, expense) => {
+    const categoryTotals = periodExpenses.reduce((acc: Record<string, number>, expense) => {
       const category = expense.category || 'Altro';
       acc[category] = (acc[category] || 0) + Number(expense.amount);
       return acc;
@@ -168,9 +208,10 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onLo
         totalExpenses: total, 
         dailyTotal: daily,
         categoryData: sortedCategoryData,
-        recurringCountThisMonth: recurringCount
+        recurringCountInPeriod: recurringCount,
+        periodLabel: label
     };
-  }, [expenses, recurringExpenses]);
+  }, [expenses, recurringExpenses, viewMode]);
   
   return (
     <div className="p-4 md:p-6 space-y-6">
@@ -178,23 +219,27 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onLo
             <div className="lg:col-span-1 bg-white p-6 rounded-2xl shadow-lg flex flex-col justify-between">
                 <div>
                     <div className="flex justify-between items-center mb-4">
-                        <div className="flex items-center gap-2">
-                            <h3 className="text-xl font-bold text-slate-700">Spesa Mensile</h3>
-                        </div>
-                        <button
-                            onClick={onLogout}
-                            className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-100 rounded-full transition-colors"
-                            aria-label="Logout"
-                            title="Logout"
+                        <button 
+                            onClick={() => cycleViewMode('prev')}
+                            className="p-2 rounded-full hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors"
                         >
-                            <LockClosedIcon className="w-6 h-6" />
+                            <ChevronLeftIcon className="w-5 h-5" />
+                        </button>
+                        
+                        <h3 className="text-xl font-bold text-slate-700 text-center flex-1">{periodLabel}</h3>
+
+                        <button 
+                            onClick={() => cycleViewMode('next')}
+                            className="p-2 rounded-full hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors"
+                        >
+                            <ChevronRightIcon className="w-5 h-5" />
                         </button>
                     </div>
                     <div className="flex justify-between items-baseline">
                         <p className="text-4xl font-extrabold text-indigo-600">{formatCurrency(totalExpenses)}</p>
-                        {recurringCountThisMonth > 0 && (
-                            <span className="text-base font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-lg" title={`${recurringCountThisMonth} spese programmate previste questo mese`}>
-                                {recurringCountThisMonth} P
+                        {recurringCountInPeriod > 0 && (
+                            <span className="text-base font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-lg" title={`${recurringCountInPeriod} spese programmate previste in questo periodo`}>
+                                {recurringCountInPeriod} P
                             </span>
                         )}
                     </div>
@@ -282,7 +327,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onLo
                     </ResponsiveContainer>
                     {activeIndex === null && (
                         <div className="absolute inset-0 flex flex-col justify-center items-center pointer-events-none">
-                            <span className="text-slate-500 text-sm">Totale Mese</span>
+                            <span className="text-slate-500 text-sm">Totale Periodo</span>
                             <span className="text-2xl font-extrabold text-slate-800 mt-1">
                                 {formatCurrency(totalExpenses)}
                             </span>
