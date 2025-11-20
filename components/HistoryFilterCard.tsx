@@ -48,15 +48,28 @@ interface HistoryFilterCardProps {
   accounts: Account[];
   selectedAccountId: string | null;
   onSelectAccount: (id: string | null) => void;
-  selectedCategory: string | null;
-  selectedSubcategory: string | null;
-  onSelectCategory: (category: string | null) => void;
-  onSelectSubcategory: (subcategory: string | null) => void;
+  
+  // Multi-Select Categories
+  selectedCategoryFilters: Set<string>;
+  onToggleCategoryFilter: (key: string) => void;
+  onClearCategoryFilters: () => void;
+  
   descriptionQuery: string;
   onDescriptionChange: (text: string) => void;
   amountRange: { min: string; max: string };
   onAmountRangeChange: (range: { min: string; max: string }) => void;
 }
+
+/* -------------------- Checkbox Component -------------------- */
+const Checkbox: React.FC<{ checked: boolean; onChange: () => void }> = ({ checked, onChange }) => (
+    <div 
+        className={`w-6 h-6 rounded border flex items-center justify-center transition-colors cursor-pointer ${checked ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-slate-300'}`}
+        onClick={(e) => { e.stopPropagation(); onChange(); }}
+    >
+        {checked && <CheckIcon className="w-4 h-4 text-white" strokeWidth={3} />}
+    </div>
+);
+
 
 /* -------------------- QuickFilterControl -------------------- */
 const QuickFilterControl: React.FC<{
@@ -391,8 +404,9 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
 
   const tapBridge = useTapBridge();
 
-  // Altezza pannello e posizione chiusa - 40%
-  const OPEN_HEIGHT_VH = 40; 
+  // Altezza pannello dinamica in base alla view
+  const OPEN_HEIGHT_VH = currentView === 'category_selection' ? 92 : 40; 
+  
   const [openHeight, setOpenHeight] = useState(0);
   const [closedY, setClosedY] = useState(0);
   const [translateY, setTranslateY] = useState(0);
@@ -408,12 +422,17 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
     setIsPeriodMenuOpen(false);
   }, [activeViewIndex]);
 
-  // Initialize state for category accordion based on current selection
+  // Initialize state for category accordion based on first selected category (optional)
   useEffect(() => {
-    if (currentView === 'category_selection' && props.selectedCategory) {
-       setExpandedCategory(props.selectedCategory);
+    // Only expand on first load if exactly one category is selected to avoid clutter
+    if (currentView === 'category_selection' && props.selectedCategoryFilters.size === 1 && expandedCategory === null) {
+        const selected = Array.from(props.selectedCategoryFilters)[0];
+        const [cat] = selected.split(':');
+        if (CATEGORIES[cat] && CATEGORIES[cat].length > 0) {
+            setExpandedCategory(cat);
+        }
     }
-  }, [currentView, props.selectedCategory]);
+  }, [currentView, props.selectedCategoryFilters, expandedCategory]);
 
   // drag stato unificato (verticale e orizzontale)
   const dragRef = useRef<{
@@ -450,11 +469,24 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
       setClosedY(closed);
 
       setTranslateY((prev) => {
-        if (!laidOut || prev === 0 || prev === closedY) {
-          return closed;
+        // Se è il primo layout o siamo in posizione "chiuso" o "quasi chiuso", 
+        // rimaniamo chiusi (adattandoci alla nuova closedY se l'altezza cambia).
+        // Ma se siamo APERTI (translateY vicino a 0), vogliamo restare a 0.
+        
+        if (!laidOut) {
+            // Primo render: parti chiuso
+            return closed; 
         }
-        const wasOpen = prev < closedY / 2;
-        return wasOpen ? 0 : closed;
+        
+        const wasOpen = prev < closed / 2; // Euristica: se siamo nella metà superiore, siamo "aperti"
+        
+        if (wasOpen) {
+            // Se eravamo aperti, restiamo aperti (0) anche se l'altezza cambia
+            return 0;
+        } else {
+            // Se eravamo chiusi, ci adattiamo alla nuova posizione di chiusura
+            return closed;
+        }
       });
 
       setLaidOut(true);
@@ -466,7 +498,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
       window.removeEventListener('resize', update);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.isActive]);
+  }, [props.isActive, OPEN_HEIGHT_VH]); // Ricalcola quando cambia l'altezza target
 
   const SPEED = 0.05;
   const MIN_TOGGLE_DRAG = 10; // px minimi per considerare "scatto" apri/chiudi
@@ -653,32 +685,33 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
       ? props.accounts.find(a => a.id === props.selectedAccountId)?.name 
       : 'Conto';
 
+  // Build the label for the Category Button
   const selectedCategoryLabel = useMemo(() => {
-      if (props.selectedCategory) {
-          const style = getCategoryStyle(props.selectedCategory);
-          if (props.selectedSubcategory) {
-              return `${style.label}, ${props.selectedSubcategory}`;
+      const count = props.selectedCategoryFilters.size;
+      if (count === 0) return 'Categoria';
+      if (count === 1) {
+          const key = Array.from(props.selectedCategoryFilters)[0];
+          const [cat, sub] = key.split(':');
+          const style = getCategoryStyle(cat);
+          if (sub) {
+              return `${style.label}, ${sub}`;
           }
           return style.label;
       }
-      return 'Categoria';
-  }, [props.selectedCategory, props.selectedSubcategory]);
+      return `${count} Categorie`;
+  }, [props.selectedCategoryFilters]);
   
   const SelectedCategoryIcon = useMemo(() => {
-      if (props.selectedCategory) {
-          return getCategoryStyle(props.selectedCategory).Icon;
+      if (props.selectedCategoryFilters.size === 1) {
+          const key = Array.from(props.selectedCategoryFilters)[0];
+          const [cat] = key.split(':');
+          return getCategoryStyle(cat).Icon;
       }
       return TagIcon;
-  }, [props.selectedCategory]);
+  }, [props.selectedCategoryFilters]);
       
   const handleCategoryClick = (cat: string) => {
       setExpandedCategory(prev => prev === cat ? null : cat);
-  };
-
-  const handleSubcategorySelect = (cat: string, sub: string | null) => {
-      props.onSelectCategory(cat);
-      props.onSelectSubcategory(sub);
-      setCurrentView('main');
   };
 
   const renderMainView = () => (
@@ -745,13 +778,13 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
         <button
             type="button"
             onClick={() => setCurrentView('category_selection')}
-            className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-sm rounded-lg border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors text-left ${props.selectedCategory ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'}`}
+            className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-sm rounded-lg border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors text-left ${props.selectedCategoryFilters.size > 0 ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'}`}
         >
             <div className="flex items-center gap-2 overflow-hidden">
-                <SelectedCategoryIcon className={`h-5 w-5 flex-shrink-0 ${props.selectedCategory ? 'text-indigo-600' : 'text-slate-400'}`} />
+                <SelectedCategoryIcon className={`h-5 w-5 flex-shrink-0 ${props.selectedCategoryFilters.size > 0 ? 'text-indigo-600' : 'text-slate-400'}`} />
                 <span className="truncate font-medium">{selectedCategoryLabel}</span>
             </div>
-            <ChevronRightIcon className={`w-5 h-5 flex-shrink-0 ${props.selectedCategory ? 'text-indigo-400' : 'text-slate-400'}`} />
+            <ChevronRightIcon className={`w-5 h-5 flex-shrink-0 ${props.selectedCategoryFilters.size > 0 ? 'text-indigo-400' : 'text-slate-400'}`} />
         </button>
     </div>
   );
@@ -792,60 +825,79 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
               <button onClick={() => setCurrentView('main')} className="p-1 -ml-1 rounded-full hover:bg-slate-100 text-slate-500">
                   <ArrowLeftIcon className="w-5 h-5" />
               </button>
-              <h3 className="text-base font-bold text-slate-800">Seleziona Categoria</h3>
+              <div className="flex-1">
+                <h3 className="text-base font-bold text-slate-800">Seleziona Categorie</h3>
+                {props.selectedCategoryFilters.size > 0 && (
+                    <p className="text-xs text-indigo-600 font-semibold">{props.selectedCategoryFilters.size} selezionate</p>
+                )}
+              </div>
+              {props.selectedCategoryFilters.size > 0 && (
+                <button 
+                    onClick={props.onClearCategoryFilters}
+                    className="text-xs font-semibold text-slate-500 hover:text-red-600 px-2 py-1 rounded bg-slate-100 hover:bg-red-50"
+                >
+                    Reset
+                </button>
+              )}
           </div>
           <div className="space-y-1 pb-4">
-              <button
-                    onClick={() => { props.onSelectCategory(null); props.onSelectSubcategory(null); setCurrentView('main'); }}
-                    className={`w-full flex items-center justify-between px-3 py-3 rounded-lg text-left text-sm transition-colors ${props.selectedCategory === null ? 'bg-indigo-50 text-indigo-700 font-semibold' : 'text-slate-700 hover:bg-slate-50'}`}
-                 >
-                     <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-600"><TagIcon className="w-4 h-4"/></div>
-                        <span>Tutte</span>
-                     </div>
-                     {props.selectedCategory === null && <CheckIcon className="w-5 h-5" />}
-              </button>
-
               {Object.keys(CATEGORIES).map(cat => {
                   const style = getCategoryStyle(cat);
                   const isExpanded = expandedCategory === cat;
-                  const isSelected = props.selectedCategory === cat;
+                  
+                  // FIX: Check if ANY subcategory is selected OR the main category itself
+                  const isFullySelected = props.selectedCategoryFilters.has(cat) || 
+                                          Array.from(props.selectedCategoryFilters).some(k => k.startsWith(cat + ':'));
+                  
                   const subcategories = CATEGORIES[cat] || [];
                   
                   return (
-                      <div key={cat} className="rounded-lg overflow-hidden">
-                          <button
-                                onClick={() => handleCategoryClick(cat)}
-                                className={`w-full flex items-center justify-between px-3 py-2 text-left text-sm transition-colors ${isSelected ? 'bg-indigo-50 text-indigo-900 font-semibold' : 'text-slate-700 hover:bg-slate-50'}`}
-                             >
-                                 <div className="flex items-center gap-3">
-                                    <span className={`w-8 h-8 rounded-full flex items-center justify-center ${style.bgColor}`}>
+                      <div key={cat} className="rounded-lg overflow-hidden border border-transparent hover:border-slate-100">
+                          <div className={`w-full flex items-center px-3 py-2 gap-3 transition-colors ${isFullySelected ? 'bg-indigo-50' : 'hover:bg-slate-50'}`}>
+                                {/* Expand Chevron / Clickable Area */}
+                                <button 
+                                    onClick={() => handleCategoryClick(cat)}
+                                    className="flex items-center gap-3 flex-1 text-left min-w-0"
+                                >
+                                     <span className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${style.bgColor}`}>
                                         <style.Icon className={`w-4 h-4 ${style.color}`} />
                                     </span>
-                                    <span>{style.label}</span>
-                                 </div>
-                                 <ChevronDownIcon className={`w-5 h-5 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                          </button>
+                                    <span className={`text-sm font-medium truncate ${isFullySelected ? 'text-indigo-800' : 'text-slate-700'}`}>{style.label}</span>
+                                    {subcategories.length > 0 && (
+                                        <ChevronDownIcon className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                                    )}
+                                </button>
+                                
+                                {/* Checkbox */}
+                                <Checkbox 
+                                    checked={isFullySelected} 
+                                    onChange={() => props.onToggleCategoryFilter(cat)} 
+                                />
+                          </div>
                           
-                          {isExpanded && (
-                              <div className="bg-slate-50 pl-14 pr-4 py-2 space-y-1 border-t border-slate-100 animate-fade-in-down">
-                                  <button
-                                      onClick={() => handleSubcategorySelect(cat, null)}
-                                      className={`w-full text-left py-2 text-sm flex items-center justify-between ${isSelected && props.selectedSubcategory === null ? 'text-indigo-600 font-medium' : 'text-slate-600 hover:text-slate-900'}`}
-                                  >
-                                      <span>Tutte ({style.label})</span>
-                                      {isSelected && props.selectedSubcategory === null && <CheckIcon className="w-4 h-4" />}
-                                  </button>
-                                  {subcategories.map(sub => (
-                                      <button
-                                          key={sub}
-                                          onClick={() => handleSubcategorySelect(cat, sub)}
-                                          className={`w-full text-left py-2 text-sm flex items-center justify-between ${isSelected && props.selectedSubcategory === sub ? 'text-indigo-600 font-medium' : 'text-slate-600 hover:text-slate-900'}`}
-                                      >
-                                          <span>{sub}</span>
-                                          {isSelected && props.selectedSubcategory === sub && <CheckIcon className="w-4 h-4" />}
-                                      </button>
-                                  ))}
+                          {isExpanded && subcategories.length > 0 && (
+                              <div className="bg-slate-50 pl-14 pr-4 py-2 space-y-2 border-t border-slate-100 animate-fade-in-down">
+                                  {subcategories.map(sub => {
+                                      const key = `${cat}:${sub}`;
+                                      const isEffectivelySelected = isFullySelected || props.selectedCategoryFilters.has(key);
+                                      
+                                      return (
+                                          <div key={sub} className="flex items-center justify-between">
+                                              <span className={`text-sm ${isEffectivelySelected ? 'text-indigo-700 font-medium' : 'text-slate-600'}`}>{sub}</span>
+                                              <Checkbox 
+                                                checked={isEffectivelySelected} 
+                                                onChange={() => {
+                                                    if (isFullySelected) {
+                                                        props.onToggleCategoryFilter(cat); // Deselect parent
+                                                        props.onToggleCategoryFilter(key); // Select child
+                                                    } else {
+                                                        props.onToggleCategoryFilter(key);
+                                                    }
+                                                }} 
+                                              />
+                                          </div>
+                                      );
+                                  })}
                               </div>
                           )}
                       </div>
@@ -867,10 +919,10 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
       style={{
         height: `${OPEN_HEIGHT_VH}vh`,
         transform: `translate3d(0, ${yForStyle}px, 0)`,
-        transition: anim ? 'transform 0.08s cubic-bezier(0.22, 0.61, 0.36, 1)' : 'none',
+        transition: anim ? 'transform 0.08s cubic-bezier(0.22, 0.61, 0.36, 1)' : 'transform 0.3s cubic-bezier(0.22, 0.61, 0.36, 1), height 0.3s cubic-bezier(0.22, 0.61, 0.36, 1)',
         touchAction: 'none', 
         backfaceVisibility: 'hidden',
-        willChange: 'transform',
+        willChange: 'transform, height',
         opacity: laidOut ? 1 : 0,
         pointerEvents: laidOut ? 'auto' : 'none',
         display: 'flex',
