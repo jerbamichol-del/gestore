@@ -6,7 +6,7 @@ import React, {
   useEffect,
   useCallback,
 } from 'react';
-import { Expense, Account } from '../types';
+import { Expense, Account, CATEGORIES } from '../types';
 import { getCategoryStyle } from '../utils/categoryStyles';
 import { formatCurrency } from '../components/icons/formatters';
 import { TrashIcon } from '../components/icons/TrashIcon';
@@ -197,7 +197,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
       <div className="absolute top-0 right-0 h-full flex items-center z-0">
         <button
           onClick={() => onDelete(expense.id)}
-          className="w-[72px] h-full flex flex-col items-center justify-center bg-red-600 text-white text-xs font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white"
+          className="w-[72px] h-full flex flex-col items-center justify-center bg-red-600 text-white text-xs font-semibold focus:outline-none focus:visible:ring-2 focus:visible:ring-inset focus:visible:ring-white"
           aria-label="Elimina spesa"
           {...tapBridge}
         >
@@ -306,20 +306,24 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
   isOverlayed,
 }) => {
   const [isAnimatingIn, setIsAnimatingIn] = useState(false);
-  const [activeFilterMode, setActiveFilterMode] =
-    useState<ActiveFilterMode>('quick');
+  
+  // Date Filtering State
+  const [activeFilterMode, setActiveFilterMode] = useState<ActiveFilterMode>('quick');
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
-  const [customRange, setCustomRange] = useState<{
-    start: string | null;
-    end: string | null;
-  }>({ start: null, end: null });
-
+  const [customRange, setCustomRange] = useState<{ start: string | null; end: string | null; }>({ start: null, end: null });
   const [periodType, setPeriodType] = useState<PeriodType>('week');
   const [periodDate, setPeriodDate] = useState<Date>(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
     return d;
   });
+
+  // Advanced Filtering State
+  const [filterAccount, setFilterAccount] = useState<string | null>(null);
+  const [filterCategory, setFilterCategory] = useState<string | null>(null);
+  const [filterSubcategory, setFilterSubcategory] = useState<string | null>(null);
+  const [filterDescription, setFilterDescription] = useState('');
+  const [filterMinAmount, setFilterMinAmount] = useState<string>('');
 
   const [openItemId, setOpenItemId] = useState<string | null>(null);
   const [isInternalDateModalOpen, setIsInternalDateModalOpen] = useState(false);
@@ -371,14 +375,16 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
   }, [openItemId, isEditingOrDeleting]);
 
   const filteredExpenses = useMemo(() => {
+    let result = expenses;
+
+    // 1. Date Filter
     if (activeFilterMode === 'period') {
       const start = new Date(periodDate);
       start.setHours(0, 0, 0, 0);
       const end = new Date(periodDate);
       end.setHours(23, 59, 59, 999);
       switch (periodType) {
-        case 'day':
-          break;
+        case 'day': break;
         case 'week': {
           const day = start.getDay();
           const diff = start.getDate() - day + (day === 0 ? -6 : 1);
@@ -399,51 +405,62 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
       }
       const t0 = start.getTime();
       const t1 = end.getTime();
-      return expenses.filter((e) => {
+      result = result.filter((e) => {
         const d = parseLocalYYYYMMDD(e.date);
         if (isNaN(d.getTime())) return false;
         const t = d.getTime();
         return t >= t0 && t <= t1;
       });
-    }
-
-    if (activeFilterMode === 'custom' && customRange.start && customRange.end) {
+    } else if (activeFilterMode === 'custom' && customRange.start && customRange.end) {
       const t0 = parseLocalYYYYMMDD(customRange.start).getTime();
       const endDay = parseLocalYYYYMMDD(customRange.end);
       endDay.setDate(endDay.getDate() + 1);
       const t1 = endDay.getTime();
-      return expenses.filter((e) => {
+      result = result.filter((e) => {
         const d = parseLocalYYYYMMDD(e.date);
         if (isNaN(d.getTime())) return false;
         const t = d.getTime();
         return t >= t0 && t < t1;
       });
+    } else if (dateFilter !== 'all') {
+      const startDate = new Date();
+      startDate.setHours(0, 0, 0, 0);
+      switch (dateFilter) {
+        case '7d': startDate.setDate(startDate.getDate() - 6); break;
+        case '30d': startDate.setDate(startDate.getDate() - 29); break;
+        case '6m': startDate.setMonth(startDate.getMonth() - 6); break;
+        case '1y': startDate.setFullYear(startDate.getFullYear() - 1); break;
+      }
+      const t0 = startDate.getTime();
+      result = result.filter((e) => {
+        const d = parseLocalYYYYMMDD(e.date);
+        return !isNaN(d.getTime()) && d.getTime() >= t0;
+      });
     }
 
-    if (dateFilter === 'all') return expenses;
-
-    const startDate = new Date();
-    startDate.setHours(0, 0, 0, 0);
-    switch (dateFilter) {
-      case '7d':
-        startDate.setDate(startDate.getDate() - 6);
-        break;
-      case '30d':
-        startDate.setDate(startDate.getDate() - 29);
-        break;
-      case '6m':
-        startDate.setMonth(startDate.getMonth() - 6);
-        break;
-      case '1y':
-        startDate.setFullYear(startDate.getFullYear() - 1);
-        break;
+    // 2. Advanced Filters
+    if (filterAccount) {
+        result = result.filter(e => e.accountId === filterAccount);
     }
-    const t0 = startDate.getTime();
-    return expenses.filter((e) => {
-      const d = parseLocalYYYYMMDD(e.date);
-      return !isNaN(d.getTime()) && d.getTime() >= t0;
-    });
-  }, [expenses, activeFilterMode, dateFilter, customRange, periodType, periodDate]);
+    if (filterCategory) {
+        result = result.filter(e => e.category === filterCategory);
+    }
+    if (filterSubcategory) {
+        result = result.filter(e => e.subcategory === filterSubcategory);
+    }
+    if (filterDescription.trim()) {
+        const q = filterDescription.toLowerCase();
+        result = result.filter(e => (e.description || '').toLowerCase().includes(q));
+    }
+    if (filterMinAmount) {
+        const min = parseFloat(filterMinAmount);
+        if (!isNaN(min)) {
+            result = result.filter(e => e.amount >= min);
+        }
+    }
+
+    return result;
+  }, [expenses, activeFilterMode, dateFilter, customRange, periodType, periodDate, filterAccount, filterCategory, filterSubcategory, filterDescription, filterMinAmount]);
 
   const groupedExpenses = useMemo(() => {
     const sorted = [...filteredExpenses].sort((a, b) => {
@@ -485,6 +502,12 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
   );
 
   const handleOpenItem = (id: string) => setOpenItemId(id || null);
+
+  // Reset Subcategory when Category changes or is cleared
+  const handleCategorySelect = (cat: string | null) => {
+    setFilterCategory(cat);
+    setFilterSubcategory(null);
+  };
 
   return (
     <div
@@ -555,6 +578,8 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
 
       <HistoryFilterCard
         isActive={isAnimatingIn && !isInternalDateModalOpen && !isOverlayed}
+        
+        // Date Filter Props
         onSelectQuickFilter={(value) => {
           setDateFilter(value);
           setActiveFilterMode('quick');
@@ -582,6 +607,19 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
         isPeriodFilterActive={activeFilterMode === 'period'}
         onActivatePeriodFilter={() => setActiveFilterMode('period')}
         onOpenStateChange={onFilterPanelOpenStateChange}
+
+        // Advanced Filter Props
+        accounts={accounts}
+        selectedAccountId={filterAccount}
+        onSelectAccount={setFilterAccount}
+        selectedCategory={filterCategory}
+        selectedSubcategory={filterSubcategory}
+        onSelectCategory={handleCategorySelect}
+        onSelectSubcategory={setFilterSubcategory}
+        descriptionQuery={filterDescription}
+        onDescriptionChange={setFilterDescription}
+        minAmountQuery={filterMinAmount}
+        onMinAmountChange={setFilterMinAmount}
       />
     </div>
   );
