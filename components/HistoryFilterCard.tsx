@@ -1,4 +1,3 @@
-
 import React, {
   useState,
   useRef,
@@ -173,6 +172,7 @@ const PeriodNavigator: React.FC<{
   onActivate: () => void;
   isMenuOpen: boolean;
   onMenuToggle: (isOpen: boolean) => void;
+  isPanelOpen: boolean;
 }> = ({
   periodType,
   periodDate,
@@ -182,6 +182,7 @@ const PeriodNavigator: React.FC<{
   onActivate,
   isMenuOpen,
   onMenuToggle,
+  isPanelOpen,
 }) => {
   const wrapperRef = useRef<HTMLDivElement>(null);
 
@@ -289,7 +290,7 @@ const PeriodNavigator: React.FC<{
     <div
       ref={wrapperRef}
       className={
-        'w-full h-10 flex items-center justify-between border rounded-lg bg-white ' +
+        'relative w-full h-10 flex items-center justify-between border rounded-lg bg-white ' +
         (isActive ? 'border-indigo-600' : 'border-slate-400')
       }
     >
@@ -324,7 +325,11 @@ const PeriodNavigator: React.FC<{
       </button>
 
       {isMenuOpen && (
-        <div className="absolute bottom-full mb-2 left-0 right-0 mx-auto w-40 bg-white border border-slate-200 shadow-lg rounded-lg z-[1000] p-2 space-y-1">
+        <div
+          className={`absolute left-0 right-0 mx-auto w-40 bg-white border border-slate-200 shadow-lg rounded-lg z-[1000] p-2 space-y-1 ${
+            isPanelOpen ? 'top-full mt-9' : 'bottom-full mb-2'
+          }`}
+        >
           {(['day', 'week', 'month', 'year'] as PeriodType[]).map((v) => (
             <button
               key={v}
@@ -378,6 +383,11 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
   // Stato swipe orizzontale
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [isSwipeAnimating, setIsSwipeAnimating] = useState(false);
+
+  // Reset menu quando si cambia view
+  useEffect(() => {
+    setIsPeriodMenuOpen(false);
+  }, [activeViewIndex]);
 
   // drag stato unificato (verticale e orizzontale)
   const dragRef = useRef<{
@@ -731,6 +741,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
                 onActivate={props.onActivatePeriodFilter}
                 isMenuOpen={isPeriodMenuOpen}
                 onMenuToggle={setIsPeriodMenuOpen}
+                isPanelOpen={isPanelOpen}
               />
             </div>
 
