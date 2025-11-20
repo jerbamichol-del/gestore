@@ -323,7 +323,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
   const [filterCategory, setFilterCategory] = useState<string | null>(null);
   const [filterSubcategory, setFilterSubcategory] = useState<string | null>(null);
   const [filterDescription, setFilterDescription] = useState('');
-  const [filterMinAmount, setFilterMinAmount] = useState<string>('');
+  const [filterAmountRange, setFilterAmountRange] = useState<{ min: string; max: string }>({ min: '', max: '' });
 
   const [openItemId, setOpenItemId] = useState<string | null>(null);
   const [isInternalDateModalOpen, setIsInternalDateModalOpen] = useState(false);
@@ -452,15 +452,23 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
         const q = filterDescription.toLowerCase();
         result = result.filter(e => (e.description || '').toLowerCase().includes(q));
     }
-    if (filterMinAmount) {
-        const min = parseFloat(filterMinAmount);
+    
+    // Amount Range Filter
+    if (filterAmountRange.min) {
+        const min = parseFloat(filterAmountRange.min);
         if (!isNaN(min)) {
             result = result.filter(e => e.amount >= min);
         }
     }
+    if (filterAmountRange.max) {
+        const max = parseFloat(filterAmountRange.max);
+        if (!isNaN(max)) {
+            result = result.filter(e => e.amount <= max);
+        }
+    }
 
     return result;
-  }, [expenses, activeFilterMode, dateFilter, customRange, periodType, periodDate, filterAccount, filterCategory, filterSubcategory, filterDescription, filterMinAmount]);
+  }, [expenses, activeFilterMode, dateFilter, customRange, periodType, periodDate, filterAccount, filterCategory, filterSubcategory, filterDescription, filterAmountRange]);
 
   const groupedExpenses = useMemo(() => {
     const sorted = [...filteredExpenses].sort((a, b) => {
@@ -618,8 +626,8 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
         onSelectSubcategory={setFilterSubcategory}
         descriptionQuery={filterDescription}
         onDescriptionChange={setFilterDescription}
-        minAmountQuery={filterMinAmount}
-        onMinAmountChange={setFilterMinAmount}
+        amountRange={filterAmountRange}
+        onAmountRangeChange={setFilterAmountRange}
       />
     </div>
   );
