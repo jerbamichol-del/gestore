@@ -412,10 +412,20 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
   const [translateY, setTranslateY] = useState(0);
   const [laidOut, setLaidOut] = useState(false);
   const [anim, setAnim] = useState(false);
+  
+  // Track if panel is open for resize logic
+  const isPanelOpenRef = useRef(false);
 
   // Stato swipe orizzontale
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [isSwipeAnimating, setIsSwipeAnimating] = useState(false);
+  
+  const isPanelOpen = laidOut && translateY < (closedY || 0) / 2;
+
+  // Update ref whenever calculation updates
+  useEffect(() => {
+     isPanelOpenRef.current = isPanelOpen;
+  }, [isPanelOpen]);
 
   // Reset view when user swipes to another filter "tab" (Quick/Period/Custom)
   useEffect(() => {
@@ -469,22 +479,17 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
       setClosedY(closed);
 
       setTranslateY((prev) => {
-        // Se è il primo layout o siamo in posizione "chiuso" o "quasi chiuso", 
-        // rimaniamo chiusi (adattandoci alla nuova closedY se l'altezza cambia).
-        // Ma se siamo APERTI (translateY vicino a 0), vogliamo restare a 0.
-        
+        // Fix: Use the persistent ref to check if we should stay open.
+        // If we rely on 'prev < closed/2' during a resize (keyboard dismissal), 
+        // the changed 'closed' value can cause a false positive for closing.
         if (!laidOut) {
-            // Primo render: parti chiuso
             return closed; 
         }
         
-        const wasOpen = prev < closed / 2; // Euristica: se siamo nella metà superiore, siamo "aperti"
-        
-        if (wasOpen) {
-            // Se eravamo aperti, restiamo aperti (0) anche se l'altezza cambia
+        // Robust check: if it was open before resize, keep it open (0).
+        if (isPanelOpenRef.current) {
             return 0;
         } else {
-            // Se eravamo chiusi, ci adattiamo alla nuova posizione di chiusura
             return closed;
         }
       });
@@ -534,8 +539,6 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
     },
     [closedY, translateY, laidOut, SPEED, clampY],
   );
-
-  const isPanelOpen = laidOut && translateY < (closedY || 0) / 2;
 
   const { onOpenStateChange } = props;
   useEffect(() => {
@@ -728,6 +731,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
                 onChange={(e) => props.onDescriptionChange(e.target.value)}
                 placeholder="Descrizione..."
                 className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                {...tapBridge}
             />
         </div>
 
@@ -736,6 +740,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
             type="button"
             onClick={() => setCurrentView('account_selection')}
             className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-sm rounded-lg border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors text-left ${props.selectedAccountId ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'}`}
+            {...tapBridge}
         >
             <div className="flex items-center gap-2 overflow-hidden">
                 <CreditCardIcon className={`h-5 w-5 flex-shrink-0 ${props.selectedAccountId ? 'text-indigo-600' : 'text-slate-400'}`} />
@@ -757,6 +762,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
                     onChange={(e) => props.onAmountRangeChange({...props.amountRange, min: e.target.value})}
                     placeholder="Da"
                     className={`w-full rounded-lg border py-2 pl-10 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 ${props.amountRange.min ? 'bg-indigo-50 border-indigo-200 text-indigo-700 font-medium' : 'bg-white border-slate-300'}`}
+                    {...tapBridge}
                 />
             </div>
             <div className="relative flex-1">
@@ -770,6 +776,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
                     onChange={(e) => props.onAmountRangeChange({...props.amountRange, max: e.target.value})}
                     placeholder="A"
                     className={`w-full rounded-lg border py-2 pl-10 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 ${props.amountRange.max ? 'bg-indigo-50 border-indigo-200 text-indigo-700 font-medium' : 'bg-white border-slate-300'}`}
+                    {...tapBridge}
                 />
             </div>
         </div>
@@ -779,6 +786,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
             type="button"
             onClick={() => setCurrentView('category_selection')}
             className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-sm rounded-lg border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors text-left ${props.selectedCategoryFilters.size > 0 ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'}`}
+            {...tapBridge}
         >
             <div className="flex items-center gap-2 overflow-hidden">
                 <SelectedCategoryIcon className={`h-5 w-5 flex-shrink-0 ${props.selectedCategoryFilters.size > 0 ? 'text-indigo-600' : 'text-slate-400'}`} />
