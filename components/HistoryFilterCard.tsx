@@ -4,18 +4,31 @@ import React, {
   useEffect,
   useCallback,
   useLayoutEffect,
+  useMemo,
 } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronLeftIcon } from './icons/ChevronLeftIcon';
 import { ChevronRightIcon } from './icons/ChevronRightIcon';
 import { ChevronDownIcon } from './icons/ChevronDownIcon';
+import { CreditCardIcon } from './icons/CreditCardIcon';
+import { TagIcon } from './icons/TagIcon';
+import { CurrencyEuroIcon } from './icons/CurrencyEuroIcon';
+import { MagnifyingGlassIcon } from './icons/MagnifyingGlassIcon';
 import { useTapBridge } from '../hooks/useTapBridge';
 import SmoothPullTab from './SmoothPullTab';
+import { Account, CATEGORIES } from '../types';
+import { getCategoryStyle } from '../utils/categoryStyles';
+import { ArrowLeftIcon } from './icons/ArrowLeftIcon';
+import { CheckIcon } from './icons/CheckIcon';
 
 type DateFilter = 'all' | '7d' | '30d' | '6m' | '1y';
 type PeriodType = 'day' | 'week' | 'month' | 'year';
 
+// Internal View State for the panel content
+type PanelView = 'main' | 'account_selection' | 'category_selection';
+
 interface HistoryFilterCardProps {
+  // Date Filters
   onSelectQuickFilter: (value: DateFilter) => void;
   currentQuickFilter: DateFilter;
   onCustomRangeChange: (range: { start: string | null; end: string | null }) => void;
@@ -30,6 +43,19 @@ interface HistoryFilterCardProps {
   onActivatePeriodFilter: () => void;
   isPeriodFilterActive: boolean;
   onOpenStateChange: (isOpen: boolean) => void;
+
+  // Expanded Filters
+  accounts: Account[];
+  selectedAccountId: string | null;
+  onSelectAccount: (id: string | null) => void;
+  selectedCategory: string | null;
+  selectedSubcategory: string | null;
+  onSelectCategory: (category: string | null) => void;
+  onSelectSubcategory: (subcategory: string | null) => void;
+  descriptionQuery: string;
+  onDescriptionChange: (text: string) => void;
+  minAmountQuery: string;
+  onMinAmountChange: (text: string) => void;
 }
 
 /* -------------------- QuickFilterControl -------------------- */
@@ -102,13 +128,12 @@ const CustomDateRangeInputs: React.FC<{
   };
 
   const handleInputClick = (e: React.MouseEvent<HTMLInputElement>) => {
-    // Force show picker on click to ensure responsiveness even if touch events are complex
     try {
       if (typeof (e.currentTarget as any).showPicker === 'function') {
         (e.currentTarget as any).showPicker();
       }
     } catch (err) {
-      // Ignore if browser prevents it or doesn't support it
+      // Ignore
     }
   };
 
@@ -119,14 +144,10 @@ const CustomDateRangeInputs: React.FC<{
         (isActive ? 'border-indigo-600 bg-indigo-50' : 'border-slate-400 bg-slate-100')
       }
     >
-      {/* Start Date Input Wrapper */}
       <label className="relative flex-1 h-full group cursor-pointer block">
-         {/* Visual Text (Centered) */}
          <div className={`absolute inset-0 flex items-center justify-center z-0 pointer-events-none ${textSize} ${textColor}`}>
             {range.start ? formatDate(range.start) : 'Dal'}
          </div>
-         
-         {/* Invisible Native Input on top */}
          <input
           type="date"
           value={range.start || ''}
@@ -137,17 +158,11 @@ const CustomDateRangeInputs: React.FC<{
           style={{ touchAction: 'none' }}
         />
       </label>
-      
       <div className={`w-px my-1 ${isActive ? 'bg-indigo-200' : 'bg-slate-300'}`} />
-      
-      {/* End Date Input Wrapper */}
       <label className="relative flex-1 h-full group cursor-pointer block">
-        {/* Visual Text (Centered) */}
         <div className={`absolute inset-0 flex items-center justify-center z-0 pointer-events-none ${textSize} ${textColor}`}>
             {range.end ? formatDate(range.end) : 'Al'}
          </div>
-         
-         {/* Invisible Native Input on top */}
          <input
           type="date"
           value={range.end || ''}
@@ -369,11 +384,15 @@ export const PEEK_PX = 70;
 export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
   const [isPeriodMenuOpen, setIsPeriodMenuOpen] = useState(false);
   const [activeViewIndex, setActiveViewIndex] = useState(0);
+  
+  // --- Internal Navigation State ---
+  const [currentView, setCurrentView] = useState<PanelView>('main');
+  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
 
   const tapBridge = useTapBridge();
 
-  // Altezza pannello e posizione chiusa
-  const OPEN_HEIGHT_VH = 40; // pannello aperto = 40% viewport
+  // Altezza pannello e posizione chiusa - 40%
+  const OPEN_HEIGHT_VH = 40; 
   const [openHeight, setOpenHeight] = useState(0);
   const [closedY, setClosedY] = useState(0);
   const [translateY, setTranslateY] = useState(0);
@@ -384,10 +403,17 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [isSwipeAnimating, setIsSwipeAnimating] = useState(false);
 
-  // Reset menu quando si cambia view
+  // Reset view when user swipes to another filter "tab" (Quick/Period/Custom)
   useEffect(() => {
     setIsPeriodMenuOpen(false);
   }, [activeViewIndex]);
+
+  // Initialize state for category accordion based on current selection
+  useEffect(() => {
+    if (currentView === 'category_selection' && props.selectedCategory) {
+       setExpandedCategory(props.selectedCategory);
+    }
+  }, [currentView, props.selectedCategory]);
 
   // drag stato unificato (verticale e orizzontale)
   const dragRef = useRef<{
@@ -464,13 +490,10 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
 
       let target: number;
       if (vy <= -SPEED) {
-        // flick deciso verso l'alto -> apri
         target = 0;
       } else if (vy >= SPEED) {
-        // flick deciso verso il basso -> chiudi
         target = max;
       } else {
-        // niente flick: scegli in base alla posizione
         target = ratio < 0.5 ? 0 : max;
       }
 
@@ -487,15 +510,12 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
     onOpenStateChange(isPanelOpen);
   }, [isPanelOpen, onOpenStateChange]);
 
-  // Gestore Pointer Down principale
   const handlePointerDown = (e: React.PointerEvent) => {
     if (!props.isActive) return;
+    if ((e.target as HTMLElement).closest('[data-no-drag]')) return;
 
-    // Attiviamo SEMPRE TapBridge nel pannello.
-    // In questo modo gestiamo correttamente i "tap" anche se focus/stato erano altrove.
     tapBridge.onPointerDown(e as any);
 
-    // 2. Inizializziamo il drag tracker
     dragRef.current = {
       active: true,
       direction: 'none',
@@ -520,17 +540,14 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
     const dx = e.clientX - d.startX;
     const dy = e.clientY - d.startY;
 
-    // Se non abbiamo ancora deciso la direzione
     if (d.direction === 'none') {
       const dist2 = dx * dx + dy * dy;
-      // Soglia minima di movimento (slop)
       if (dist2 < 100) return; 
       
       if (Math.abs(dy) > Math.abs(dx)) {
         d.direction = 'vertical';
       } else {
-        // Se menu aperto, non swipare orizzontalmente
-        if (isPeriodMenuOpen) {
+        if (isPeriodMenuOpen || currentView !== 'main') { // Disable horizontal swipe in sub-views
             d.active = false;
             return;
         }
@@ -538,7 +555,6 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
       }
     }
 
-    // Gestione Drag Verticale (Pannello)
     if (d.direction === 'vertical') {
       if (e.cancelable) e.preventDefault();
       const now = performance.now();
@@ -546,10 +562,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
       setTranslateY(newY);
       d.lastY = e.clientY;
       d.lastT = now;
-    }
-    
-    // Gestione Drag Orizzontale (Filtri)
-    else if (d.direction === 'horizontal') {
+    } else if (d.direction === 'horizontal') {
        if (e.cancelable) e.preventDefault();
        setSwipeOffset(dx);
     }
@@ -560,14 +573,12 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
     const d = dragRef.current;
     
     if (!d.active) {
-      // Reset generico se non attivo
       d.direction = 'none';
       return;
     }
 
     d.active = false;
 
-    // Fine Drag Verticale
     if (d.direction === 'vertical') {
         const totalDy = e.clientY - d.startY;
         const startPos = d.startTranslateY;
@@ -593,12 +604,9 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
         const dt = Math.max(1, now - d.lastT);
         const vy = (e.clientY - d.lastY) / dt;
         snapTo(vy, endPos);
-    } 
-    
-    // Fine Drag Orizzontale
-    else if (d.direction === 'horizontal') {
+    } else if (d.direction === 'horizontal') {
         const dx = e.clientX - d.startX;
-        const threshold = 40; // Reduced swipe threshold (was 80)
+        const threshold = 40;
         
         if (dx < -threshold && activeViewIndex < 2) {
             setActiveViewIndex(prev => prev + 1);
@@ -606,7 +614,6 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
             setActiveViewIndex(prev => prev - 1);
         }
         
-        // Reset offset e attiva animazione di snap
         setIsSwipeAnimating(true);
         setSwipeOffset(0);
     }
@@ -619,11 +626,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
     const d = dragRef.current;
     d.active = false;
     d.direction = 'none';
-    
-    // Reset vertical
     snapTo(0);
-    
-    // Reset horizontal
     setIsSwipeAnimating(true);
     setSwipeOffset(0);
   };
@@ -632,45 +635,210 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
     tapBridge.onClickCapture(e as any);
   };
 
-  const handleQuickSelect = useCallback(
-    (v: DateFilter) => {
-      props.onSelectQuickFilter(v);
-    },
-    [props.onSelectQuickFilter],
-  );
+  const handleQuickSelect = useCallback((v: DateFilter) => props.onSelectQuickFilter(v), [props]);
+  const handlePeriodDateChange = useCallback((date: Date) => props.onSetPeriodDate(date), [props]);
+  const handlePeriodTypeChange = useCallback((type: PeriodType) => props.onSelectPeriodType(type), [props]);
+  const handleCustomRangeChange = useCallback((range: { start: string | null; end: string | null }) => props.onCustomRangeChange(range), [props]);
 
-  const handlePeriodDateChange = useCallback(
-    (date: Date) => {
-      props.onSetPeriodDate(date);
-    },
-    [props.onSetPeriodDate],
-  );
-
-  const handlePeriodTypeChange = useCallback(
-    (type: PeriodType) => {
-      props.onSelectPeriodType(type);
-    },
-    [props.onSelectPeriodType],
-  );
-  
-  const handleCustomRangeChange = useCallback(
-    (range: { start: string | null; end: string | null }) => {
-      props.onCustomRangeChange(range);
-    },
-    [props.onCustomRangeChange]
-  );
-
-  // Calcolo posizione Y finale
   const yForStyle = laidOut
     ? clampY(translateY)
     : openHeight || (typeof window !== 'undefined' ? (window.innerHeight * OPEN_HEIGHT_VH) / 100 : 0);
     
-  // Calcolo traslazione orizzontale lista
-  const listTx = -activeViewIndex * (100 / 3); // base position %
-  // Aggiungiamo swipeOffset in pixel usando calc
+  const listTx = -activeViewIndex * (100 / 3);
   const listTransform = `translateX(calc(${listTx}% + ${swipeOffset}px))`;
 
   const isQuickFilterActive = !props.isPeriodFilterActive && !props.isCustomRangeActive;
+
+  const selectedAccountLabel = props.selectedAccountId 
+      ? props.accounts.find(a => a.id === props.selectedAccountId)?.name 
+      : 'Conto';
+
+  const selectedCategoryLabel = useMemo(() => {
+      if (props.selectedCategory) {
+          const style = getCategoryStyle(props.selectedCategory);
+          if (props.selectedSubcategory) {
+              return `${style.label}, ${props.selectedSubcategory}`;
+          }
+          return style.label;
+      }
+      return 'Categoria';
+  }, [props.selectedCategory, props.selectedSubcategory]);
+  
+  const SelectedCategoryIcon = useMemo(() => {
+      if (props.selectedCategory) {
+          return getCategoryStyle(props.selectedCategory).Icon;
+      }
+      return TagIcon;
+  }, [props.selectedCategory]);
+      
+  const handleCategoryClick = (cat: string) => {
+      setExpandedCategory(prev => prev === cat ? null : cat);
+  };
+
+  const handleSubcategorySelect = (cat: string, sub: string | null) => {
+      props.onSelectCategory(cat);
+      props.onSelectSubcategory(sub);
+      setCurrentView('main');
+  };
+
+  const renderMainView = () => (
+    <div className="space-y-3">
+        {/* Search Description */}
+        <div className="relative">
+            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                <MagnifyingGlassIcon className="h-5 w-5 text-slate-400" />
+            </div>
+            <input 
+                id="filter-desc"
+                type="text"
+                value={props.descriptionQuery}
+                onChange={(e) => props.onDescriptionChange(e.target.value)}
+                placeholder="Descrizione..."
+                className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+            />
+        </div>
+
+        {/* Account Button - Full Width */}
+         <button
+            type="button"
+            onClick={() => setCurrentView('account_selection')}
+            className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-sm rounded-lg border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors text-left ${props.selectedAccountId ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'}`}
+        >
+            <div className="flex items-center gap-2 overflow-hidden">
+                <CreditCardIcon className={`h-5 w-5 flex-shrink-0 ${props.selectedAccountId ? 'text-indigo-600' : 'text-slate-400'}`} />
+                <span className="truncate font-medium">{selectedAccountLabel}</span>
+            </div>
+            <ChevronRightIcon className={`w-5 h-5 flex-shrink-0 ${props.selectedAccountId ? 'text-indigo-400' : 'text-slate-400'}`} />
+        </button>
+
+        {/* Amount Input - Full Width */}
+        <div className="relative">
+            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                <CurrencyEuroIcon className={`h-5 w-5 ${props.minAmountQuery ? 'text-indigo-600' : 'text-slate-400'}`} />
+            </div>
+            <input 
+                id="filter-amount"
+                type="number"
+                value={props.minAmountQuery}
+                onChange={(e) => props.onMinAmountChange(e.target.value)}
+                placeholder="Importo Minimo"
+                className={`w-full rounded-lg border py-2 pl-10 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 ${props.minAmountQuery ? 'bg-indigo-50 border-indigo-200 text-indigo-700 font-medium' : 'bg-white border-slate-300'}`}
+            />
+        </div>
+
+        {/* Category Button - Full Width */}
+        <button
+            type="button"
+            onClick={() => setCurrentView('category_selection')}
+            className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-sm rounded-lg border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors text-left ${props.selectedCategory ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'}`}
+        >
+            <div className="flex items-center gap-2 overflow-hidden">
+                <SelectedCategoryIcon className={`h-5 w-5 flex-shrink-0 ${props.selectedCategory ? 'text-indigo-600' : 'text-slate-400'}`} />
+                <span className="truncate font-medium">{selectedCategoryLabel}</span>
+            </div>
+            <ChevronRightIcon className={`w-5 h-5 flex-shrink-0 ${props.selectedCategory ? 'text-indigo-400' : 'text-slate-400'}`} />
+        </button>
+    </div>
+  );
+
+  const renderAccountSelection = () => (
+      <div className="space-y-2">
+          <div className="flex items-center gap-2 mb-3 pb-2 border-b border-slate-100">
+              <button onClick={() => setCurrentView('main')} className="p-1 -ml-1 rounded-full hover:bg-slate-100 text-slate-500">
+                  <ArrowLeftIcon className="w-5 h-5" />
+              </button>
+              <h3 className="text-base font-bold text-slate-800">Seleziona Conto</h3>
+          </div>
+          <div className="space-y-1">
+             <button
+                onClick={() => { props.onSelectAccount(null); setCurrentView('main'); }}
+                className={`w-full flex items-center justify-between px-3 py-3 rounded-lg text-left text-sm transition-colors ${props.selectedAccountId === null ? 'bg-indigo-50 text-indigo-700 font-semibold' : 'text-slate-700 hover:bg-slate-50'}`}
+             >
+                 <span>Tutti</span>
+                 {props.selectedAccountId === null && <CheckIcon className="w-5 h-5" />}
+             </button>
+             {props.accounts.map(acc => (
+                 <button
+                    key={acc.id}
+                    onClick={() => { props.onSelectAccount(acc.id); setCurrentView('main'); }}
+                    className={`w-full flex items-center justify-between px-3 py-3 rounded-lg text-left text-sm transition-colors ${props.selectedAccountId === acc.id ? 'bg-indigo-50 text-indigo-700 font-semibold' : 'text-slate-700 hover:bg-slate-50'}`}
+                 >
+                     <span>{acc.name}</span>
+                     {props.selectedAccountId === acc.id && <CheckIcon className="w-5 h-5" />}
+                 </button>
+             ))}
+          </div>
+      </div>
+  );
+
+  const renderCategorySelection = () => (
+      <div className="space-y-2">
+          <div className="flex items-center gap-2 mb-3 pb-2 border-b border-slate-100 sticky top-0 bg-white z-10">
+              <button onClick={() => setCurrentView('main')} className="p-1 -ml-1 rounded-full hover:bg-slate-100 text-slate-500">
+                  <ArrowLeftIcon className="w-5 h-5" />
+              </button>
+              <h3 className="text-base font-bold text-slate-800">Seleziona Categoria</h3>
+          </div>
+          <div className="space-y-1 pb-4">
+              <button
+                    onClick={() => { props.onSelectCategory(null); props.onSelectSubcategory(null); setCurrentView('main'); }}
+                    className={`w-full flex items-center justify-between px-3 py-3 rounded-lg text-left text-sm transition-colors ${props.selectedCategory === null ? 'bg-indigo-50 text-indigo-700 font-semibold' : 'text-slate-700 hover:bg-slate-50'}`}
+                 >
+                     <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-600"><TagIcon className="w-4 h-4"/></div>
+                        <span>Tutte</span>
+                     </div>
+                     {props.selectedCategory === null && <CheckIcon className="w-5 h-5" />}
+              </button>
+
+              {Object.keys(CATEGORIES).map(cat => {
+                  const style = getCategoryStyle(cat);
+                  const isExpanded = expandedCategory === cat;
+                  const isSelected = props.selectedCategory === cat;
+                  const subcategories = CATEGORIES[cat] || [];
+                  
+                  return (
+                      <div key={cat} className="rounded-lg overflow-hidden">
+                          <button
+                                onClick={() => handleCategoryClick(cat)}
+                                className={`w-full flex items-center justify-between px-3 py-2 text-left text-sm transition-colors ${isSelected ? 'bg-indigo-50 text-indigo-900 font-semibold' : 'text-slate-700 hover:bg-slate-50'}`}
+                             >
+                                 <div className="flex items-center gap-3">
+                                    <span className={`w-8 h-8 rounded-full flex items-center justify-center ${style.bgColor}`}>
+                                        <style.Icon className={`w-4 h-4 ${style.color}`} />
+                                    </span>
+                                    <span>{style.label}</span>
+                                 </div>
+                                 <ChevronDownIcon className={`w-5 h-5 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                          </button>
+                          
+                          {isExpanded && (
+                              <div className="bg-slate-50 pl-14 pr-4 py-2 space-y-1 border-t border-slate-100 animate-fade-in-down">
+                                  <button
+                                      onClick={() => handleSubcategorySelect(cat, null)}
+                                      className={`w-full text-left py-2 text-sm flex items-center justify-between ${isSelected && props.selectedSubcategory === null ? 'text-indigo-600 font-medium' : 'text-slate-600 hover:text-slate-900'}`}
+                                  >
+                                      <span>Tutte ({style.label})</span>
+                                      {isSelected && props.selectedSubcategory === null && <CheckIcon className="w-4 h-4" />}
+                                  </button>
+                                  {subcategories.map(sub => (
+                                      <button
+                                          key={sub}
+                                          onClick={() => handleSubcategorySelect(cat, sub)}
+                                          className={`w-full text-left py-2 text-sm flex items-center justify-between ${isSelected && props.selectedSubcategory === sub ? 'text-indigo-600 font-medium' : 'text-slate-600 hover:text-slate-900'}`}
+                                      >
+                                          <span>{sub}</span>
+                                          {isSelected && props.selectedSubcategory === sub && <CheckIcon className="w-4 h-4" />}
+                                      </button>
+                                  ))}
+                              </div>
+                          )}
+                      </div>
+                  );
+              })}
+          </div>
+      </div>
+  );
 
   const panel = (
     <div
@@ -690,10 +858,12 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
         willChange: 'transform',
         opacity: laidOut ? 1 : 0,
         pointerEvents: laidOut ? 'auto' : 'none',
+        display: 'flex',
+        flexDirection: 'column'
       }}
       onTransitionEnd={() => setAnim(false)}
     >
-      {/* linguetta + chevron */}
+      {/* Pull Tab */}
       <div
         className="absolute top-0 left-1/2 -translate-x-1/2 w-[88px] h-auto flex justify-center cursor-grab"
         style={{ transform: 'translateX(-50%) translateY(-19px)' }}
@@ -709,10 +879,11 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
         />
       </div>
 
-      <div className="pt-1">
-        <div
-          className={'relative ' + (isPeriodMenuOpen ? 'overflow-visible' : 'overflow-hidden')}
-        >
+      {/* Header: Date Filters (Always Visible unless hidden by view logic if needed, but request implies drill-down for "expanded" filters) 
+          Current design keeps Date Filters visible at top. 
+      */}
+      <div className="pt-1 flex-shrink-0">
+        <div className={'relative ' + (isPeriodMenuOpen ? 'overflow-visible' : 'overflow-hidden')}>
           <div
             className="w-[300%] flex"
             style={{
@@ -721,7 +892,6 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
             }}
             onTransitionEnd={() => setIsSwipeAnimating(false)}
           >
-            {/* QUICK */}
             <div className="w-1/3 px-4 py-1">
               <QuickFilterControl
                 onSelect={handleQuickSelect}
@@ -729,8 +899,6 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
                 isActive={isQuickFilterActive}
               />
             </div>
-
-            {/* PERIODO */}
             <div className="w-1/3 px-4 py-1">
               <PeriodNavigator
                 periodType={props.periodType}
@@ -744,8 +912,6 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
                 isPanelOpen={isPanelOpen}
               />
             </div>
-
-            {/* RANGE CUSTOM */}
             <div className="w-1/3 px-4 py-1">
               <CustomDateRangeInputs
                 range={props.currentCustomRange}
@@ -756,7 +922,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
           </div>
         </div>
 
-        {/* pallini di paging */}
+        {/* Pagination Dots */}
         <div className="flex justify-center items-center pt-1 pb-2 gap-2">
           {[0, 1, 2].map((i) => (
             <button
@@ -773,16 +939,30 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
             />
           ))}
         </div>
+      </div>
+      
+      <div className="w-full h-px bg-slate-200 mb-2 flex-shrink-0" />
 
-        {/* safe area bottom */}
-        <div style={{ height: 'env(safe-area-inset-bottom, 0px)' }} />
+      {/* Scrollable Content Area */}
+      <div 
+        className="flex-1 overflow-y-auto px-4 pb-4"
+        data-no-drag // Tell drag handler to ignore this area so we can scroll
+        style={{
+            overscrollBehaviorY: 'contain',
+            touchAction: 'pan-y'
+        }}
+      >
+          {currentView === 'main' && renderMainView()}
+          {currentView === 'account_selection' && renderAccountSelection()}
+          {currentView === 'category_selection' && renderCategorySelection()}
+          
+          {/* Spacer for Safe Area */}
+          <div style={{ height: 'env(safe-area-inset-bottom, 20px)' }} />
       </div>
     </div>
   );
 
-  return (
-    <>
-      {props.isActive && createPortal(panel, document.body)}
-    </>
-  );
+  if (typeof window === 'undefined') return null;
+
+  return createPortal(panel, document.body);
 };
