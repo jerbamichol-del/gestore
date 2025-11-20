@@ -845,15 +845,19 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
                   const style = getCategoryStyle(cat);
                   const isExpanded = expandedCategory === cat;
                   
-                  // FIX: Check if ANY subcategory is selected OR the main category itself
-                  const isFullySelected = props.selectedCategoryFilters.has(cat) || 
-                                          Array.from(props.selectedCategoryFilters).some(k => k.startsWith(cat + ':'));
+                  // FIX: Explicitly check if the PARENT is selected vs just having a child selected
+                  const isParentExplicitlySelected = props.selectedCategoryFilters.has(cat);
+                  // If parent is selected, all subcategories are implicitly selected
+                  // If a specific subcategory is selected, only that one is checked
+                  
+                  const hasAnySubcategorySelected = Array.from(props.selectedCategoryFilters).some(k => k.startsWith(cat + ':'));
+                  const isParentVisuallyChecked = isParentExplicitlySelected || hasAnySubcategorySelected;
                   
                   const subcategories = CATEGORIES[cat] || [];
                   
                   return (
                       <div key={cat} className="rounded-lg overflow-hidden border border-transparent hover:border-slate-100">
-                          <div className={`w-full flex items-center px-3 py-2 gap-3 transition-colors ${isFullySelected ? 'bg-indigo-50' : 'hover:bg-slate-50'}`}>
+                          <div className={`w-full flex items-center px-3 py-2 gap-3 transition-colors ${isParentVisuallyChecked ? 'bg-indigo-50' : 'hover:bg-slate-50'}`}>
                                 {/* Expand Chevron / Clickable Area */}
                                 <button 
                                     onClick={() => handleCategoryClick(cat)}
@@ -862,7 +866,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
                                      <span className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${style.bgColor}`}>
                                         <style.Icon className={`w-4 h-4 ${style.color}`} />
                                     </span>
-                                    <span className={`text-sm font-medium truncate ${isFullySelected ? 'text-indigo-800' : 'text-slate-700'}`}>{style.label}</span>
+                                    <span className={`text-sm font-medium truncate ${isParentVisuallyChecked ? 'text-indigo-800' : 'text-slate-700'}`}>{style.label}</span>
                                     {subcategories.length > 0 && (
                                         <ChevronDownIcon className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                                     )}
@@ -870,7 +874,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
                                 
                                 {/* Checkbox */}
                                 <Checkbox 
-                                    checked={isFullySelected} 
+                                    checked={isParentVisuallyChecked} 
                                     onChange={() => props.onToggleCategoryFilter(cat)} 
                                 />
                           </div>
@@ -879,18 +883,23 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
                               <div className="bg-slate-50 pl-14 pr-4 py-2 space-y-2 border-t border-slate-100 animate-fade-in-down">
                                   {subcategories.map(sub => {
                                       const key = `${cat}:${sub}`;
-                                      const isEffectivelySelected = isFullySelected || props.selectedCategoryFilters.has(key);
+                                      // If parent is explicitly selected, child is visually selected.
+                                      // OR if the child key is explicitly in the set.
+                                      const isSubVisuallyChecked = isParentExplicitlySelected || props.selectedCategoryFilters.has(key);
                                       
                                       return (
                                           <div key={sub} className="flex items-center justify-between">
-                                              <span className={`text-sm ${isEffectivelySelected ? 'text-indigo-700 font-medium' : 'text-slate-600'}`}>{sub}</span>
+                                              <span className={`text-sm ${isSubVisuallyChecked ? 'text-indigo-700 font-medium' : 'text-slate-600'}`}>{sub}</span>
                                               <Checkbox 
-                                                checked={isEffectivelySelected} 
+                                                checked={isSubVisuallyChecked} 
                                                 onChange={() => {
-                                                    if (isFullySelected) {
+                                                    if (isParentExplicitlySelected) {
+                                                        // If parent was selected, selecting a child means we want to "focus" on that child,
+                                                        // so we remove the parent (which was "ALL") and select just this child.
                                                         props.onToggleCategoryFilter(cat); // Deselect parent
                                                         props.onToggleCategoryFilter(key); // Select child
                                                     } else {
+                                                        // Normal toggle
                                                         props.onToggleCategoryFilter(key);
                                                     }
                                                 }} 
