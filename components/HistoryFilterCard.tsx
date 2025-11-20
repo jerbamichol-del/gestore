@@ -328,7 +328,8 @@ const PeriodNavigator: React.FC<{
           {(['day', 'week', 'month', 'year'] as PeriodType[]).map((v) => (
             <button
               key={v}
-              onClick={() => {
+              onClick={(e) => {
+                e.stopPropagation();
                 onActivate();
                 onTypeChange(v);
                 onMenuToggle(false);
