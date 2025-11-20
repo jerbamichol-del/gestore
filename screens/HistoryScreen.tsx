@@ -320,8 +320,11 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
 
   // Advanced Filtering State
   const [filterAccount, setFilterAccount] = useState<string | null>(null);
-  const [filterCategory, setFilterCategory] = useState<string | null>(null);
-  const [filterSubcategory, setFilterSubcategory] = useState<string | null>(null);
+  
+  // Replaced single category/subcategory strings with a Set for multi-selection
+  // Format: "Category" (for whole category) or "Category:Subcategory" (for specific subcategory)
+  const [filterCategories, setFilterCategories] = useState<Set<string>>(new Set());
+  
   const [filterDescription, setFilterDescription] = useState('');
   const [filterAmountRange, setFilterAmountRange] = useState<{ min: string; max: string }>({ min: '', max: '' });
 
@@ -442,12 +445,28 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
     if (filterAccount) {
         result = result.filter(e => e.accountId === filterAccount);
     }
-    if (filterCategory) {
-        result = result.filter(e => e.category === filterCategory);
+
+    // New Multi-Category Filter Logic
+    if (filterCategories.size > 0) {
+        result = result.filter(e => {
+            const wholeCategoryKey = e.category;
+            const specificSubKey = `${e.category}:${e.subcategory || ''}`;
+            
+            // If "Category" is selected, it matches all subcategories.
+            // If "Category:Subcategory" is selected, it matches only that.
+            // However, if "Category" is present in the Set, we accept it.
+            // If "Category:Sub" is present, we accept it.
+            
+            // Edge case: If user selects specific subcats, the Set has keys like "Food:Pizza".
+            // If user selects "All Food", the Set has "Food".
+            
+            if (filterCategories.has(wholeCategoryKey)) return true;
+            if (e.subcategory && filterCategories.has(specificSubKey)) return true;
+            
+            return false;
+        });
     }
-    if (filterSubcategory) {
-        result = result.filter(e => e.subcategory === filterSubcategory);
-    }
+
     if (filterDescription.trim()) {
         const q = filterDescription.toLowerCase();
         result = result.filter(e => (e.description || '').toLowerCase().includes(q));
@@ -468,7 +487,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
     }
 
     return result;
-  }, [expenses, activeFilterMode, dateFilter, customRange, periodType, periodDate, filterAccount, filterCategory, filterSubcategory, filterDescription, filterAmountRange]);
+  }, [expenses, activeFilterMode, dateFilter, customRange, periodType, periodDate, filterAccount, filterCategories, filterDescription, filterAmountRange]);
 
   const groupedExpenses = useMemo(() => {
     const sorted = [...filteredExpenses].sort((a, b) => {
@@ -510,12 +529,20 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
   );
 
   const handleOpenItem = (id: string) => setOpenItemId(id || null);
-
-  // Reset Subcategory when Category changes or is cleared
-  const handleCategorySelect = (cat: string | null) => {
-    setFilterCategory(cat);
-    setFilterSubcategory(null);
+  
+  const handleToggleCategoryFilter = (key: string) => {
+      setFilterCategories(prev => {
+          const next = new Set(prev);
+          if (next.has(key)) {
+              next.delete(key);
+          } else {
+              next.add(key);
+          }
+          return next;
+      });
   };
+
+  const handleClearCategoryFilters = () => setFilterCategories(new Set());
 
   return (
     <div
@@ -620,10 +647,11 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
         accounts={accounts}
         selectedAccountId={filterAccount}
         onSelectAccount={setFilterAccount}
-        selectedCategory={filterCategory}
-        selectedSubcategory={filterSubcategory}
-        onSelectCategory={handleCategorySelect}
-        onSelectSubcategory={setFilterSubcategory}
+        
+        selectedCategoryFilters={filterCategories}
+        onToggleCategoryFilter={handleToggleCategoryFilter}
+        onClearCategoryFilters={handleClearCategoryFilters}
+        
         descriptionQuery={filterDescription}
         onDescriptionChange={setFilterDescription}
         amountRange={filterAmountRange}
