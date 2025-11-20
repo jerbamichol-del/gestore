@@ -54,8 +54,8 @@ interface HistoryFilterCardProps {
   onSelectSubcategory: (subcategory: string | null) => void;
   descriptionQuery: string;
   onDescriptionChange: (text: string) => void;
-  minAmountQuery: string;
-  onMinAmountChange: (text: string) => void;
+  amountRange: { min: string; max: string };
+  onAmountRangeChange: (range: { min: string; max: string }) => void;
 }
 
 /* -------------------- QuickFilterControl -------------------- */
@@ -711,19 +711,34 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
             <ChevronRightIcon className={`w-5 h-5 flex-shrink-0 ${props.selectedAccountId ? 'text-indigo-400' : 'text-slate-400'}`} />
         </button>
 
-        {/* Amount Input - Full Width */}
-        <div className="relative">
-            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                <CurrencyEuroIcon className={`h-5 w-5 ${props.minAmountQuery ? 'text-indigo-600' : 'text-slate-400'}`} />
+        {/* Amount Range Inputs - Min & Max */}
+        <div className="flex gap-3">
+             <div className="relative flex-1">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                    <CurrencyEuroIcon className={`h-5 w-5 ${props.amountRange.min ? 'text-indigo-600' : 'text-slate-400'}`} />
+                </div>
+                <input 
+                    id="filter-amount-min"
+                    type="number"
+                    value={props.amountRange.min}
+                    onChange={(e) => props.onAmountRangeChange({...props.amountRange, min: e.target.value})}
+                    placeholder="Da"
+                    className={`w-full rounded-lg border py-2 pl-10 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 ${props.amountRange.min ? 'bg-indigo-50 border-indigo-200 text-indigo-700 font-medium' : 'bg-white border-slate-300'}`}
+                />
             </div>
-            <input 
-                id="filter-amount"
-                type="number"
-                value={props.minAmountQuery}
-                onChange={(e) => props.onMinAmountChange(e.target.value)}
-                placeholder="Importo Minimo"
-                className={`w-full rounded-lg border py-2 pl-10 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 ${props.minAmountQuery ? 'bg-indigo-50 border-indigo-200 text-indigo-700 font-medium' : 'bg-white border-slate-300'}`}
-            />
+            <div className="relative flex-1">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                    <CurrencyEuroIcon className={`h-5 w-5 ${props.amountRange.max ? 'text-indigo-600' : 'text-slate-400'}`} />
+                </div>
+                <input 
+                    id="filter-amount-max"
+                    type="number"
+                    value={props.amountRange.max}
+                    onChange={(e) => props.onAmountRangeChange({...props.amountRange, max: e.target.value})}
+                    placeholder="A"
+                    className={`w-full rounded-lg border py-2 pl-10 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 ${props.amountRange.max ? 'bg-indigo-50 border-indigo-200 text-indigo-700 font-medium' : 'bg-white border-slate-300'}`}
+                />
+            </div>
         </div>
 
         {/* Category Button - Full Width */}
