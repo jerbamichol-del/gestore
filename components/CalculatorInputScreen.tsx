@@ -1,4 +1,3 @@
-
 // CalculatorInputScreen.tsx
 import React, { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { Expense, Account, CATEGORIES } from '../types';
@@ -115,6 +114,7 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
   const isSyncingFromParent = useRef(false);
   const typingSinceActivationRef = useRef(false);
 
+  // 🔧 SEMPLIFICATO: Rimosso tap bridge complesso che blocca eventi
   useEffect(() => {
     onMenuStateChange(activeMenu !== null);
   }, [activeMenu, onMenuStateChange]);
@@ -132,6 +132,8 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
     return () => window.removeEventListener('page-activated', onActivated as EventListener);
   }, []);
 
+  // Sync bidirezionale con debounce
+  // FIX: Changed type from global.NodeJS.Timeout to number for browser compatibility.
   const syncTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -350,6 +352,8 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
       <div className="flex-1 flex flex-col">
         <header className="flex items-center justify-between p-4 flex-shrink-0">
           <button
+            // FIX: This onClick handler was implicitly passing a MouseEvent to a prop expecting no arguments.
+            // Wrapping it in a lambda function prevents the type mismatch.
             onClick={() => onClose()}
             aria-label="Chiudi calcolatrice"
             className="w-11 h-11 flex items-center justify-center border border-red-300 text-red-600 bg-red-50 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 rounded-full transition-colors"
@@ -388,7 +392,9 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
             tabIndex={0}
             aria-label="Aggiungi dettagli alla spesa"
             aria-hidden={isDesktop}
+            // FIX: Use onNavigateToDetails prop.
             onClick={onNavigateToDetails}
+            // FIX: Use onNavigateToDetails prop.
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onNavigateToDetails(); }}
             className={`absolute top-1/2 -right-px w-8 h-[148px] flex items-center justify-center cursor-pointer ${isDesktop ? 'hidden' : ''}`}
             style={{ transform: 'translateY(calc(-50% + 2px))' }}
@@ -448,6 +454,7 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
             <KeypadButton className="text-slate-800" onClick={() => handleKeyPress(',')}>,</KeypadButton>
             <KeypadButton className="text-slate-800" onClick={() => handleKeyPress('0')}>0</KeypadButton>
             <KeypadButton
+              // FIX: Correctly type props for KeypadButton and remove invalid ones from the component's internal div.
               title="Tocca: cancella una cifra — Tieni premuto: cancella tutto"
               aria-label="Cancella"
               onPointerDownCapture={onDelPointerDownCapture}
@@ -456,6 +463,7 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
               onPointerCancelCapture={onDelPointerCancelCapture}
               onContextMenu={(e) => e.preventDefault()}
             >
+              {/* 🔧 FIX: Aggiunta classe colore esplicita */}
               <BackspaceIcon className="w-8 h-8 text-slate-800" />
             </KeypadButton>
           </div>
