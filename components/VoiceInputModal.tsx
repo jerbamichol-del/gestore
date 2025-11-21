@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Expense } from '../types';
-import { createLiveSession, createBlob, parseExpenseFromText } from '../utils/ai';
+import { createLiveSession, createBlob } from '../utils/ai';
 import { XMarkIcon } from './icons/XMarkIcon';
 import { MicrophoneIcon } from './icons/MicrophoneIcon';
-// FIX: Removed deprecated LiveSession import.
 import { LiveServerMessage } from '@google/genai';
 
 interface VoiceInputModalProps {
@@ -18,8 +17,7 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({ isOpen, onClose, onPa
   const [transcript, setTranscript] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  // FIX: Use ReturnType for proper type inference as LiveSession is not exported.
-  const sessionPromise = useRef<ReturnType<typeof createLiveSession> | null>(null);
+  const sessionPromise = useRef<Promise<any> | null>(null);
   const audioContext = useRef<AudioContext | null>(null);
   const scriptProcessor = useRef<ScriptProcessorNode | null>(null);
   const stream = useRef<MediaStream | null>(null);
@@ -28,7 +26,7 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({ isOpen, onClose, onPa
     stream.current?.getTracks().forEach(track => track.stop());
     scriptProcessor.current?.disconnect();
     audioContext.current?.close();
-    sessionPromise.current?.then(session => session.close());
+    sessionPromise.current?.then((session: any) => session.close());
     sessionPromise.current = null;
     audioContext.current = null;
     scriptProcessor.current = null;
@@ -42,42 +40,30 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({ isOpen, onClose, onPa
     setStatus('listening');
 
     try {
-      stream.current = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true } });
+      stream.current = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-      // FIX: Moved audio processing setup into `onopen` callback and added type assertions for function call args.
       sessionPromise.current = createLiveSession({
-        onopen: async () => {
-          const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-          if (!AudioContext) {
+        onopen: () => {
+          const AudioContextCtor =
+            window.AudioContext || (window as any).webkitAudioContext;
+          if (!AudioContextCtor) {
             setError("Il tuo browser non supporta l'input vocale.");
             setStatus('error');
             return;
           }
-    
-          // MOBILE FIX: Remove sampleRate restriction. Let the browser choose (e.g. 48k).
-          // The downsampling is handled in createBlob utility.
-          audioContext.current = new AudioContext();
 
-          // Ensure context is running (mobile browsers sometimes suspend it)
-          if (audioContext.current.state === 'suspended') {
-              await audioContext.current.resume();
-          }
-
+          audioContext.current = new AudioContextCtor({ sampleRate: 16000 });
           const source = audioContext.current.createMediaStreamSource(stream.current!);
           scriptProcessor.current = audioContext.current.createScriptProcessor(4096, 1, 1);
-          
-          // Capture the *actual* sample rate the browser gave us
-          const currentSampleRate = audioContext.current.sampleRate;
 
           scriptProcessor.current.onaudioprocess = (audioProcessingEvent) => {
-              const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
-              // Pass the actual sample rate to the encoder for downsampling if needed
-              const pcmBlob = createBlob(inputData, currentSampleRate);
-              sessionPromise.current?.then((session) => {
-                  session.sendRealtimeInput({ media: pcmBlob });
-              });
+            const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
+            const pcmBlob = createBlob(inputData);
+            sessionPromise.current?.then((session: any) => {
+              session.sendRealtimeInput({ media: pcmBlob });
+            });
           };
-    
+
           source.connect(scriptProcessor.current);
           scriptProcessor.current.connect(audioContext.current.destination);
         },
@@ -103,38 +89,15 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({ isOpen, onClose, onPa
           cleanUp();
         },
         onclose: () => {
-           // Session closed
+          // Session closed
         }
       });
 
     } catch (err) {
       console.error(err);
-      setError("Accesso al microfono negato o API Key mancante.");
+      setError("Accesso al microfono negato. Controlla le autorizzazioni del browser.");
       setStatus('error');
     }
-  };
-
-  const handleManualFinish = async () => {
-      cleanUp(); // Stop listening immediately
-      if (!transcript.trim()) {
-          onClose(); // Nothing was said
-          return;
-      }
-      
-      setStatus('processing');
-      try {
-          // Fallback: analyze the text transcript directly
-          const data = await parseExpenseFromText(transcript);
-          if (data) {
-              onParsed(data);
-          } else {
-              setError("Non ho capito la spesa. Riprova.");
-              setStatus('error');
-          }
-      } catch (e) {
-          setError("Errore nell'elaborazione del testo.");
-          setStatus('error');
-      }
   };
 
   useEffect(() => {
@@ -144,7 +107,7 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({ isOpen, onClose, onPa
       return () => {
         clearTimeout(timer);
         cleanUp();
-      }
+      };
     } else {
       setIsAnimating(false);
     }
@@ -153,22 +116,34 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({ isOpen, onClose, onPa
   if (!isOpen) return null;
 
   const getStatusContent = () => {
-    switch(status) {
+    switch (status) {
       case 'listening':
         return {
-          icon: <div className="w-24 h-24 rounded-full bg-red-500 animate-pulse flex items-center justify-center"><MicrophoneIcon className="w-12 h-12 text-white" /></div>,
+          icon: (
+            <div className="w-24 h-24 rounded-full bg-red-500 animate-pulse flex items-center justify-center">
+              <MicrophoneIcon className="w-12 h-12 text-white" />
+            </div>
+          ),
           text: 'In ascolto...',
           subtext: 'Descrivi la tua spesa, ad esempio "25 euro per una cena al ristorante".'
         };
       case 'processing':
         return {
-          icon: <div className="w-24 h-24 rounded-full bg-indigo-500 flex items-center justify-center"><div className="w-12 h-12 text-white animate-spin rounded-full border-4 border-t-transparent border-white"></div></div>,
+          icon: (
+            <div className="w-24 h-24 rounded-full bg-indigo-500 flex items-center justify-center">
+              <div className="w-12 h-12 text-white animate-spin rounded-full border-4 border-t-transparent border-white"></div>
+            </div>
+          ),
           text: 'Elaborazione...',
           subtext: 'Sto analizzando la tua richiesta.'
         };
       case 'error':
         return {
-          icon: <div className="w-24 h-24 rounded-full bg-red-100 flex items-center justify-center"><XMarkIcon className="w-12 h-12 text-red-500" /></div>,
+          icon: (
+            <div className="w-24 h-24 rounded-full bg-red-100 flex items-center justify-center">
+              <XMarkIcon className="w-12 h-12 text-red-500" />
+            </div>
+          ),
           text: 'Errore',
           subtext: error
         };
@@ -176,18 +151,22 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({ isOpen, onClose, onPa
         return { icon: null, text: '', subtext: '' };
     }
   };
-  
+
   const { icon, text, subtext } = getStatusContent();
 
   return (
     <div
-      className={`fixed inset-0 z-50 flex justify-center items-center p-4 transition-opacity duration-300 ease-in-out ${isAnimating ? 'opacity-100' : 'opacity-0'} bg-slate-900/50 backdrop-blur-sm`}
+      className={`fixed inset-0 z-50 flex justify-center items-center p-4 transition-opacity duration-300 ease-in-out ${
+        isAnimating ? 'opacity-100' : 'opacity-0'
+      } bg-slate-900/50 backdrop-blur-sm`}
       onClick={onClose}
       aria-modal="true"
       role="dialog"
     >
       <div
-        className={`bg-slate-50 rounded-lg shadow-xl w-full max-w-lg transform transition-all duration-300 ease-in-out ${isAnimating ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`}
+        className={`bg-slate-50 rounded-lg shadow-xl w-full max-w-lg transform transition-all duration-300 ease-in-out ${
+          isAnimating ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
+        }`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-between items-center p-6 border-b border-slate-200">
@@ -203,25 +182,15 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({ isOpen, onClose, onPa
         </div>
 
         <div className="p-6 flex flex-col items-center justify-center min-h-[300px] text-center">
-            {icon}
-            <p className="text-xl font-semibold text-slate-800 mt-6">{text}</p>
-            <p className="text-slate-500 mt-2">{subtext}</p>
-            
-            {status === 'listening' && (
-                <button
-                    onClick={handleManualFinish}
-                    className="mt-6 px-6 py-2 bg-indigo-600 text-white font-semibold rounded-full hover:bg-indigo-700 transition-colors shadow-md"
-                >
-                    Concludi
-                </button>
-            )}
-
-            {transcript && (
-                <div className="mt-6 p-3 bg-slate-100 rounded-md w-full text-left max-h-32 overflow-y-auto">
-                    <p className="text-sm text-slate-600 font-medium">Trascrizione:</p>
-                    <p className="text-slate-800">{transcript}</p>
-                </div>
-            )}
+          {icon}
+          <p className="text-xl font-semibold text-slate-800 mt-6">{text}</p>
+          <p className="text-slate-500 mt-2">{subtext}</p>
+          {transcript && (
+            <div className="mt-6 p-3 bg-slate-100 rounded-md w-full text-left">
+              <p className="text-sm text-slate-600 font-medium">Trascrizione:</p>
+              <p className="text-slate-800">{transcript}</p>
+            </div>
+          )}
         </div>
       </div>
     </div>
