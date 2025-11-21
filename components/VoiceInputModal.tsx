@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Expense } from '../types';
 import { createLiveSession, createBlob } from '../utils/ai';
@@ -23,32 +24,10 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({ isOpen, onClose, onPa
   const stream = useRef<MediaStream | null>(null);
 
   const cleanUp = () => {
-    try {
-      stream.current?.getTracks().forEach(track => track.stop());
-    } catch { /* niente */ }
-
-    try {
-      scriptProcessor.current?.disconnect();
-    } catch { /* niente */ }
-
-    try {
-      audioContext.current?.close();
-    } catch { /* niente */ }
-
-    if (sessionPromise.current) {
-      sessionPromise.current
-        .then((session: any) => {
-          try {
-            session.close();
-          } catch {
-            // ignore
-          }
-        })
-        .catch(() => {
-          // ignore
-        });
-    }
-
+    stream.current?.getTracks().forEach(track => track.stop());
+    scriptProcessor.current?.disconnect();
+    audioContext.current?.close();
+    sessionPromise.current?.then((session: any) => session.close());
     sessionPromise.current = null;
     audioContext.current = null;
     scriptProcessor.current = null;
@@ -62,40 +41,40 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({ isOpen, onClose, onPa
     setStatus('listening');
 
     try {
-      // Richiesta permesso microfono
       stream.current = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-      // Apertura sessione live Gemini
       sessionPromise.current = createLiveSession({
-        onopen: async () => {
+        onopen: async () => { // Nota: aggiungi async qui
           const AudioContextCtor =
             window.AudioContext || (window as any).webkitAudioContext;
           if (!AudioContextCtor) {
-            setError('Il tuo browser non supporta l’input vocale.');
+            setError("Il tuo browser non supporta l'input vocale.");
             setStatus('error');
             return;
           }
 
+          // 1. RIMUOVI { sampleRate: 16000 }. Lascia decidere all'hardware.
           audioContext.current = new AudioContextCtor();
 
+          // 2. FIX PER IOS: Se il contesto è sospeso, riattivalo esplicitamente
           if (audioContext.current.state === 'suspended') {
             await audioContext.current.resume();
           }
 
+          // 3. Ottieni il sample rate REALE del dispositivo (es. 44100 o 48000)
           const realSampleRate = audioContext.current.sampleRate;
+
           const source = audioContext.current.createMediaStreamSource(stream.current!);
           scriptProcessor.current = audioContext.current.createScriptProcessor(4096, 1, 1);
 
           scriptProcessor.current.onaudioprocess = (audioProcessingEvent) => {
             const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
+            
+            // 4. Passa il sample rate reale alla funzione createBlob
             const pcmBlob = createBlob(inputData, realSampleRate);
 
             sessionPromise.current?.then((session: any) => {
-              try {
-                session.sendRealtimeInput({ media: pcmBlob });
-              } catch (e) {
-                console.error('Errore invio chunk audio:', e);
-              }
+              session.sendRealtimeInput({ media: pcmBlob });
             });
           };
 
@@ -103,57 +82,35 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({ isOpen, onClose, onPa
           scriptProcessor.current.connect(audioContext.current.destination);
         },
         onmessage: (message: LiveServerMessage) => {
-          // Trascrizione live
           if (message.serverContent?.inputTranscription) {
             setTranscript(prev => prev + message.serverContent.inputTranscription.text);
           }
-
-          // Tool call: addExpense
-          if (message.toolCall?.functionCalls && message.toolCall.functionCalls.length > 0) {
+          if (message.toolCall?.functionCalls) {
             setStatus('processing');
-            const call = message.toolCall.functionCalls[0];
-
-            // args può essere oggetto o stringa JSON
-            let args: any = call.args;
-            if (typeof args === 'string') {
-              try {
-                args = JSON.parse(args);
-              } catch (e) {
-                console.error('Impossibile parsare i parametri della tool call:', e);
-                setError('Errore nella risposta del modello.');
-                setStatus('error');
-                cleanUp();
-                return;
-              }
-            }
-
+            const args = message.toolCall.functionCalls[0].args;
             onParsed({
               description: args.description as string,
               amount: args.amount as number,
               category: args.category as string,
             });
-
             cleanUp();
           }
         },
-        onerror: (e: any) => {
-          console.error('Errore sessione live:', e);
-          setError('Si è verificato un errore durante la sessione vocale.');
+        onerror: (e: ErrorEvent) => {
+          console.error(e);
+          setError("Si è verificato un errore durante la sessione vocale.");
           setStatus('error');
           cleanUp();
         },
         onclose: () => {
-          // chiusura normale: se siamo ancora in ascolto, torniamo idle
-          if (status === 'listening') {
-            setStatus('idle');
-          }
+          // Session closed
         }
       });
+
     } catch (err) {
-      console.error('Errore getUserMedia / avvio sessione:', err);
-      setError('Accesso al microfono negato o non disponibile. Controlla le autorizzazioni del browser.');
+      console.error(err);
+      setError("Accesso al microfono negato. Controlla le autorizzazioni del browser.");
       setStatus('error');
-      cleanUp();
     }
   };
 
@@ -168,7 +125,6 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({ isOpen, onClose, onPa
     } else {
       setIsAnimating(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   if (!isOpen) return null;
@@ -183,7 +139,7 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({ isOpen, onClose, onPa
             </div>
           ),
           text: 'In ascolto...',
-          subtext: 'Descrivi la tua spesa, ad esempio "25 euro per una cena al ristorante".',
+          subtext: 'Descrivi la tua spesa, ad esempio "25 euro per una cena al ristorante".'
         };
       case 'processing':
         return {
@@ -193,7 +149,7 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({ isOpen, onClose, onPa
             </div>
           ),
           text: 'Elaborazione...',
-          subtext: 'Sto analizzando la tua richiesta.',
+          subtext: 'Sto analizzando la tua richiesta.'
         };
       case 'error':
         return {
@@ -203,7 +159,7 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({ isOpen, onClose, onPa
             </div>
           ),
           text: 'Errore',
-          subtext: error || 'Si è verificato un problema.',
+          subtext: error
         };
       default:
         return { icon: null, text: '', subtext: '' };
@@ -217,10 +173,7 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({ isOpen, onClose, onPa
       className={`fixed inset-0 z-50 flex justify-center items-center p-4 transition-opacity duration-300 ease-in-out ${
         isAnimating ? 'opacity-100' : 'opacity-0'
       } bg-slate-900/50 backdrop-blur-sm`}
-      onClick={() => {
-        cleanUp();
-        onClose();
-      }}
+      onClick={onClose}
       aria-modal="true"
       role="dialog"
     >
@@ -234,10 +187,7 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({ isOpen, onClose, onPa
           <h2 className="text-xl font-bold text-slate-800">Aggiungi con Voce</h2>
           <button
             type="button"
-            onClick={() => {
-              cleanUp();
-              onClose();
-            }}
+            onClick={onClose}
             className="text-slate-500 hover:text-slate-800 transition-colors p-1 rounded-full hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             aria-label="Chiudi"
           >
@@ -252,7 +202,7 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({ isOpen, onClose, onPa
           {transcript && (
             <div className="mt-6 p-3 bg-slate-100 rounded-md w-full text-left">
               <p className="text-sm text-slate-600 font-medium">Trascrizione:</p>
-              <p className="text-slate-800 break-words">{transcript}</p>
+              <p className="text-slate-800">{transcript}</p>
             </div>
           )}
         </div>
