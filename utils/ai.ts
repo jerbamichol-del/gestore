@@ -75,11 +75,22 @@ export async function parseExpensesFromImage(base64Image: string, mimeType: stri
         }
     });
 
-    const jsonStr = response.text.trim();
+    let jsonStr = response.text?.trim();
     if (!jsonStr) {
         return [];
     }
-    return JSON.parse(jsonStr);
+
+    // Robustness cleanup: Remove markdown code blocks if present
+    if (jsonStr.startsWith('```')) {
+        jsonStr = jsonStr.replace(/^```(json)?/, '').replace(/```$/, '').trim();
+    }
+
+    try {
+        return JSON.parse(jsonStr);
+    } catch (e) {
+        console.error("Failed to parse AI response:", e, jsonStr);
+        return [];
+    }
 }
 
 
@@ -117,7 +128,7 @@ export function encode(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-export function createBlob(data: Float32Array): Blob {
+export function createBlob(data: Float32Array, sampleRate: number): Blob {
   const l = data.length;
   const int16 = new Int16Array(l);
   for (let i = 0; i < l; i++) {
@@ -125,7 +136,7 @@ export function createBlob(data: Float32Array): Blob {
   }
   return {
     data: encode(new Uint8Array(int16.buffer)),
-    mimeType: 'audio/pcm;rate=16000',
+    mimeType: `audio/pcm;rate=${sampleRate}`,
   };
 }
 
