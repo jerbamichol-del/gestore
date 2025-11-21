@@ -1,25 +1,18 @@
-import { GoogleGenAI, Type, FunctionDeclaration, Modality, Blob, LiveServerMessage, HarmCategory, HarmBlockThreshold } from '@google/genai';
+
+import { GoogleGenAI, Type, FunctionDeclaration, Modality, Blob, LiveServerMessage } from '@google/genai';
 import { CATEGORIES, Expense } from '../types';
 
-// Robust API Key retrieval for Vite/CRA/Node environments
-const getApiKey = () => {
-  try {
-    // @ts-ignore - Check for Vite environment variable
-    if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_KEY) {
-      // @ts-ignore
-      return import.meta.env.VITE_API_KEY;
-    }
-  } catch (e) {}
-  return process.env.API_KEY;
-};
-
-const API_KEY = getApiKey();
+// 1. Cerca la chiave in tutte le possibili variabili d'ambiente standard
+const API_KEY = 
+  (import.meta as any).env?.VITE_API_KEY || 
+  process.env.REACT_APP_API_KEY || 
+  process.env.API_KEY;
 
 if (!API_KEY) {
-    console.error("API_KEY environment variable is not set. AI features will not work.");
+    console.error("API_KEY mancante! Le funzionalità AI non funzioneranno.");
 }
 
-const ai = new GoogleGenAI({ apiKey: API_KEY || '' });
+const ai = new GoogleGenAI({ apiKey: API_KEY! });
 
 const toYYYYMMDD = (date: Date) => {
     const year = date.getFullYear();
@@ -61,8 +54,6 @@ const getCategoryPrompt = () => {
 }
 
 export async function parseExpensesFromImage(base64Image: string, mimeType: string): Promise<Partial<Expense>[]> {
-    if (!API_KEY) return [];
-    
     const imagePart = {
         inlineData: {
             mimeType,
@@ -85,63 +76,14 @@ export async function parseExpensesFromImage(base64Image: string, mimeType: stri
         config: {
             responseMimeType: "application/json",
             responseSchema: multiExpenseSchema,
-            // Robustness: disable safety filters to prevent false positives on receipts
-            safetySettings: [
-                { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
-                { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
-                { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-                { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE }
-            ]
         }
     });
 
-    let jsonStr = response.text?.trim();
+    const jsonStr = response.text.trim();
     if (!jsonStr) {
         return [];
     }
-
-    // Robustness cleanup: Remove markdown code blocks if present
-    if (jsonStr.startsWith('```')) {
-        jsonStr = jsonStr.replace(/^```(json)?/, '').replace(/```$/, '').trim();
-    }
-
-    try {
-        return JSON.parse(jsonStr);
-    } catch (e) {
-        console.error("Failed to parse AI response:", e, jsonStr);
-        return [];
-    }
-}
-
-export async function parseExpenseFromText(text: string): Promise<Partial<Expense> | null> {
-    if (!API_KEY) return null;
-
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: `Estrai i dati di spesa da questo testo: "${text}".
-        Oggi è ${new Date().toLocaleDateString('it-IT')}.
-        Le categorie disponibili sono: ${Object.keys(CATEGORIES).join(', ')}.
-        Se la categoria non è specificata, cerca di dedurla.
-        Restituisci un JSON con: { description, amount (numero), category }.`,
-        config: {
-            responseMimeType: "application/json",
-            responseSchema: expenseSchema
-        }
-    });
-
-    let jsonStr = response.text?.trim();
-    if (!jsonStr) return null;
-
-    if (jsonStr.startsWith('```')) {
-        jsonStr = jsonStr.replace(/^```(json)?/, '').replace(/```$/, '').trim();
-    }
-
-    try {
-        return JSON.parse(jsonStr);
-    } catch (e) {
-        console.error("Failed to parse text expense:", e);
-        return null;
-    }
+    return JSON.parse(jsonStr);
 }
 
 
@@ -179,33 +121,17 @@ export function encode(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-// Updated createBlob to handle downsampling to 16kHz
-export function createBlob(data: Float32Array, inputSampleRate: number): Blob {
-  const targetSampleRate = 16000;
-  let outputData: Int16Array;
-
-  if (inputSampleRate !== targetSampleRate) {
-      // Downsample logic
-      const ratio = inputSampleRate / targetSampleRate;
-      const newLength = Math.ceil(data.length / ratio);
-      outputData = new Int16Array(newLength);
-      for (let i = 0; i < newLength; i++) {
-          const offset = Math.floor(i * ratio);
-          // Ensure we don't go out of bounds
-          const val = data[Math.min(offset, data.length - 1)];
-          outputData[i] = Math.max(-1, Math.min(1, val)) * 32768;
-      }
-  } else {
-      const l = data.length;
-      outputData = new Int16Array(l);
-      for (let i = 0; i < l; i++) {
-          outputData[i] = data[i] * 32768;
-      }
+// Modifica la firma della funzione per accettare sampleRateInHz
+export function createBlob(data: Float32Array, sampleRateInHz: number): Blob {
+  const l = data.length;
+  const int16 = new Int16Array(l);
+  for (let i = 0; i < l; i++) {
+    int16[i] = data[i] * 32768;
   }
-
   return {
-    data: encode(new Uint8Array(outputData.buffer)),
-    mimeType: `audio/pcm;rate=${targetSampleRate}`,
+    data: encode(new Uint8Array(int16.buffer)),
+    // Usa il rate reale passato dal componente Voice
+    mimeType: `audio/pcm;rate=${sampleRateInHz}`,
   };
 }
 
@@ -216,9 +142,6 @@ export function createLiveSession(callbacks: {
     onerror: (e: ErrorEvent) => void,
     onclose: (e: CloseEvent) => void
 }) {
-    if (!API_KEY) {
-        throw new Error("API Key mancante");
-    }
     const sessionPromise = ai.live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-09-2025',
         callbacks,
