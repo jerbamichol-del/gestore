@@ -6,7 +6,6 @@ import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { getQueuedImages, deleteImageFromQueue, OfflineImage, addImageToQueue } from './utils/db';
 import { parseExpensesFromImage } from './utils/ai';
 import { DEFAULT_ACCOUNTS } from './utils/defaults';
-import { toISODate, parseISODate, fileToBase64 } from './components/icons/formatters';
 
 import Header from './components/Header';
 import Dashboard from './components/Dashboard';
@@ -29,6 +28,15 @@ import SuccessIndicator from './components/SuccessIndicator';
 import { PEEK_PX } from './components/HistoryFilterCard';
 
 type ToastMessage = { message: string; type: 'success' | 'info' | 'error' };
+
+const fileToBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve((reader.result as string).split(',')[1]);
+    reader.onerror = error => reject(error);
+  });
+};
 
 const pickImage = (source: 'camera' | 'gallery'): Promise<File> => {
   return new Promise((resolve, reject) => {
@@ -76,6 +84,13 @@ const pickImage = (source: 'camera' | 'gallery'): Promise<File> => {
   });
 };
 
+const toYYYYMMDD = (date: Date) => date.toISOString().split('T')[0];
+
+const parseDate = (dateString: string): Date => {
+  const [year, month, day] = dateString.split('-').map(Number);
+  return new Date(year, month - 1, day);
+};
+
 const calculateNextDueDate = (template: Expense, fromDate: Date): Date | null => {
   if (template.frequency !== 'recurring' || !template.recurrence) return null;
   const interval = template.recurrenceInterval || 1;
@@ -106,33 +121,81 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const [accounts, setAccounts] = useLocalStorage<Account[]>('accounts_v1', DEFAULT_ACCOUNTS);
 
   // ================== Migrazione dati localStorage (vecchie chiavi) ==================
+  const hasRunMigrationRef = useRef(false);
+
   useEffect(() => {
+    if (hasRunMigrationRef.current) return;
+    hasRunMigrationRef.current = true;
+
     if (typeof window === 'undefined') return;
 
-    const migrate = (targetKey: string, legacyKeys: string[], setter: (val: any) => void, currentValue: any[]) => {
-      if (!currentValue || currentValue.length === 0) {
-        for (const key of legacyKeys) {
+    try {
+      // Migra SPESE se la chiave nuova è vuota
+      if (!expenses || expenses.length === 0) {
+        const legacyExpenseKeys = ['expenses_v1', 'expenses', 'spese', 'spese_v1'];
+
+        for (const key of legacyExpenseKeys) {
           const raw = window.localStorage.getItem(key);
           if (!raw) continue;
+
           try {
             const parsed = JSON.parse(raw);
             if (Array.isArray(parsed) && parsed.length > 0) {
-              console.log(`[MIGRAZIONE] Trovati dati su ${key} → migrazione in ${targetKey}`);
-              setter(parsed);
+              console.log('[MIGRAZIONE] Trovate spese su', key, '→ le copio in expenses_v2');
+              setExpenses(parsed as Expense[]);
               break;
             }
           } catch (e) {
-            console.warn(`[MIGRAZIONE] Errore leggendo ${key}`, e);
+            console.warn('[MIGRAZIONE] Errore leggendo', key, e);
           }
         }
       }
-    };
 
-    migrate('expenses_v2', ['expenses_v1', 'expenses', 'spese', 'spese_v1'], setExpenses, expenses);
-    migrate('accounts_v1', ['accounts', 'conti'], setAccounts, accounts === DEFAULT_ACCOUNTS ? [] : accounts);
-    migrate('recurring_expenses_v1', ['recurring_expenses', 'ricorrenti', 'recurring'], setRecurringExpenses, recurringExpenses);
-    
-  }, []); // Run once on mount
+      // Migra CONTI se la chiave nuova è vuota o default
+      if (!accounts || accounts.length === 0 || accounts === DEFAULT_ACCOUNTS) {
+        const legacyAccountKeys = ['accounts', 'conti'];
+
+        for (const key of legacyAccountKeys) {
+          const raw = window.localStorage.getItem(key);
+          if (!raw) continue;
+
+          try {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              console.log('[MIGRAZIONE] Trovati conti su', key, '→ li copio in accounts_v1');
+              setAccounts(parsed as Account[]);
+              break;
+            }
+          } catch (e) {
+            console.warn('[MIGRAZIONE] Errore leggendo', key, e);
+          }
+        }
+      }
+
+      // Migra SPESE RICORRENTI se la chiave nuova è vuota
+      if (!recurringExpenses || recurringExpenses.length === 0) {
+        const legacyRecurringKeys = ['recurring_expenses', 'ricorrenti', 'recurring'];
+
+        for (const key of legacyRecurringKeys) {
+          const raw = window.localStorage.getItem(key);
+          if (!raw) continue;
+
+          try {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              console.log('[MIGRAZIONE] Trovate ricorrenti su', key, '→ le copio in recurring_expenses_v1');
+              setRecurringExpenses(parsed as Expense[]);
+              break;
+            }
+          } catch (e) {
+            console.warn('[MIGRAZIONE] Errore leggendo', key, e);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[MIGRAZIONE] Errore generale di migrazione dati locali', err);
+    }
+  }, [expenses, accounts, recurringExpenses, setExpenses, setAccounts, setRecurringExpenses]);
 
   // Modal States
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -178,16 +241,17 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     const templatesToUpdate: Expense[] = [];
 
     recurringExpenses.forEach(template => {
-      if (!template.date) return;
+      if (!template.date) {
+        console.warn('Skipping recurring expense template with no date:', template);
+        return;
+      }
 
       const cursorDateString = template.lastGeneratedDate || template.date;
-      let cursor = parseISODate(cursorDateString);
-      if (!cursor) return;
-
+      let cursor = parseDate(cursorDateString);
       let updatedTemplate = { ...template };
 
       let nextDue = !template.lastGeneratedDate
-        ? parseISODate(template.date)
+        ? parseDate(template.date)
         : calculateNextDueDate(template, cursor);
 
       while (nextDue && nextDue <= today) {
@@ -198,7 +262,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         if (
           template.recurrenceEndType === 'date' &&
           template.recurrenceEndDate &&
-          toISODate(nextDue) > template.recurrenceEndDate
+          toYYYYMMDD(nextDue) > template.recurrenceEndDate
         ) {
           break;
         }
@@ -211,7 +275,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
           break;
         }
 
-        const nextDueDateString = toISODate(nextDue);
+        const nextDueDateString = toYYYYMMDD(nextDue);
         const instanceExists = expenses.some(
           exp => exp.recurringExpenseId === template.id && exp.date === nextDueDateString,
         ) || newExpenses.some(
@@ -230,7 +294,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         }
 
         cursor = nextDue;
-        updatedTemplate.lastGeneratedDate = toISODate(cursor);
+        updatedTemplate.lastGeneratedDate = toYYYYMMDD(cursor);
         nextDue = calculateNextDueDate(template, cursor);
       }
 
@@ -320,7 +384,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       if (backPressExitTimeoutRef.current) {
         clearTimeout(backPressExitTimeoutRef.current);
         backPressExitTimeoutRef.current = null;
-        try { window.close(); } catch (e) { console.log("Window close prevented", e); }
+        window.close();
       } else {
         showToast({ message: 'Premi di nuovo per uscire.', type: 'info' });
         backPressExitTimeoutRef.current = window.setTimeout(() => {
@@ -508,6 +572,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     setToast({ message: 'Spesa programmata eliminata.', type: 'info' });
   };
 
+  // New bulk delete functions
   const deleteExpenses = (ids: string[]) => {
     setExpenses(prev => prev.filter(e => !ids.includes(e.id)));
     setToast({ message: `${ids.length} spese eliminate.`, type: 'info' });
@@ -606,7 +671,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     isRecurringScreenOpen ||
     (isHistoryScreenOpen && isHistoryFilterPanelOpen);
 
-  const FAB_MARGIN_ABOVE_PEEK = 12;
+  const FAB_MARGIN_ABOVE_PEEK = 12; // ~3mm
 
   const fabStyle: React.CSSProperties = {
     bottom: isHistoryScreenOpen
@@ -696,6 +761,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         isForRecurringTemplate={!!editingRecurringExpense}
       />
 
+      {/* Modal scelta sorgente immagine */}
       {isImageSourceModalOpen && (
         <div
           className="fixed inset-0 z-50 flex justify-center items-end p-4 transition-opacity duration-75 ease-in-out bg-slate-900/60 backdrop-blur-sm"
@@ -736,6 +802,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         </div>
       )}
 
+      {/* Overlay analisi immagine */}
       {isParsingImage && (
         <div className="fixed inset-0 bg-white/80 backdrop-blur-md flex flex-col items-center justify-center z-[100]">
           <SpinnerIcon className="w-12 h-12 text-indigo-600" />
@@ -751,6 +818,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         onParsed={handleVoiceParsed}
       />
 
+      {/* Conferma eliminazione spesa singola */}
       <ConfirmationModal
         isOpen={isConfirmDeleteModalOpen}
         onClose={() => {
@@ -768,6 +836,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         variant="danger"
       />
 
+      {/* Conferma analisi immagine appena scattata */}
       <ConfirmationModal
         isOpen={!!imageForAnalysis}
         onClose={() => {
