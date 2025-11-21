@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Expense } from '../types';
 import { createLiveSession, createBlob } from '../utils/ai';
@@ -43,7 +44,7 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({ isOpen, onClose, onPa
       stream.current = await navigator.mediaDevices.getUserMedia({ audio: true });
 
       sessionPromise.current = createLiveSession({
-        onopen: () => {
+        onopen: async () => { // Nota: aggiungi async qui
           const AudioContextCtor =
             window.AudioContext || (window as any).webkitAudioContext;
           if (!AudioContextCtor) {
@@ -52,13 +53,26 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({ isOpen, onClose, onPa
             return;
           }
 
-          audioContext.current = new AudioContextCtor({ sampleRate: 16000 });
+          // 1. RIMUOVI { sampleRate: 16000 }. Lascia decidere all'hardware.
+          audioContext.current = new AudioContextCtor();
+
+          // 2. FIX PER IOS: Se il contesto è sospeso, riattivalo esplicitamente
+          if (audioContext.current.state === 'suspended') {
+            await audioContext.current.resume();
+          }
+
+          // 3. Ottieni il sample rate REALE del dispositivo (es. 44100 o 48000)
+          const realSampleRate = audioContext.current.sampleRate;
+
           const source = audioContext.current.createMediaStreamSource(stream.current!);
           scriptProcessor.current = audioContext.current.createScriptProcessor(4096, 1, 1);
 
           scriptProcessor.current.onaudioprocess = (audioProcessingEvent) => {
             const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
-            const pcmBlob = createBlob(inputData);
+            
+            // 4. Passa il sample rate reale alla funzione createBlob
+            const pcmBlob = createBlob(inputData, realSampleRate);
+
             sessionPromise.current?.then((session: any) => {
               session.sendRealtimeInput({ media: pcmBlob });
             });
