@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Expense } from '../types';
-import { createLiveSession, createBlob } from '../utils/ai';
+import { createLiveSession, createBlob, parseExpenseFromText } from '../utils/ai';
 import { XMarkIcon } from './icons/XMarkIcon';
 import { MicrophoneIcon } from './icons/MicrophoneIcon';
 // FIX: Removed deprecated LiveSession import.
@@ -55,10 +54,9 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({ isOpen, onClose, onPa
             return;
           }
     
-          // Request 16k, but browser might ignore it (especially on mobile)
-          audioContext.current = new AudioContext({ 
-              sampleRate: 16000 
-          });
+          // MOBILE FIX: Remove sampleRate restriction. Let the browser choose (e.g. 48k).
+          // The downsampling is handled in createBlob utility.
+          audioContext.current = new AudioContext();
 
           // Ensure context is running (mobile browsers sometimes suspend it)
           if (audioContext.current.state === 'suspended') {
@@ -111,9 +109,32 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({ isOpen, onClose, onPa
 
     } catch (err) {
       console.error(err);
-      setError("Accesso al microfono negato. Controlla le autorizzazioni del browser.");
+      setError("Accesso al microfono negato o API Key mancante.");
       setStatus('error');
     }
+  };
+
+  const handleManualFinish = async () => {
+      cleanUp(); // Stop listening immediately
+      if (!transcript.trim()) {
+          onClose(); // Nothing was said
+          return;
+      }
+      
+      setStatus('processing');
+      try {
+          // Fallback: analyze the text transcript directly
+          const data = await parseExpenseFromText(transcript);
+          if (data) {
+              onParsed(data);
+          } else {
+              setError("Non ho capito la spesa. Riprova.");
+              setStatus('error');
+          }
+      } catch (e) {
+          setError("Errore nell'elaborazione del testo.");
+          setStatus('error');
+      }
   };
 
   useEffect(() => {
@@ -185,8 +206,18 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({ isOpen, onClose, onPa
             {icon}
             <p className="text-xl font-semibold text-slate-800 mt-6">{text}</p>
             <p className="text-slate-500 mt-2">{subtext}</p>
+            
+            {status === 'listening' && (
+                <button
+                    onClick={handleManualFinish}
+                    className="mt-6 px-6 py-2 bg-indigo-600 text-white font-semibold rounded-full hover:bg-indigo-700 transition-colors shadow-md"
+                >
+                    Concludi
+                </button>
+            )}
+
             {transcript && (
-                <div className="mt-6 p-3 bg-slate-100 rounded-md w-full text-left">
+                <div className="mt-6 p-3 bg-slate-100 rounded-md w-full text-left max-h-32 overflow-y-auto">
                     <p className="text-sm text-slate-600 font-medium">Trascrizione:</p>
                     <p className="text-slate-800">{transcript}</p>
                 </div>
