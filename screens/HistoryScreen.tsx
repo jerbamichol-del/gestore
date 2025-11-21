@@ -1,3 +1,4 @@
+
 // screens/HistoryScreen.tsx
 import React, {
   useMemo,
@@ -12,6 +13,8 @@ import { formatCurrency } from '../components/icons/formatters';
 import { TrashIcon } from '../components/icons/TrashIcon';
 import { HistoryFilterCard } from '../components/HistoryFilterCard';
 import { ArrowLeftIcon } from '../components/icons/ArrowLeftIcon';
+import { CheckIcon } from '../components/icons/CheckIcon';
+import ConfirmationModal from '../components/ConfirmationModal';
 import { useTapBridge } from '../hooks/useTapBridge';
 
 type DateFilter = 'all' | '7d' | '30d' | '6m' | '1y';
@@ -25,6 +28,10 @@ interface ExpenseItemProps {
   onDelete: (id: string) => void;
   isOpen: boolean;
   onOpen: (id: string) => void;
+  isSelectionMode: boolean;
+  isSelected: boolean;
+  onToggleSelection: (id: string) => void;
+  onLongPress: (id: string) => void;
 }
 
 const ACTION_WIDTH = 72;
@@ -37,6 +44,10 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
   onDelete,
   isOpen,
   onOpen,
+  isSelectionMode,
+  isSelected,
+  onToggleSelection,
+  onLongPress,
 }) => {
   const style = getCategoryStyle(expense.category);
   const accountName =
@@ -45,7 +56,24 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
   const tapBridge = useTapBridge();
 
   const isRecurringInstance = !!expense.recurringExpenseId;
-  const itemBgClass = isRecurringInstance ? 'bg-amber-50' : 'bg-white';
+  const itemBgClass = isSelected ? 'bg-indigo-50 ring-1 ring-inset ring-indigo-200' : isRecurringInstance ? 'bg-amber-50' : 'bg-white';
+
+  // Long press logic
+  const longPressTimer = useRef<number | null>(null);
+  const handlePointerDownItem = (e: React.PointerEvent) => {
+    if (isSelectionMode) return; // No long press needed if already selecting
+    longPressTimer.current = window.setTimeout(() => {
+        onLongPress(expense.id);
+        if (navigator.vibrate) navigator.vibrate(50);
+    }, 500);
+  };
+
+  const cancelLongPress = () => {
+      if (longPressTimer.current) {
+          clearTimeout(longPressTimer.current);
+          longPressTimer.current = null;
+      }
+  };
 
   const dragState = useRef({
     isDragging: false,
@@ -68,12 +96,16 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
 
   useEffect(() => {
     if (!dragState.current.isDragging) {
-      setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
+      setTranslateX(isOpen && !isSelectionMode ? -ACTION_WIDTH : 0, true);
     }
-  }, [isOpen, setTranslateX]);
+  }, [isOpen, isSelectionMode, setTranslateX]);
 
   const handlePointerDown = (e: React.PointerEvent) => {
+    handlePointerDownItem(e);
     if ((e.target as HTMLElement).closest('button') || !itemRef.current) return;
+
+    // Disable swipe in selection mode
+    if (isSelectionMode) return;
 
     itemRef.current.style.transition = 'none';
     const m = new DOMMatrixReadOnly(
@@ -101,7 +133,15 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
 
   const handlePointerMove = (e: React.PointerEvent) => {
     const ds = dragState.current;
+    
+    // Cancel long press on significant move
+    if (longPressTimer.current) {
+        const dist = Math.hypot(e.clientX - ds.startX, e.clientY - ds.startY);
+        if (dist > 10) cancelLongPress();
+    }
+
     if (ds.pointerId !== e.pointerId) return;
+    if (isSelectionMode) return; // Disable swipe in selection mode
 
     const dx = e.clientX - ds.startX;
     const dy = e.clientY - ds.startY;
@@ -138,6 +178,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
+    cancelLongPress();
     const ds = dragState.current;
     if (ds.pointerId !== e.pointerId) return;
 
@@ -171,6 +212,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
   };
 
   const handlePointerCancel = (e: React.PointerEvent) => {
+    cancelLongPress();
     const ds = dragState.current;
     if (ds.pointerId !== e.pointerId) return;
 
@@ -185,15 +227,18 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
 
   const handleClick = () => {
     if (dragState.current.isDragging || dragState.current.wasHorizontal) return;
-    if (isOpen) {
-      onOpen('');
+    
+    if (isSelectionMode) {
+        onToggleSelection(expense.id);
+    } else if (isOpen) {
+        onOpen('');
     } else {
-      onEdit(expense);
+        onEdit(expense);
     }
   };
 
   return (
-    <div className={`relative ${itemBgClass} overflow-hidden`}>
+    <div className={`relative ${itemBgClass} overflow-hidden transition-colors duration-200`}>
       <div className="absolute top-0 right-0 h-full flex items-center z-0">
         <button
           onClick={() => onDelete(expense.id)}
@@ -213,31 +258,39 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}
         onClick={handleClick}
-        className={`relative flex items-center gap-4 py-3 px-4 ${itemBgClass} z-10 cursor-pointer`}
+        className={`relative flex items-center gap-4 py-3 px-4 ${itemBgClass} z-10 cursor-pointer transition-colors duration-200`}
         style={{ touchAction: 'pan-y' }}
       >
-        {isRecurringInstance && (
+        {isRecurringInstance && !isSelectionMode && (
           <span className="absolute top-1.5 right-1.5 w-5 h-5 bg-amber-200 text-amber-800 text-xs font-bold rounded-full flex items-center justify-center border-2 border-amber-50" title="Spesa Programmata">
             P
           </span>
         )}
-        <span
-          className={`w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center ${style.bgColor}`}
-        >
-          <style.Icon className={`w-6 h-6 ${style.color}`} />
-        </span>
+        
+        {isSelected ? (
+             <span className={`w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center bg-indigo-600 text-white transition-transform duration-200 transform scale-100`}>
+                <CheckIcon className="w-6 h-6" strokeWidth={3} />
+             </span>
+        ) : (
+            <span
+              className={`w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center ${style.bgColor} transition-transform duration-200`}
+            >
+              <style.Icon className={`w-6 h-6 ${style.color}`} />
+            </span>
+        )}
+
         <div className="flex-grow min-w-0">
-          <p className="font-semibold text-slate-800 truncate">
+          <p className={`font-semibold truncate ${isSelected ? 'text-indigo-900' : 'text-slate-800'}`}>
             {expense.subcategory || style.label} • {accountName}
           </p>
           <p
-            className="text-sm text-slate-500 truncate"
+            className={`text-sm truncate ${isSelected ? 'text-indigo-700' : 'text-slate-500'}`}
             title={expense.description}
           >
             {expense.description || 'Senza descrizione'}
           </p>
         </div>
-        <p className="font-bold text-slate-900 text-lg text-right shrink-0 whitespace-nowrap min-w-[90px]">
+        <p className={`font-bold text-lg text-right shrink-0 whitespace-nowrap min-w-[90px] ${isSelected ? 'text-indigo-900' : 'text-slate-900'}`}>
           {formatCurrency(Number(expense.amount) || 0)}
         </p>
       </div>
@@ -251,6 +304,7 @@ interface HistoryScreenProps {
   accounts: Account[];
   onEditExpense: (expense: Expense) => void;
   onDeleteExpense: (id: string) => void;
+  onDeleteExpenses: (ids: string[]) => void; // For bulk delete
   isEditingOrDeleting: boolean;
   onDateModalStateChange: (isOpen: boolean) => void;
   onClose: () => void;
@@ -299,6 +353,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
   accounts,
   onEditExpense,
   onDeleteExpense,
+  onDeleteExpenses,
   isEditingOrDeleting,
   onDateModalStateChange,
   onClose,
@@ -320,19 +375,21 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
 
   // Advanced Filtering State
   const [filterAccount, setFilterAccount] = useState<string | null>(null);
-  
-  // Replaced single category/subcategory strings with a Set for multi-selection
-  // Format: "Category" (for whole category) or "Category:Subcategory" (for specific subcategory)
   const [filterCategories, setFilterCategories] = useState<Set<string>>(new Set());
-  
   const [filterDescription, setFilterDescription] = useState('');
   const [filterAmountRange, setFilterAmountRange] = useState<{ min: string; max: string }>({ min: '', max: '' });
 
   const [openItemId, setOpenItemId] = useState<string | null>(null);
   const [isInternalDateModalOpen, setIsInternalDateModalOpen] = useState(false);
 
+  // Selection State
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
+
   const autoCloseRef = useRef<number | null>(null);
   const prevOpRef = useRef(isEditingOrDeleting);
+
+  const isSelectionMode = selectedIds.size > 0;
 
   useEffect(() => {
     const timer = setTimeout(() => setIsAnimatingIn(true), 10);
@@ -451,18 +508,8 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
         result = result.filter(e => {
             const wholeCategoryKey = e.category;
             const specificSubKey = `${e.category}:${e.subcategory || ''}`;
-            
-            // If "Category" is selected, it matches all subcategories.
-            // If "Category:Subcategory" is selected, it matches only that.
-            // However, if "Category" is present in the Set, we accept it.
-            // If "Category:Sub" is present, we accept it.
-            
-            // Edge case: If user selects specific subcats, the Set has keys like "Food:Pizza".
-            // If user selects "All Food", the Set has "Food".
-            
             if (filterCategories.has(wholeCategoryKey)) return true;
             if (e.subcategory && filterCategories.has(specificSubKey)) return true;
-            
             return false;
         });
     }
@@ -544,6 +591,40 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
 
   const handleClearCategoryFilters = () => setFilterCategories(new Set());
 
+  // Selection Logic
+  const handleLongPress = (id: string) => {
+      setSelectedIds(new Set([id]));
+      if (navigator.vibrate) navigator.vibrate(50);
+  };
+
+  const handleToggleSelection = (id: string) => {
+      setSelectedIds(prev => {
+          const next = new Set(prev);
+          if (next.has(id)) {
+              next.delete(id);
+          } else {
+              next.add(id);
+          }
+          return next;
+      });
+  };
+
+  const handleCancelSelection = () => {
+      setSelectedIds(new Set());
+  };
+
+  const handleBulkDeleteClick = () => {
+      if (selectedIds.size > 0) {
+          setIsBulkDeleteModalOpen(true);
+      }
+  };
+
+  const handleConfirmBulkDelete = () => {
+      onDeleteExpenses(Array.from(selectedIds));
+      setIsBulkDeleteModalOpen(false);
+      setSelectedIds(new Set());
+  };
+
   return (
     <div
       className={`fixed inset-0 z-20 bg-slate-100 transform transition-transform duration-300 ease-in-out ${
@@ -551,19 +632,41 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
       }`}
       style={{ touchAction: 'pan-y' }}
     >
-      <header className="sticky top-0 z-20 flex items-center gap-4 p-4 bg-white/80 backdrop-blur-sm shadow-sm">
-        <button
-          onClick={handleClose}
-          className="p-2 rounded-full hover:bg-slate-200 transition-colors"
-          aria-label="Indietro"
-        >
-          <ArrowLeftIcon className="w-6 h-6 text-slate-700" />
-        </button>
-        <h1 className="text-xl font-bold text-slate-800">Storico Spese</h1>
+      <header className="sticky top-0 z-20 flex items-center gap-4 p-4 bg-white/80 backdrop-blur-sm shadow-sm h-[60px]">
+        {isSelectionMode ? (
+            <>
+                <button
+                    onClick={handleCancelSelection}
+                    className="p-2 -ml-2 rounded-full hover:bg-slate-200 transition-colors text-slate-600"
+                    aria-label="Annulla selezione"
+                >
+                    <ArrowLeftIcon className="w-6 h-6" />
+                </button>
+                <h1 className="text-xl font-bold text-indigo-800 flex-1">{selectedIds.size} Selezionati</h1>
+                <button
+                    onClick={handleBulkDeleteClick}
+                    className="p-2 rounded-full hover:bg-red-100 text-red-600 transition-colors"
+                    aria-label="Elimina selezionati"
+                >
+                    <TrashIcon className="w-6 h-6" />
+                </button>
+            </>
+        ) : (
+            <>
+                <button
+                  onClick={handleClose}
+                  className="p-2 -ml-2 rounded-full hover:bg-slate-200 transition-colors"
+                  aria-label="Indietro"
+                >
+                  <ArrowLeftIcon className="w-6 h-6 text-slate-700" />
+                </button>
+                <h1 className="text-xl font-bold text-slate-800 flex-1">Storico Spese</h1>
+            </>
+        )}
       </header>
 
       <main
-        className="overflow-y-auto h-[calc(100%-68px)]"
+        className="overflow-y-auto h-[calc(100%-60px)]"
         style={{ touchAction: 'pan-y' }}
       >
         <div
@@ -593,6 +696,10 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
                         onDelete={onDeleteExpense}
                         isOpen={openItemId === expense.id}
                         onOpen={handleOpenItem}
+                        isSelectionMode={isSelectionMode}
+                        isSelected={selectedIds.has(expense.id)}
+                        onToggleSelection={handleToggleSelection}
+                        onLongPress={handleLongPress}
                       />
                     </React.Fragment>
                   ))}
@@ -612,7 +719,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
       </main>
 
       <HistoryFilterCard
-        isActive={isAnimatingIn && !isInternalDateModalOpen && !isOverlayed}
+        isActive={isAnimatingIn && !isInternalDateModalOpen && !isOverlayed && !isSelectionMode}
         
         // Date Filter Props
         onSelectQuickFilter={(value) => {
@@ -656,6 +763,17 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
         onDescriptionChange={setFilterDescription}
         amountRange={filterAmountRange}
         onAmountRangeChange={setFilterAmountRange}
+      />
+
+      <ConfirmationModal
+        isOpen={isBulkDeleteModalOpen}
+        onClose={() => setIsBulkDeleteModalOpen(false)}
+        onConfirm={handleConfirmBulkDelete}
+        title="Elimina Selezionati"
+        message={`Sei sicuro di voler eliminare ${selectedIds.size} elementi? L'azione è irreversibile.`}
+        variant="danger"
+        confirmButtonText="Elimina"
+        cancelButtonText="Annulla"
       />
     </div>
   );
