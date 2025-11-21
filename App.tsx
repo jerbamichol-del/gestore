@@ -5,7 +5,6 @@ import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { getQueuedImages, deleteImageFromQueue, OfflineImage, addImageToQueue } from './utils/db';
 import { parseExpensesFromImage } from './utils/ai';
 import { DEFAULT_ACCOUNTS } from './utils/defaults';
-import { fileToBase64 } from './components/icons/formatters';
 
 import Header from './components/Header';
 import Dashboard from './components/Dashboard';
@@ -29,7 +28,7 @@ import { PEEK_PX } from './components/HistoryFilterCard';
 
 type ToastMessage = { message: string; type: 'success' | 'info' | 'error' };
 
-// helper locale per formattare Date → "YYYY-MM-DD"
+// ================== Helper date / base64 locali ==================
 const toISODate = (date: Date): string => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -37,13 +36,34 @@ const toISODate = (date: Date): string => {
   return `${year}-${month}-${day}`;
 };
 
-// helper locale per parse della data ISO
 const parseISODate = (value: string | null | undefined): Date | null => {
   if (!value) return null;
   const d = new Date(value);
   return isNaN(d.getTime()) ? null : d;
 };
 
+const fileToBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result !== 'string') {
+        reject(new Error('Impossibile leggere il file.'));
+        return;
+      }
+      // result è tipo "data:image/jpeg;base64,AAAA..."
+      const commaIndex = result.indexOf(',');
+      const base64 = commaIndex >= 0 ? result.slice(commaIndex + 1) : result;
+      resolve(base64);
+    };
+    reader.onerror = () => {
+      reject(reader.error || new Error('Errore durante la lettura del file.'));
+    };
+    reader.readAsDataURL(file);
+  });
+};
+
+// ================== Picker immagine ==================
 const pickImage = (source: 'camera' | 'gallery'): Promise<File> => {
   return new Promise((resolve, reject) => {
     const input = document.createElement('input');
