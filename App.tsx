@@ -1,4 +1,7 @@
-
+<change>
+<file>App.tsx</file>
+<description>Add startup check for API Key presence to assist with PWA debugging.</description>
+<content><![CDATA[
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Expense, Account } from './types';
 import { useLocalStorage } from './hooks/useLocalStorage';
@@ -37,8 +40,8 @@ const processImageFile = (file: File): Promise<{base64: string, mimeType: string
       const canvas = document.createElement('canvas');
       let width = img.width;
       let height = img.height;
-      const MAX_WIDTH = 1024; // Reduced to 1024px for better mobile stability
-      const MAX_HEIGHT = 1024;
+      const MAX_WIDTH = 800; // Reduced to 800px for maximum mobile stability
+      const MAX_HEIGHT = 800;
 
       if (width > height) {
         if (width > MAX_WIDTH) {
@@ -57,8 +60,8 @@ const processImageFile = (file: File): Promise<{base64: string, mimeType: string
       const ctx = canvas.getContext('2d');
       if (ctx) {
           ctx.drawImage(img, 0, 0, width, height);
-          // Aggressive compression (0.6) to keep payload small for mobile networks
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+          // Aggressive compression (0.5) to keep payload very small for mobile networks
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.5);
           resolve({
               base64: dataUrl.split(',')[1],
               mimeType: 'image/jpeg'
@@ -153,6 +156,18 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const [expenses, setExpenses] = useLocalStorage<Expense[]>('expenses_v2', []);
   const [recurringExpenses, setRecurringExpenses] = useLocalStorage<Expense[]>('recurring_expenses_v1', []);
   const [accounts, setAccounts] = useLocalStorage<Account[]>('accounts_v1', DEFAULT_ACCOUNTS);
+
+  // Debugging check for API Key
+  useEffect(() => {
+    // @ts-ignore
+    const apiKey = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_KEY) || process.env.API_KEY;
+    if (!apiKey) {
+       // Use a timer to make sure UI is mounted
+       setTimeout(() => {
+           alert("ATTENZIONE: API Key mancante! Le funzioni AI (vocali e immagini) non funzioneranno. Verifica il file .env.");
+       }, 1000);
+    }
+  }, []);
 
   // ================== Migrazione dati localStorage (vecchie chiavi) ==================
   const hasRunMigrationRef = useRef(false);
@@ -937,3 +952,5 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 };
 
 export default App;
+]]></content>
+</change>
