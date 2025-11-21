@@ -572,6 +572,17 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     setToast({ message: 'Spesa programmata eliminata.', type: 'info' });
   };
 
+  // New bulk delete functions
+  const deleteExpenses = (ids: string[]) => {
+    setExpenses(prev => prev.filter(e => !ids.includes(e.id)));
+    setToast({ message: `${ids.length} spese eliminate.`, type: 'info' });
+  };
+
+  const deleteRecurringExpenses = (ids: string[]) => {
+    setRecurringExpenses(prev => prev.filter(e => !ids.includes(e.id)));
+    setToast({ message: `${ids.length} spese programmate eliminate.`, type: 'info' });
+  };
+
   // ================== Immagini / AI ==================
   const handleImagePick = async (source: 'camera' | 'gallery') => {
     setIsImageSourceModalOpen(false);
@@ -864,6 +875,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
           onClose={() => { setIsHistoryScreenOpen(false); }}
           onEditExpense={openEditForm}
           onDeleteExpense={handleDeleteRequest}
+          onDeleteExpenses={deleteExpenses}
           isEditingOrDeleting={isEditingOrDeletingInHistory}
           isOverlayed={isHistoryScreenOverlayed}
           onDateModalStateChange={setIsDateModalOpen}
@@ -879,6 +891,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
           onClose={() => { setIsRecurringScreenOpen(false); }}
           onEdit={openRecurringEditForm}
           onDelete={deleteRecurringExpense}
+          onDeleteRecurringExpenses={deleteRecurringExpenses}
         />
       )}
 
