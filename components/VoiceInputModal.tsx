@@ -47,7 +47,7 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({ isOpen, onClose, onPa
 
       // FIX: Moved audio processing setup into `onopen` callback and added type assertions for function call args.
       sessionPromise.current = createLiveSession({
-        onopen: () => {
+        onopen: async () => {
           const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
           if (!AudioContext) {
             setError("Il tuo browser non supporta l'input vocale.");
@@ -55,13 +55,25 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({ isOpen, onClose, onPa
             return;
           }
     
-          audioContext.current = new AudioContext({ sampleRate: 16000 });
+          audioContext.current = new AudioContext({ 
+              // We suggest 16k, but browser might ignore it on mobile
+              sampleRate: 16000 
+          });
+
+          // Ensure context is running (mobile browsers sometimes suspend it)
+          if (audioContext.current.state === 'suspended') {
+              await audioContext.current.resume();
+          }
+
           const source = audioContext.current.createMediaStreamSource(stream.current!);
           scriptProcessor.current = audioContext.current.createScriptProcessor(4096, 1, 1);
           
+          const currentSampleRate = audioContext.current.sampleRate;
+
           scriptProcessor.current.onaudioprocess = (audioProcessingEvent) => {
               const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
-              const pcmBlob = createBlob(inputData);
+              // Pass the actual sample rate to the encoder
+              const pcmBlob = createBlob(inputData, currentSampleRate);
               sessionPromise.current?.then((session) => {
                   session.sendRealtimeInput({ media: pcmBlob });
               });
