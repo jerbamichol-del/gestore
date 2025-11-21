@@ -1,4 +1,5 @@
 
+
 export const formatCurrency = (amount: number): string => {
   const numericAmount = (typeof amount === 'number' && !isNaN(amount)) ? amount : 0;
 
@@ -27,34 +28,12 @@ export const formatDate = (date: Date): string => {
     day: 'numeric',
   };
   const formatter = new Intl.DateTimeFormat('it-IT', options);
+  // Usiamo formatToParts per poter aggiungere il punto al mese abbreviato.
+  // Questo approccio è robusto e rispetta l'ordine dei componenti della data per la lingua specificata.
   return formatter.formatToParts(date).map(({ type, value }) => {
     if (type === 'month') {
       return `${value}.`;
     }
     return value;
   }).join('');
-};
-
-// --- Shared Utilities ---
-
-export const toISODate = (date: Date): string => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
-export const parseISODate = (dateString: string | null | undefined): Date | null => {
-  if (!dateString) return null;
-  const [year, month, day] = dateString.split('-').map(Number);
-  return new Date(year, month - 1, day);
-};
-
-export const fileToBase64 = (file: File | Blob): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => resolve((reader.result as string).split(',')[1]);
-    reader.onerror = error => reject(error);
-  });
 };
