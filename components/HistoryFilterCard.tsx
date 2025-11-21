@@ -932,7 +932,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
       onPointerCancel={handlePointerCancel}
       onClickCapture={handleClickCapture}
       data-no-page-swipe="true"
-      className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-[0_-8px_20px_-5px_rgba(0,0,0,0.08)] z-[1000]"
+      className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-[0_-3px_4px_rgba(71,85,105,0.6)] z-[1000]"
       style={{
         height: `${OPEN_HEIGHT_VH}vh`,
         transform: `translate3d(0, ${yForStyle}px, 0)`,
