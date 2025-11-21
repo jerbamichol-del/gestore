@@ -5,7 +5,7 @@ import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { getQueuedImages, deleteImageFromQueue, OfflineImage, addImageToQueue } from './utils/db';
 import { parseExpensesFromImage } from './utils/ai';
 import { DEFAULT_ACCOUNTS } from './utils/defaults';
-import { toISODate, fileToBase64 } from './components/icons/formatters';
+import { fileToBase64 } from './components/icons/formatters';
 
 import Header from './components/Header';
 import Dashboard from './components/Dashboard';
@@ -29,7 +29,15 @@ import { PEEK_PX } from './components/HistoryFilterCard';
 
 type ToastMessage = { message: string; type: 'success' | 'info' | 'error' };
 
-// helper locale per la parsing della data ISO
+// helper locale per formattare Date → "YYYY-MM-DD"
+const toISODate = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+// helper locale per parse della data ISO
 const parseISODate = (value: string | null | undefined): Date | null => {
   if (!value) return null;
   const d = new Date(value);
