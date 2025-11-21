@@ -4,7 +4,6 @@ import { Expense } from '../types';
 import { createLiveSession, createBlob } from '../utils/ai';
 import { XMarkIcon } from './icons/XMarkIcon';
 import { MicrophoneIcon } from './icons/MicrophoneIcon';
-// FIX: Removed deprecated LiveSession import.
 import { LiveServerMessage } from '@google/genai';
 
 interface VoiceInputModalProps {
@@ -19,8 +18,7 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({ isOpen, onClose, onPa
   const [transcript, setTranscript] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  // FIX: Use ReturnType for proper type inference as LiveSession is not exported.
-  const sessionPromise = useRef<ReturnType<typeof createLiveSession> | null>(null);
+  const sessionPromise = useRef<Promise<any> | null>(null);
   const audioContext = useRef<AudioContext | null>(null);
   const scriptProcessor = useRef<ScriptProcessorNode | null>(null);
   const stream = useRef<MediaStream | null>(null);
@@ -29,7 +27,7 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({ isOpen, onClose, onPa
     stream.current?.getTracks().forEach(track => track.stop());
     scriptProcessor.current?.disconnect();
     audioContext.current?.close();
-    sessionPromise.current?.then(session => session.close());
+    sessionPromise.current?.then((session: any) => session.close());
     sessionPromise.current = null;
     audioContext.current = null;
     scriptProcessor.current = null;
@@ -45,7 +43,6 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({ isOpen, onClose, onPa
     try {
       stream.current = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-      // FIX: Moved audio processing setup into `onopen` callback and added type assertions for function call args.
       sessionPromise.current = createLiveSession({
         onopen: () => {
           const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
@@ -62,7 +59,7 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({ isOpen, onClose, onPa
           scriptProcessor.current.onaudioprocess = (audioProcessingEvent) => {
               const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
               const pcmBlob = createBlob(inputData);
-              sessionPromise.current?.then((session) => {
+              sessionPromise.current?.then((session: any) => {
                   session.sendRealtimeInput({ media: pcmBlob });
               });
           };
