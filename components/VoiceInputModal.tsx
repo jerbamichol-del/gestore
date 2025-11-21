@@ -43,7 +43,7 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({ isOpen, onClose, onPa
     setStatus('listening');
 
     try {
-      stream.current = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.current = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true } });
 
       // FIX: Moved audio processing setup into `onopen` callback and added type assertions for function call args.
       sessionPromise.current = createLiveSession({
@@ -55,8 +55,8 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({ isOpen, onClose, onPa
             return;
           }
     
+          // Request 16k, but browser might ignore it (especially on mobile)
           audioContext.current = new AudioContext({ 
-              // We suggest 16k, but browser might ignore it on mobile
               sampleRate: 16000 
           });
 
@@ -68,11 +68,12 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({ isOpen, onClose, onPa
           const source = audioContext.current.createMediaStreamSource(stream.current!);
           scriptProcessor.current = audioContext.current.createScriptProcessor(4096, 1, 1);
           
+          // Capture the *actual* sample rate the browser gave us
           const currentSampleRate = audioContext.current.sampleRate;
 
           scriptProcessor.current.onaudioprocess = (audioProcessingEvent) => {
               const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
-              // Pass the actual sample rate to the encoder
+              // Pass the actual sample rate to the encoder for downsampling if needed
               const pcmBlob = createBlob(inputData, currentSampleRate);
               sessionPromise.current?.then((session) => {
                   session.sendRealtimeInput({ media: pcmBlob });
