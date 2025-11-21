@@ -63,7 +63,7 @@ interface HistoryFilterCardProps {
 /* -------------------- Checkbox Component -------------------- */
 const Checkbox: React.FC<{ checked: boolean; onChange: () => void }> = ({ checked, onChange }) => (
     <div 
-        className={`w-6 h-6 rounded border flex items-center justify-center transition-colors cursor-pointer ${checked ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-slate-300'}`}
+        className={`w-6 h-6 rounded border flex items-center justify-center transition-colors cursor-pointer ${checked ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-black'}`}
         onClick={(e) => { e.stopPropagation(); onChange(); }}
     >
         {checked && <CheckIcon className="w-4 h-4 text-white" strokeWidth={3} />}
@@ -871,12 +871,12 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
                                     onClick={() => handleCategoryClick(cat)}
                                     className="flex items-center gap-3 flex-1 text-left min-w-0"
                                 >
-                                     <span className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${style.bgColor}`}>
-                                        <style.Icon className={`w-4 h-4 ${style.color}`} />
+                                     <span className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${style.bgColor}`}>
+                                        <style.Icon className={`w-5 h-5 ${style.color}`} />
                                     </span>
-                                    <span className={`text-sm font-medium truncate ${isParentVisuallyChecked ? 'text-indigo-800' : 'text-slate-700'}`}>{style.label}</span>
+                                    <span className={`text-base font-bold truncate ${isParentVisuallyChecked ? 'text-indigo-800' : 'text-slate-700'}`}>{style.label}</span>
                                     {subcategories.length > 0 && (
-                                        <ChevronDownIcon className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                                        <ChevronDownIcon className={`w-5 h-5 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                                     )}
                                 </button>
                                 
@@ -888,7 +888,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
                           </div>
                           
                           {isExpanded && subcategories.length > 0 && (
-                              <div className="bg-slate-50 pl-14 pr-4 py-2 space-y-2 border-t border-slate-100 animate-fade-in-down">
+                              <div className="bg-slate-50 pl-16 pr-4 py-3 space-y-3 border-t border-slate-100 animate-fade-in-down">
                                   {subcategories.map(sub => {
                                       const key = `${cat}:${sub}`;
                                       // If parent is explicitly selected, child is visually selected.
@@ -897,7 +897,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
                                       
                                       return (
                                           <div key={sub} className="flex items-center justify-between">
-                                              <span className={`text-sm ${isSubVisuallyChecked ? 'text-indigo-700 font-medium' : 'text-slate-600'}`}>{sub}</span>
+                                              <span className={`text-base font-bold ${isSubVisuallyChecked ? 'text-indigo-700' : 'text-slate-600'}`}>{sub}</span>
                                               <Checkbox 
                                                 checked={isSubVisuallyChecked} 
                                                 onChange={() => {
