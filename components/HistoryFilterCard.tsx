@@ -63,7 +63,7 @@ interface HistoryFilterCardProps {
 /* -------------------- Checkbox Component -------------------- */
 const Checkbox: React.FC<{ checked: boolean; onChange: () => void }> = ({ checked, onChange }) => (
     <div 
-        className={`w-6 h-6 rounded border flex items-center justify-center transition-colors cursor-pointer ${checked ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-black'}`}
+        className={`w-6 h-6 rounded border flex items-center justify-center transition-colors cursor-pointer ${checked ? 'bg-indigo-600 border-black' : 'bg-white border-black'}`}
         onClick={(e) => { e.stopPropagation(); onChange(); }}
     >
         {checked && <CheckIcon className="w-4 h-4 text-white" strokeWidth={3} />}
@@ -355,7 +355,7 @@ const PeriodNavigator: React.FC<{
       {isMenuOpen && (
         <div
           className={`absolute left-0 right-0 mx-auto w-40 bg-white border border-slate-200 shadow-lg rounded-lg z-[1000] p-2 space-y-1 ${
-            isPanelOpen ? 'top-full mt-9' : 'bottom-full mb-2'
+            isPanelOpen ? 'top-full mt-1' : 'bottom-full mb-2'
           }`}
         >
           {(['day', 'week', 'month', 'year'] as PeriodType[]).map((v) => (
@@ -436,7 +436,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
   useEffect(() => {
     // Only expand on first load if exactly one category is selected to avoid clutter
     if (currentView === 'category_selection' && props.selectedCategoryFilters.size === 1 && expandedCategory === null) {
-        const selected = Array.from(props.selectedCategoryFilters)[0];
+        const selected = Array.from(props.selectedCategoryFilters)[0] as string;
         const [cat] = selected.split(':');
         if (CATEGORIES[cat] && CATEGORIES[cat].length > 0) {
             setExpandedCategory(cat);
@@ -479,9 +479,6 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
       setClosedY(closed);
 
       setTranslateY((prev) => {
-        // Fix: Use the persistent ref to check if we should stay open.
-        // If we rely on 'prev < closed/2' during a resize (keyboard dismissal), 
-        // the changed 'closed' value can cause a false positive for closing.
         if (!laidOut) {
             return closed; 
         }
@@ -503,10 +500,10 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
       window.removeEventListener('resize', update);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.isActive, OPEN_HEIGHT_VH]); // Ricalcola quando cambia l'altezza target
+  }, [props.isActive, OPEN_HEIGHT_VH]);
 
   const SPEED = 0.05;
-  const MIN_TOGGLE_DRAG = 10; // px minimi per considerare "scatto" apri/chiudi
+  const MIN_TOGGLE_DRAG = 10;
 
   const clampY = useCallback(
     (y: number) => {
@@ -693,7 +690,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
       const count = props.selectedCategoryFilters.size;
       if (count === 0) return 'Categoria';
       if (count === 1) {
-          const key = Array.from(props.selectedCategoryFilters)[0];
+          const key = Array.from(props.selectedCategoryFilters)[0] as string;
           const [cat, sub] = key.split(':');
           const style = getCategoryStyle(cat);
           if (sub) {
@@ -706,7 +703,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
   
   const SelectedCategoryIcon = useMemo(() => {
       if (props.selectedCategoryFilters.size === 1) {
-          const key = Array.from(props.selectedCategoryFilters)[0];
+          const key = Array.from(props.selectedCategoryFilters)[0] as string;
           const [cat] = key.split(':');
           return getCategoryStyle(cat).Icon;
       }
@@ -717,8 +714,9 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
       setExpandedCategory(prev => prev === cat ? null : cat);
   };
 
-  const renderMainView = () => (
-    <div className="space-y-3">
+  // Reorganized Renders
+  const renderHeaderInputs = () => (
+    <div className="px-4 pb-2 space-y-3">
         {/* Search Description */}
         <div className="relative">
             <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
@@ -734,20 +732,6 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
                 {...tapBridge}
             />
         </div>
-
-        {/* Account Button - Full Width */}
-         <button
-            type="button"
-            onClick={() => setCurrentView('account_selection')}
-            className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-sm rounded-lg border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors text-left ${props.selectedAccountId ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'}`}
-            {...tapBridge}
-        >
-            <div className="flex items-center gap-2 overflow-hidden">
-                <CreditCardIcon className={`h-5 w-5 flex-shrink-0 ${props.selectedAccountId ? 'text-indigo-600' : 'text-slate-400'}`} />
-                <span className="truncate font-medium">{selectedAccountLabel}</span>
-            </div>
-            <ChevronRightIcon className={`w-5 h-5 flex-shrink-0 ${props.selectedAccountId ? 'text-indigo-400' : 'text-slate-400'}`} />
-        </button>
 
         {/* Amount Range Inputs - Min & Max */}
         <div className="flex gap-3">
@@ -780,6 +764,24 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
                 />
             </div>
         </div>
+    </div>
+  );
+
+  const renderBodyMain = () => (
+    <div className="space-y-3 pt-2">
+        {/* Account Button - Full Width */}
+         <button
+            type="button"
+            onClick={() => setCurrentView('account_selection')}
+            className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-sm rounded-lg border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors text-left ${props.selectedAccountId ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'}`}
+            {...tapBridge}
+        >
+            <div className="flex items-center gap-2 overflow-hidden">
+                <CreditCardIcon className={`h-5 w-5 flex-shrink-0 ${props.selectedAccountId ? 'text-indigo-600' : 'text-slate-400'}`} />
+                <span className="truncate font-medium">{selectedAccountLabel}</span>
+            </div>
+            <ChevronRightIcon className={`w-5 h-5 flex-shrink-0 ${props.selectedAccountId ? 'text-indigo-400' : 'text-slate-400'}`} />
+        </button>
 
         {/* Category Button - Full Width */}
         <button
@@ -790,7 +792,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
         >
             <div className="flex items-center gap-2 overflow-hidden">
                 <SelectedCategoryIcon className={`h-5 w-5 flex-shrink-0 ${props.selectedCategoryFilters.size > 0 ? 'text-indigo-600' : 'text-slate-400'}`} />
-                <span className="truncate font-medium">{selectedCategoryLabel}</span>
+                <span className="truncate font-medium text-base font-bold">{selectedCategoryLabel}</span>
             </div>
             <ChevronRightIcon className={`w-5 h-5 flex-shrink-0 ${props.selectedCategoryFilters.size > 0 ? 'text-indigo-400' : 'text-slate-400'}`} />
         </button>
@@ -853,12 +855,8 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
                   const style = getCategoryStyle(cat);
                   const isExpanded = expandedCategory === cat;
                   
-                  // FIX: Explicitly check if the PARENT is selected vs just having a child selected
                   const isParentExplicitlySelected = props.selectedCategoryFilters.has(cat);
-                  // If parent is selected, all subcategories are implicitly selected
-                  // If a specific subcategory is selected, only that one is checked
-                  
-                  const hasAnySubcategorySelected = Array.from(props.selectedCategoryFilters).some(k => k.startsWith(cat + ':'));
+                  const hasAnySubcategorySelected = Array.from(props.selectedCategoryFilters).some(k => (k as string).startsWith(cat + ':'));
                   const isParentVisuallyChecked = isParentExplicitlySelected || hasAnySubcategorySelected;
                   
                   const subcategories = CATEGORIES[cat] || [];
@@ -866,21 +864,19 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
                   return (
                       <div key={cat} className="rounded-lg overflow-hidden border border-transparent hover:border-slate-100">
                           <div className={`w-full flex items-center px-3 py-2 gap-3 transition-colors ${isParentVisuallyChecked ? 'bg-indigo-50' : 'hover:bg-slate-50'}`}>
-                                {/* Expand Chevron / Clickable Area */}
                                 <button 
                                     onClick={() => handleCategoryClick(cat)}
                                     className="flex items-center gap-3 flex-1 text-left min-w-0"
                                 >
-                                     <span className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${style.bgColor}`}>
+                                     <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${style.bgColor}`}>
                                         <style.Icon className={`w-5 h-5 ${style.color}`} />
-                                    </span>
+                                    </div>
                                     <span className={`text-base font-bold truncate ${isParentVisuallyChecked ? 'text-indigo-800' : 'text-slate-700'}`}>{style.label}</span>
                                     {subcategories.length > 0 && (
                                         <ChevronDownIcon className={`w-5 h-5 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                                     )}
                                 </button>
                                 
-                                {/* Checkbox */}
                                 <Checkbox 
                                     checked={isParentVisuallyChecked} 
                                     onChange={() => props.onToggleCategoryFilter(cat)} 
@@ -891,8 +887,6 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
                               <div className="bg-slate-50 pl-16 pr-4 py-3 space-y-3 border-t border-slate-100 animate-fade-in-down">
                                   {subcategories.map(sub => {
                                       const key = `${cat}:${sub}`;
-                                      // If parent is explicitly selected, child is visually selected.
-                                      // OR if the child key is explicitly in the set.
                                       const isSubVisuallyChecked = isParentExplicitlySelected || props.selectedCategoryFilters.has(key);
                                       
                                       return (
@@ -902,12 +896,9 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
                                                 checked={isSubVisuallyChecked} 
                                                 onChange={() => {
                                                     if (isParentExplicitlySelected) {
-                                                        // If parent was selected, selecting a child means we want to "focus" on that child,
-                                                        // so we remove the parent (which was "ALL") and select just this child.
-                                                        props.onToggleCategoryFilter(cat); // Deselect parent
-                                                        props.onToggleCategoryFilter(key); // Select child
+                                                        props.onToggleCategoryFilter(cat);
+                                                        props.onToggleCategoryFilter(key);
                                                     } else {
-                                                        // Normal toggle
                                                         props.onToggleCategoryFilter(key);
                                                     }
                                                 }} 
@@ -932,7 +923,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
       onPointerCancel={handlePointerCancel}
       onClickCapture={handleClickCapture}
       data-no-page-swipe="true"
-      className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-[0_-3px_4px_rgba(71,85,105,0.6)] z-[1000]"
+      className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-[0_-3px_4px_rgba(71,85,105,0.6)] z-[1000] flex flex-col"
       style={{
         height: `${OPEN_HEIGHT_VH}vh`,
         transform: `translate3d(0, ${yForStyle}px, 0)`,
@@ -949,7 +940,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
     >
       {/* Pull Tab */}
       <div
-        className="absolute top-0 left-1/2 -translate-x-1/2 w-[88px] h-auto flex justify-center cursor-grab"
+        className="absolute top-0 left-1/2 -translate-x-1/2 w-[88px] h-auto flex justify-center cursor-grab z-50"
         style={{ transform: 'translateX(-50%) translateY(-19px)' }}
         aria-hidden="true"
       >
@@ -963,80 +954,89 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
         />
       </div>
 
-      {/* Header: Date Filters (Always Visible unless hidden by view logic if needed, but request implies drill-down for "expanded" filters) 
-          Current design keeps Date Filters visible at top. 
-      */}
-      <div className="pt-1 flex-shrink-0">
-        <div className={'relative ' + (isPeriodMenuOpen ? 'overflow-visible' : 'overflow-hidden')}>
-          <div
-            className="w-[300%] flex"
-            style={{
-              transform: listTransform,
-              transition: isSwipeAnimating ? 'transform 0.2s cubic-bezier(0.22, 0.61, 0.36, 1)' : 'none',
-            }}
-            onTransitionEnd={() => setIsSwipeAnimating(false)}
-          >
-            <div className="w-1/3 px-4 py-1">
-              <QuickFilterControl
-                onSelect={handleQuickSelect}
-                currentValue={props.currentQuickFilter}
-                isActive={isQuickFilterActive}
-              />
+      {/* Header Content Wrapper */}
+      <div className="flex-shrink-0 z-20 relative bg-white rounded-t-2xl">
+        
+        {/* Header: Date Filters - Highest Z-Index to allow dropdown over inputs */}
+        <div className="pt-2 pb-1 relative z-30">
+            <div className={'relative ' + (isPeriodMenuOpen ? 'overflow-visible' : 'overflow-hidden')}>
+            <div
+                className="w-[300%] flex"
+                style={{
+                transform: listTransform,
+                transition: isSwipeAnimating ? 'transform 0.2s cubic-bezier(0.22, 0.61, 0.36, 1)' : 'none',
+                }}
+                onTransitionEnd={() => setIsSwipeAnimating(false)}
+            >
+                <div className="w-1/3 px-4 py-1">
+                <QuickFilterControl
+                    onSelect={handleQuickSelect}
+                    currentValue={props.currentQuickFilter}
+                    isActive={isQuickFilterActive}
+                />
+                </div>
+                <div className="w-1/3 px-4 py-1">
+                <PeriodNavigator
+                    periodType={props.periodType}
+                    periodDate={props.periodDate}
+                    onTypeChange={handlePeriodTypeChange}
+                    onDateChange={handlePeriodDateChange}
+                    isActive={props.isPeriodFilterActive}
+                    onActivate={props.onActivatePeriodFilter}
+                    isMenuOpen={isPeriodMenuOpen}
+                    onMenuToggle={setIsPeriodMenuOpen}
+                    isPanelOpen={isPanelOpen}
+                />
+                </div>
+                <div className="w-1/3 px-4 py-1">
+                <CustomDateRangeInputs
+                    range={props.currentCustomRange}
+                    onChange={handleCustomRangeChange}
+                    isActive={props.isCustomRangeActive}
+                />
+                </div>
             </div>
-            <div className="w-1/3 px-4 py-1">
-              <PeriodNavigator
-                periodType={props.periodType}
-                periodDate={props.periodDate}
-                onTypeChange={handlePeriodTypeChange}
-                onDateChange={handlePeriodDateChange}
-                isActive={props.isPeriodFilterActive}
-                onActivate={props.onActivatePeriodFilter}
-                isMenuOpen={isPeriodMenuOpen}
-                onMenuToggle={setIsPeriodMenuOpen}
-                isPanelOpen={isPanelOpen}
-              />
             </div>
-            <div className="w-1/3 px-4 py-1">
-              <CustomDateRangeInputs
-                range={props.currentCustomRange}
-                onChange={handleCustomRangeChange}
-                isActive={props.isCustomRangeActive}
-              />
+
+            {/* Pagination Dots */}
+            <div className="flex justify-center items-center pt-1 pb-2 gap-2">
+            {[0, 1, 2].map((i) => (
+                <button
+                key={i}
+                onClick={() => setActiveViewIndex(i)}
+                type="button"
+                className={
+                    'w-2.5 h-2.5 rounded-full transition-colors ' +
+                    (activeViewIndex === i
+                    ? 'bg-indigo-600'
+                    : 'bg-slate-300 hover:bg-slate-400')
+                }
+                aria-label={'Vai al filtro ' + (i + 1)}
+                />
+            ))}
             </div>
-          </div>
         </div>
 
-        {/* Pagination Dots */}
-        <div className="flex justify-center items-center pt-1 pb-2 gap-2">
-          {[0, 1, 2].map((i) => (
-            <button
-              key={i}
-              onClick={() => setActiveViewIndex(i)}
-              type="button"
-              className={
-                'w-2.5 h-2.5 rounded-full transition-colors ' +
-                (activeViewIndex === i
-                  ? 'bg-indigo-600'
-                  : 'bg-slate-300 hover:bg-slate-400')
-              }
-              aria-label={'Vai al filtro ' + (i + 1)}
-            />
-          ))}
-        </div>
+        {/* Header Inputs (Desc & Amount) - Moved Below Date Filters, Lower Z-Index */}
+        {currentView === 'main' && (
+            <div className="pt-2 relative z-20">
+                {renderHeaderInputs()}
+            </div>
+        )}
       </div>
       
-      <div className="w-full h-px bg-slate-200 mb-2 flex-shrink-0" />
+      <div className="w-full h-px bg-slate-200 mb-2 flex-shrink-0 relative z-10" />
 
       {/* Scrollable Content Area */}
       <div 
-        className="flex-1 overflow-y-auto px-4 pb-4"
+        className="flex-1 overflow-y-auto px-4 pb-4 relative z-10"
         data-no-drag // Tell drag handler to ignore this area so we can scroll
         style={{
             overscrollBehaviorY: 'contain',
             touchAction: 'pan-y'
         }}
       >
-          {currentView === 'main' && renderMainView()}
+          {currentView === 'main' && renderBodyMain()}
           {currentView === 'account_selection' && renderAccountSelection()}
           {currentView === 'category_selection' && renderCategorySelection()}
           
