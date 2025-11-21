@@ -128,15 +128,33 @@ export function encode(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-export function createBlob(data: Float32Array, sampleRate: number): Blob {
-  const l = data.length;
-  const int16 = new Int16Array(l);
-  for (let i = 0; i < l; i++) {
-    int16[i] = data[i] * 32768;
+// Updated createBlob to handle downsampling to 16kHz
+export function createBlob(data: Float32Array, inputSampleRate: number): Blob {
+  const targetSampleRate = 16000;
+  let outputData: Int16Array;
+
+  if (inputSampleRate !== targetSampleRate) {
+      // Downsample logic
+      const ratio = inputSampleRate / targetSampleRate;
+      const newLength = Math.ceil(data.length / ratio);
+      outputData = new Int16Array(newLength);
+      for (let i = 0; i < newLength; i++) {
+          const offset = Math.floor(i * ratio);
+          // Ensure we don't go out of bounds
+          const val = data[Math.min(offset, data.length - 1)];
+          outputData[i] = Math.max(-1, Math.min(1, val)) * 32768;
+      }
+  } else {
+      const l = data.length;
+      outputData = new Int16Array(l);
+      for (let i = 0; i < l; i++) {
+          outputData[i] = data[i] * 32768;
+      }
   }
+
   return {
-    data: encode(new Uint8Array(int16.buffer)),
-    mimeType: `audio/pcm;rate=${sampleRate}`,
+    data: encode(new Uint8Array(outputData.buffer)),
+    mimeType: `audio/pcm;rate=${targetSampleRate}`,
   };
 }
 
