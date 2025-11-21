@@ -29,12 +29,46 @@ import { PEEK_PX } from './components/HistoryFilterCard';
 
 type ToastMessage = { message: string; type: 'success' | 'info' | 'error' };
 
-const fileToBase64 = (file: File): Promise<string> => {
+// Helper to resize image before processing to avoid payload limits and timeouts
+const processImageFile = (file: File): Promise<{base64: string, mimeType: string}> => {
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => resolve((reader.result as string).split(',')[1]);
-    reader.onerror = error => reject(error);
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let width = img.width;
+      let height = img.height;
+      const MAX_WIDTH = 1536; // 1.5K resolution is optimal for receipts and balance between quality/size
+      const MAX_HEIGHT = 1536;
+
+      if (width > height) {
+        if (width > MAX_WIDTH) {
+          height *= MAX_WIDTH / width;
+          width = MAX_WIDTH;
+        }
+      } else {
+        if (height > MAX_HEIGHT) {
+          width *= MAX_HEIGHT / height;
+          height = MAX_HEIGHT;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          // Always convert to JPEG for consistency and compression
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+          resolve({
+              base64: dataUrl.split(',')[1],
+              mimeType: 'image/jpeg'
+          });
+      } else {
+          reject(new Error("Could not get canvas context"));
+      }
+    };
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
   });
 };
 
@@ -589,8 +623,10 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     sessionStorage.setItem('preventAutoLock', 'true');
     try {
       const file = await pickImage(source);
-      const base64Image = await fileToBase64(file);
-      const newImage: OfflineImage = { id: crypto.randomUUID(), base64Image, mimeType: file.type };
+      // Resize and compress image before processing
+      const { base64: base64Image, mimeType } = await processImageFile(file);
+      
+      const newImage: OfflineImage = { id: crypto.randomUUID(), base64Image, mimeType };
       if (isOnline) {
         setImageForAnalysis(newImage);
       } else {
