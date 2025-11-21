@@ -37,8 +37,8 @@ const processImageFile = (file: File): Promise<{base64: string, mimeType: string
       const canvas = document.createElement('canvas');
       let width = img.width;
       let height = img.height;
-      const MAX_WIDTH = 1536; // 1.5K resolution is optimal for receipts and balance between quality/size
-      const MAX_HEIGHT = 1536;
+      const MAX_WIDTH = 1024; // Reduced to 1024px for better mobile stability
+      const MAX_HEIGHT = 1024;
 
       if (width > height) {
         if (width > MAX_WIDTH) {
@@ -57,8 +57,8 @@ const processImageFile = (file: File): Promise<{base64: string, mimeType: string
       const ctx = canvas.getContext('2d');
       if (ctx) {
           ctx.drawImage(img, 0, 0, width, height);
-          // Always convert to JPEG for consistency and compression
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+          // Aggressive compression (0.6) to keep payload small for mobile networks
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
           resolve({
               base64: dataUrl.split(',')[1],
               mimeType: 'image/jpeg'
