@@ -1,14 +1,25 @@
-
-import { GoogleGenAI, Type, FunctionDeclaration, Modality, Blob, LiveServerMessage } from '@google/genai';
+import { GoogleGenAI, Type, FunctionDeclaration, Modality, Blob, LiveServerMessage, HarmCategory, HarmBlockThreshold } from '@google/genai';
 import { CATEGORIES, Expense } from '../types';
 
-if (!process.env.API_KEY) {
-    // In a real app, you'd want to handle this more gracefully.
-    // For this context, we assume the key is set.
-    console.error("API_KEY environment variable is not set");
+// Robust API Key retrieval for Vite/CRA/Node environments
+const getApiKey = () => {
+  try {
+    // @ts-ignore - Check for Vite environment variable
+    if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_KEY) {
+      // @ts-ignore
+      return import.meta.env.VITE_API_KEY;
+    }
+  } catch (e) {}
+  return process.env.API_KEY;
+};
+
+const API_KEY = getApiKey();
+
+if (!API_KEY) {
+    console.error("API_KEY environment variable is not set. AI features will not work.");
 }
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+const ai = new GoogleGenAI({ apiKey: API_KEY || '' });
 
 const toYYYYMMDD = (date: Date) => {
     const year = date.getFullYear();
@@ -50,6 +61,8 @@ const getCategoryPrompt = () => {
 }
 
 export async function parseExpensesFromImage(base64Image: string, mimeType: string): Promise<Partial<Expense>[]> {
+    if (!API_KEY) return [];
+    
     const imagePart = {
         inlineData: {
             mimeType,
@@ -72,6 +85,13 @@ export async function parseExpensesFromImage(base64Image: string, mimeType: stri
         config: {
             responseMimeType: "application/json",
             responseSchema: multiExpenseSchema,
+            // Robustness: disable safety filters to prevent false positives on receipts
+            safetySettings: [
+                { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+                { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+                { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+                { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE }
+            ]
         }
     });
 
@@ -90,6 +110,37 @@ export async function parseExpensesFromImage(base64Image: string, mimeType: stri
     } catch (e) {
         console.error("Failed to parse AI response:", e, jsonStr);
         return [];
+    }
+}
+
+export async function parseExpenseFromText(text: string): Promise<Partial<Expense> | null> {
+    if (!API_KEY) return null;
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: `Estrai i dati di spesa da questo testo: "${text}".
+        Oggi è ${new Date().toLocaleDateString('it-IT')}.
+        Le categorie disponibili sono: ${Object.keys(CATEGORIES).join(', ')}.
+        Se la categoria non è specificata, cerca di dedurla.
+        Restituisci un JSON con: { description, amount (numero), category }.`,
+        config: {
+            responseMimeType: "application/json",
+            responseSchema: expenseSchema
+        }
+    });
+
+    let jsonStr = response.text?.trim();
+    if (!jsonStr) return null;
+
+    if (jsonStr.startsWith('```')) {
+        jsonStr = jsonStr.replace(/^```(json)?/, '').replace(/```$/, '').trim();
+    }
+
+    try {
+        return JSON.parse(jsonStr);
+    } catch (e) {
+        console.error("Failed to parse text expense:", e);
+        return null;
     }
 }
 
@@ -165,6 +216,9 @@ export function createLiveSession(callbacks: {
     onerror: (e: ErrorEvent) => void,
     onclose: (e: CloseEvent) => void
 }) {
+    if (!API_KEY) {
+        throw new Error("API Key mancante");
+    }
     const sessionPromise = ai.live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-09-2025',
         callbacks,
