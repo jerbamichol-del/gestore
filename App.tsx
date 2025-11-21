@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Expense, Account } from './types';
 import { useLocalStorage } from './hooks/useLocalStorage';
@@ -5,6 +6,7 @@ import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { getQueuedImages, deleteImageFromQueue, OfflineImage, addImageToQueue } from './utils/db';
 import { parseExpensesFromImage } from './utils/ai';
 import { DEFAULT_ACCOUNTS } from './utils/defaults';
+import { toISODate, parseISODate, fileToBase64 } from './components/icons/formatters';
 
 import Header from './components/Header';
 import Dashboard from './components/Dashboard';
@@ -28,42 +30,6 @@ import { PEEK_PX } from './components/HistoryFilterCard';
 
 type ToastMessage = { message: string; type: 'success' | 'info' | 'error' };
 
-// ================== Helper date / base64 locali ==================
-const toISODate = (date: Date): string => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
-const parseISODate = (value: string | null | undefined): Date | null => {
-  if (!value) return null;
-  const d = new Date(value);
-  return isNaN(d.getTime()) ? null : d;
-};
-
-const fileToBase64 = (file: File): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result;
-      if (typeof result !== 'string') {
-        reject(new Error('Impossibile leggere il file.'));
-        return;
-      }
-      // result è tipo "data:image/jpeg;base64,AAAA..."
-      const commaIndex = result.indexOf(',');
-      const base64 = commaIndex >= 0 ? result.slice(commaIndex + 1) : result;
-      resolve(base64);
-    };
-    reader.onerror = () => {
-      reject(reader.error || new Error('Errore durante la lettura del file.'));
-    };
-    reader.readAsDataURL(file);
-  });
-};
-
-// ================== Picker immagine ==================
 const pickImage = (source: 'camera' | 'gallery'): Promise<File> => {
   return new Promise((resolve, reject) => {
     const input = document.createElement('input');
@@ -164,12 +130,8 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
     migrate('expenses_v2', ['expenses_v1', 'expenses', 'spese', 'spese_v1'], setExpenses, expenses);
     migrate('accounts_v1', ['accounts', 'conti'], setAccounts, accounts === DEFAULT_ACCOUNTS ? [] : accounts);
-    migrate(
-      'recurring_expenses_v1',
-      ['recurring_expenses', 'ricorrenti', 'recurring'],
-      setRecurringExpenses,
-      recurringExpenses
-    );
+    migrate('recurring_expenses_v1', ['recurring_expenses', 'ricorrenti', 'recurring'], setRecurringExpenses, recurringExpenses);
+    
   }, []); // Run once on mount
 
   // Modal States
@@ -250,13 +212,11 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         }
 
         const nextDueDateString = toISODate(nextDue);
-        const instanceExists =
-          expenses.some(
-            exp => exp.recurringExpenseId === template.id && exp.date === nextDueDateString
-          ) ||
-          newExpenses.some(
-            exp => exp.recurringExpenseId === template.id && exp.date === nextDueDateString
-          );
+        const instanceExists = expenses.some(
+          exp => exp.recurringExpenseId === template.id && exp.date === nextDueDateString,
+        ) || newExpenses.some(
+          exp => exp.recurringExpenseId === template.id && exp.date === nextDueDateString,
+        );
 
         if (!instanceExists) {
           newExpenses.push({
@@ -274,10 +234,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         nextDue = calculateNextDueDate(template, cursor);
       }
 
-      if (
-        updatedTemplate.lastGeneratedDate &&
-        updatedTemplate.lastGeneratedDate !== template.lastGeneratedDate
-      ) {
+      if (updatedTemplate.lastGeneratedDate && updatedTemplate.lastGeneratedDate !== template.lastGeneratedDate) {
         templatesToUpdate.push(updatedTemplate);
       }
     });
@@ -287,7 +244,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     }
     if (templatesToUpdate.length > 0) {
       setRecurringExpenses(prev =>
-        prev.map(t => templatesToUpdate.find(ut => ut.id === t.id) || t)
+        prev.map(t => templatesToUpdate.find(ut => ut.id === t.id) || t),
       );
     }
   }, [recurringExpenses, expenses, setExpenses, setRecurringExpenses]);
@@ -363,11 +320,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       if (backPressExitTimeoutRef.current) {
         clearTimeout(backPressExitTimeoutRef.current);
         backPressExitTimeoutRef.current = null;
-        try {
-          window.close();
-        } catch (e) {
-          console.log('Window close prevented', e);
-        }
+        try { window.close(); } catch (e) { console.log("Window close prevented", e); }
       } else {
         showToast({ message: 'Premi di nuovo per uscire.', type: 'info' });
         backPressExitTimeoutRef.current = window.setTimeout(() => {
@@ -599,7 +552,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     try {
       const parsedData = await parseExpensesFromImage(image.base64Image, image.mimeType);
       if (parsedData.length === 0) {
-        showToast({ message: "Nessuna spesa trovata nell'immagine.", type: 'info' });
+        showToast({ message: 'Nessuna spesa trovata nell\'immagine.', type: 'info' });
       } else if (parsedData.length === 1) {
         setPrefilledData(parsedData[0]);
         setIsFormOpen(true);
@@ -673,7 +626,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       className="h-full w-full bg-slate-100 flex flex-col font-sans"
       style={{ touchAction: 'pan-y' }}
     >
-      <div className="flex-shrink-0 z-20">
+      <div className={`flex-shrink-0 z-20`}>
         <Header
           pendingSyncs={pendingImages.length}
           isOnline={isOnline}
@@ -683,7 +636,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         />
       </div>
 
-      <main className="flex-grow bg-slate-100">
+      <main className={`flex-grow bg-slate-100`}>
         <div className="w-full h-full overflow-y-auto space-y-6" style={{ touchAction: 'pan-y' }}>
           <Dashboard
             expenses={expenses}
@@ -713,7 +666,9 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         />
       )}
 
-      <SuccessIndicator show={showSuccessIndicator && !isAnyModalOpenForFab} />
+      <SuccessIndicator
+        show={showSuccessIndicator && !isAnyModalOpenForFab}
+      />
 
       <CalculatorContainer
         isOpen={isCalculatorContainerOpen}
@@ -848,9 +803,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         <HistoryScreen
           expenses={expenses}
           accounts={accounts}
-          onClose={() => {
-            setIsHistoryScreenOpen(false);
-          }}
+          onClose={() => { setIsHistoryScreenOpen(false); }}
           onEditExpense={openEditForm}
           onDeleteExpense={handleDeleteRequest}
           onDeleteExpenses={deleteExpenses}
@@ -866,22 +819,14 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
           recurringExpenses={recurringExpenses}
           expenses={expenses}
           accounts={accounts}
-          onClose={() => {
-            setIsRecurringScreenOpen(false);
-          }}
+          onClose={() => { setIsRecurringScreenOpen(false); }}
           onEdit={openRecurringEditForm}
           onDelete={deleteRecurringExpense}
           onDeleteRecurringExpenses={deleteRecurringExpenses}
         />
       )}
 
-      {toast && (
-        <Toast
-          message={toast.message}
-          type={toast.type}
-          onClose={() => setToast(null)}
-        />
-      )}
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 };
