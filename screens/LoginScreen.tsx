@@ -5,6 +5,7 @@ import { login } from '../utils/api';
 import { SpinnerIcon } from '../components/icons/SpinnerIcon';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import LoginEmail from '../components/auth/LoginEmail';
+import { FingerprintIcon } from '../components/icons/FingerprintIcon';
 
 // biometria
 import {
@@ -325,24 +326,38 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
 
           <LoginEmail onSubmit={handleEmailSubmit} />
 
-          <div className="mt-3">
+          {/* PULSANTE BIOMETRICO NELLA SCHERMATA EMAIL */}
+          {bioSupported && bioEnabled && biometricEmail && (
+            <div className="mt-6">
+              <button
+                type="button"
+                onClick={loginWithBiometrics}
+                disabled={bioBusy}
+                className="flex items-center justify-center w-full gap-2 px-4 py-3 text-sm font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors disabled:opacity-50 shadow-sm border border-indigo-100"
+              >
+                <FingerprintIcon className="w-5 h-5" />
+                {bioBusy ? 'Accesso in corso...' : 'Accedi con impronta'}
+              </button>
+            </div>
+          )}
+
+          <div className="mt-4 space-y-3">
             <button
               onClick={onGoToForgotEmail}
               className="text-sm font-semibold text-indigo-600 hover:text-indigo-500"
             >
               Email dimenticata?
             </button>
+            <p className="text-sm text-slate-500">
+              Non hai un account?{' '}
+              <button
+                onClick={onGoToRegister}
+                className="font-semibold text-indigo-600 hover:text-indigo-500"
+              >
+                Registrati
+              </button>
+            </p>
           </div>
-
-          <p className="text-sm text-slate-500 mt-4">
-            Non hai un account?{' '}
-            <button
-              onClick={onGoToRegister}
-              className="font-semibold text-indigo-600 hover:text-indigo-500"
-            >
-              Registrati
-            </button>
-          </p>
         </div>
       );
     }
@@ -371,29 +386,16 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
 
         <PinInput pin={pin} onPinChange={setPin} />
 
-        <div className="mt-4 flex flex-col items-center justify-center gap-y-3">
-          <div className="flex w-full items-center justify-between">
-            <button
-              onClick={handleSwitchUser}
-              className="text-sm font-semibold text-indigo-600 hover:text-indigo-500"
-            >
-              Cambia Utente
-            </button>
-            <button
-              onClick={onGoToForgotPassword}
-              className="text-sm font-semibold text-indigo-600 hover:text-indigo-500"
-            >
-              PIN Dimenticato?
-            </button>
-          </div>
-
+        <div className="mt-6 flex flex-col items-center justify-center gap-y-3">
+          {/* PULSANTE BIOMETRICO NELLA SCHERMATA PIN */}
           {showEnableBox && (
-            <div className="mt-3 flex flex-col items-center gap-2">
+            <div className="w-full mb-2">
               <button
                 onClick={bioEnabled ? loginWithBiometrics : enableBiometricsNow}
                 disabled={bioBusy}
-                className="text-sm font-semibold text-indigo-600 hover:text-indigo-500 disabled:opacity-60"
+                className="flex items-center justify-center w-full gap-2 px-4 py-3 text-sm font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors disabled:opacity-50 shadow-sm border border-indigo-100"
               >
+                <FingerprintIcon className="w-5 h-5" />
                 {bioBusy
                   ? 'Attendere...'
                   : bioEnabled
@@ -405,13 +407,28 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
                 <button
                   type="button"
                   onClick={optOutBiometrics}
-                  className="text-xs text-slate-400 hover:text-slate-500"
+                  className="mt-2 text-xs text-slate-400 hover:text-slate-500"
                 >
                   Non ora
                 </button>
               )}
             </div>
           )}
+
+          <div className="flex w-full items-center justify-between px-1">
+            <button
+              onClick={handleSwitchUser}
+              className="text-sm font-semibold text-indigo-600 hover:text-indigo-500 transition-colors"
+            >
+              Cambia Utente
+            </button>
+            <button
+              onClick={onGoToForgotPassword}
+              className="text-sm font-semibold text-indigo-600 hover:text-indigo-500 transition-colors"
+            >
+              PIN Dimenticato?
+            </button>
+          </div>
         </div>
       </div>
     );
