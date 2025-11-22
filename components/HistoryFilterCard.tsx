@@ -1,3 +1,4 @@
+
 import React, {
   useState,
   useRef,
@@ -392,7 +393,7 @@ const PeriodNavigator: React.FC<{
 
 /* -------------------- HistoryFilterCard (bottom sheet) -------------------- */
 
-export const PEEK_PX = 70;
+export const PEEK_PX = 74;
 
 export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
   const [isPeriodMenuOpen, setIsPeriodMenuOpen] = useState(false);
