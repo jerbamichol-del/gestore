@@ -2,20 +2,23 @@
 import { GoogleGenAI, Type } from '@google/genai';
 import { CATEGORIES, Expense } from '../types';
 
-// ====================== API KEY ======================
-// In build usiamo process.env.API_KEY, che viene iniettata
-// dal workflow GitHub Actions (secrets.VITE_GEMINI_API_KEY).
-const API_KEY = process.env.API_KEY;
-console.log('[AI] API_KEY prefix:', API_KEY?.slice(0, 8));
+// ======================================================
+// 🔑 API KEY
+// METTI QUI la TUA chiave NUOVA di Gemini (quella valida, NON la vecchia scaduta)
+// Esempio: const API_KEY = 'AIza...';
+const API_KEY = 'AIzaSyDmhOYSgRHgoqeBeHqoBAvhs2S_B8VnMoE';
 
-if (!API_KEY) {
+// ======================================================
+
+if (!API_KEY || API_KEY === 'INSERISCI_QUI_LA_TUA_CHIAVE_GEMINI') {
   console.error(
-    'API_KEY non impostata. Le funzionalità AI (immagini e voce) non funzioneranno.'
+    '[AI] API_KEY non impostata in src/utils/ai.ts. ' +
+      'Le funzioni AI (immagini e voce) non funzioneranno.'
   );
 }
 
 const ai = new GoogleGenAI({
-  apiKey: API_KEY!,
+  apiKey: API_KEY,
 });
 
 // ====================== HELPERS BASE64 ======================
@@ -128,8 +131,8 @@ export async function parseExpensesFromImage(
   base64Image: string,
   mimeType: string
 ): Promise<Partial<Expense>[]> {
-  if (!API_KEY) {
-    console.error('parseExpensesFromImage chiamata senza API_KEY.');
+  if (!API_KEY || API_KEY === 'INSERISCI_QUI_LA_TUA_CHIAVE_GEMINI') {
+    console.error('[AI] parseExpensesFromImage chiamata senza API_KEY.');
     throw new Error('API non configurata');
   }
 
@@ -204,8 +207,8 @@ Fornisci il risultato **esclusivamente** in formato JSON:
 export async function parseExpenseFromAudio(
   audioBlob: Blob
 ): Promise<Partial<Expense> | null> {
-  if (!API_KEY) {
-    console.error('parseExpenseFromAudio chiamata senza API_KEY.');
+  if (!API_KEY || API_KEY === 'INSERISCI_QUI_LA_TUA_CHIAVE_GEMINI') {
+    console.error('[AI] parseExpenseFromAudio chiamata senza API_KEY.');
     throw new Error('API non configurata');
   }
 
