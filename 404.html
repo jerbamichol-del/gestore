@@ -1,15 +1,28 @@
 <!DOCTYPE html>
 <html lang="it">
   <head>
-    <meta charset="UTF--8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
     <title>Gestore Spese - Nuovo Inizio</title>
-    <link rel="manifest" href="/gestore/manifest.json?v=cfa2cb5cad10a80dd6da164f67fa3b47ed363dc9" />
+
+    <!-- Manifest: relativo, così da funzionare sotto /gestore/ -->
+    <link rel="manifest" href="/gestore/manifest.json?v=8a22123ddcae9d64bcc188cdfc46712f069ea19d" />
+
     <meta name="theme-color" content="#4f46e5" />
+
+    <!-- Tailwind via CDN: ok anche in produzione per ora (il warning lo ignoriamo) -->
     <script src="https://cdn.tailwindcss.com"></script>
 
+    <!-- Import map usata in AI Studio / dev; non dà fastidio in produzione -->
+
+
     <style>
-      html, body, #root {
+      html,
+      body,
+      #root {
         height: 100%;
         margin: 0;
         box-sizing: border-box;
@@ -20,17 +33,19 @@
         padding-bottom: env(safe-area-inset-bottom, 0px);
         padding-left: env(safe-area-inset-left, 0px);
         overscroll-behavior-y: contain;
-        touch-action: manipulation; /* Disables double-tap-to-zoom delay */
-        -webkit-tap-highlight-color: transparent; /* Removes tap highlight on WebKit */
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
       }
-      /* Fix for browser autofill background color */
+
+      /* Fix per autofill */
       input:-webkit-autofill,
       input:-webkit-autofill:hover,
       input:-webkit-autofill:focus,
       input:-webkit-autofill:active {
-          -webkit-box-shadow: 0 0 0 30px white inset !important;
-          -webkit-text-fill-color: #0f172a !important; /* slate-900 */
+        -webkit-box-shadow: 0 0 0 30px white inset !important;
+        -webkit-text-fill-color: #0f172a !important;
       }
+
       @keyframes fade-in-up {
         from {
           opacity: 0;
@@ -45,7 +60,7 @@
       .animate-fade-in-up {
         animation: fade-in-up 0.08s ease-out forwards;
       }
-      
+
       @keyframes fade-in-down {
         from {
           opacity: 0;
@@ -62,7 +77,8 @@
       }
 
       @keyframes pulse-subtle {
-        0%, 100% {
+        0%,
+        100% {
           transform: scale(1) translateY(-50%);
           opacity: 0.8;
         }
@@ -74,15 +90,15 @@
       .animate-pulse-subtle {
         animation: pulse-subtle 2.5s ease-in-out infinite;
       }
-      
-      /* Definitive fix for Pie Chart focus outline */
+
+      /* Pie Chart focus outline */
       .recharts-pie-sector:focus,
       .recharts-pie-sector:focus-visible,
       .recharts-pie-sector path:focus,
       .recharts-pie-sector path:focus-visible {
         outline: none !important;
       }
-      
+
       .swipe-container {
         display: flex;
         overflow-x: hidden;
@@ -96,10 +112,9 @@
         will-change: transform;
       }
 
-      /* Placeholder for contenteditable divs */
       [contenteditable][data-placeholder]:empty::before {
         content: attr(data-placeholder);
-        color: #94a3b8; /* slate-400 */
+        color: #94a3b8;
         pointer-events: none;
       }
 
@@ -110,57 +125,86 @@
         user-select: none;
       }
 
-      /* Date Picker Swipe Animations */
       @keyframes slide-out-to-left {
-        from { transform: translateX(0); }
-        to { transform: translateX(-100%); }
+        from {
+          transform: translateX(0);
+        }
+        to {
+          transform: translateX(-100%);
+        }
       }
       @keyframes slide-in-from-right {
-        from { transform: translateX(100%); }
-        to { transform: translateX(0); }
+        from {
+          transform: translateX(100%);
+        }
+        to {
+          transform: translateX(0);
+        }
       }
       @keyframes slide-out-to-right {
-        from { transform: translateX(0); }
-        to { transform: translateX(100%); }
+        from {
+          transform: translateX(0);
+        }
+        to {
+          transform: translateX(100%);
+        }
       }
       @keyframes slide-in-from-left {
-        from { transform: translateX(-100%); }
-        to { transform: translateX(0); }
+        from {
+          transform: translateX(-100%);
+        }
+        to {
+          transform: translateX(0);
+        }
       }
-      .animate-slide-out-left { animation: slide-out-to-left 0.08s ease-out forwards; }
-      .animate-slide-in-from-right { animation: slide-in-from-right 0.08s ease-out forwards; }
-      .animate-slide-out-right { animation: slide-out-to-right 0.08s ease-out forwards; }
-      .animate-slide-in-from-left { animation: slide-in-from-left 0.08s ease-out forwards; }
-
+      .animate-slide-out-left {
+        animation: slide-out-to-left 0.08s ease-out forwards;
+      }
+      .animate-slide-in-from-right {
+        animation: slide-in-from-right 0.08s ease-out forwards;
+      }
+      .animate-slide-out-right {
+        animation: slide-out-to-right 0.08s ease-out forwards;
+      }
+      .animate-slide-in-from-left {
+        animation: slide-in-from-left 0.08s ease-out forwards;
+      }
     </style>
-  <link rel="stylesheet" href="/index.css">
     <script type="importmap">
-{
-  "imports": {
-    "react": "https://esm.sh/react@18.3.1",
-    "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
-    "react/": "https://esm.sh/react@18.3.1/",
-    "react-dom/": "https://esm.sh/react-dom@18.3.1/",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.21.0",
-    "recharts": "https://esm.sh/recharts@2.12.7",
-    "idb": "https://cdn.jsdelivr.net/npm/idb@8/+esm",
-    "react-dom": "https://esm.sh/react-dom@18.3.1"
-  }
-}
-</script>
-  <script type="module" crossorigin src="/gestore/assets/index-B9UnuJbJ.js"></script>
-</head>
+      {
+        "imports": {
+          "react": "https://esm.sh/react@18.3.1",
+          "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
+          "react/": "https://esm.sh/react@18.3.1/",
+          "react-dom/": "https://esm.sh/react-dom@18.3.1/",
+          "@google/genai": "https://aistudiocdn.com/@google/genai@^1.21.0",
+          "recharts": "https://esm.sh/recharts@2.12.7",
+          "idb": "https://cdn.jsdelivr.net/npm/idb@8/+esm",
+          "react-dom": "https://esm.sh/react-dom@18.3.1"
+        }
+      }
+    </script>
+    <script type="module" crossorigin src="/gestore/assets/index-CAOaoi0n.js"></script>
+  </head>
   <body class="bg-slate-100">
     <div id="root"></div>
     <div id="toast-portal"></div>
+
+    <!-- Entry Vite: va bene /index.tsx, Vite lo riscrive in /gestore/assets/... -->
+
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/gestore/service-worker.js?v=cfa2cb5cad10a80dd6da164f67fa3b47ed363dc9', { scope: '/gestore/' })
-            .then(registration => {
-              console.log('ServiceWorker registration successful with scope: ', registration.scope);
+          // 👇 path relativo, così da registrare /gestore/service-worker.js
+          navigator.serviceWorker
+            .register('service-worker.js')
+            .then((registration) => {
+              console.log(
+                'ServiceWorker registration successful with scope: ',
+                registration.scope,
+              );
             })
-            .catch(err => {
+            .catch((err) => {
               console.log('ServiceWorker registration failed: ', err);
             });
         });
