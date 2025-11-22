@@ -1,9 +1,9 @@
+// src/components/VoiceInputModal.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import { Expense } from '../types';
-import { createLiveSession, createBlob } from '../utils/ai';
+import { parseExpenseFromAudio } from '../utils/ai';
 import { XMarkIcon } from './icons/XMarkIcon';
 import { MicrophoneIcon } from './icons/MicrophoneIcon';
-import { LiveServerMessage } from '@google/genai';
 
 interface VoiceInputModalProps {
   isOpen: boolean;
@@ -11,155 +11,150 @@ interface VoiceInputModalProps {
   onParsed: (data: Partial<Omit<Expense, 'id'>>) => void;
 }
 
-const VoiceInputModal: React.FC<VoiceInputModalProps> = ({ isOpen, onClose, onParsed }) => {
+type Status = 'idle' | 'listening' | 'processing' | 'error';
+
+const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
+  isOpen,
+  onClose,
+  onParsed,
+}) => {
   const [isAnimating, setIsAnimating] = useState(false);
-  const [status, setStatus] = useState<'idle' | 'listening' | 'processing' | 'error'>('idle');
+  const [status, setStatus] = useState<Status>('idle');
   const [transcript, setTranscript] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  // Sessione Gemini live (Promise della sessione)
-  const sessionPromise = useRef<ReturnType<typeof createLiveSession> | null>(null);
-  const audioContext = useRef<AudioContext | null>(null);
-  const scriptProcessor = useRef<ScriptProcessorNode | null>(null);
-  const stream = useRef<MediaStream | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
 
   const cleanUp = () => {
     try {
-      stream.current?.getTracks().forEach(track => track.stop());
-    } catch (_) {}
+      if (
+        mediaRecorderRef.current &&
+        mediaRecorderRef.current.state !== 'inactive'
+      ) {
+        mediaRecorderRef.current.stop();
+      }
+    } catch (e) {
+      console.warn('Errore nello stop del MediaRecorder:', e);
+    }
 
-    try {
-      scriptProcessor.current?.disconnect();
-    } catch (_) {}
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+    }
 
-    try {
-      audioContext.current?.close();
-    } catch (_) {}
-
-    try {
-      sessionPromise.current?.then(session => {
-        try {
-          session.close();
-        } catch (_) {}
-      });
-    } catch (_) {}
-
-    sessionPromise.current = null;
-    audioContext.current = null;
-    scriptProcessor.current = null;
-    stream.current = null;
+    mediaRecorderRef.current = null;
+    streamRef.current = null;
+    chunksRef.current = [];
   };
 
-  const startSession = async () => {
-    cleanUp();
-    setTranscript('');
+  const startRecording = async () => {
     setError(null);
-    setStatus('listening');
+    setTranscript('');
 
     try {
-      // Richiesta microfono
-      stream.current = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
 
-      // Connessione alla sessione live Gemini
-      sessionPromise.current = createLiveSession({
-        onopen: async () => {
-          const AudioContextCtor =
-            window.AudioContext || (window as any).webkitAudioContext;
-          if (!AudioContextCtor) {
-            setError("Il tuo browser non supporta l'input vocale.");
+      const mimeType = MediaRecorder.isTypeSupported(
+        'audio/webm;codecs=opus'
+      )
+        ? 'audio/webm;codecs=opus'
+        : 'audio/webm';
+
+      const mediaRecorder = new MediaRecorder(stream, { mimeType });
+      mediaRecorderRef.current = mediaRecorder;
+      chunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          chunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(chunksRef.current, { type: mimeType });
+        setStatus('processing');
+
+        try {
+          const parsed = await parseExpenseFromAudio(audioBlob);
+          if (
+            parsed &&
+            typeof parsed.amount === 'number' &&
+            !Number.isNaN(parsed.amount)
+          ) {
+            setTranscript(parsed.description ?? '');
+            onParsed({
+              description: parsed.description ?? '',
+              amount: parsed.amount,
+              category: (parsed.category as string) || undefined,
+            });
+          } else {
+            setError(
+              'Non sono riuscito a capire la spesa. Riprova parlando chiaramente.'
+            );
             setStatus('error');
             return;
           }
-
-          // AudioContext con sample rate di default del device
-          audioContext.current = new AudioContextCtor();
-
-          // Fix per mobile: se sospeso, prova a riprendere
-          if (audioContext.current.state === 'suspended') {
-            try {
-              await audioContext.current.resume();
-            } catch (e) {
-              console.error('Impossibile riprendere AudioContext:', e);
-            }
-          }
-
-          const realSampleRate = audioContext.current.sampleRate;
-          const source = audioContext.current.createMediaStreamSource(stream.current!);
-          scriptProcessor.current = audioContext.current.createScriptProcessor(4096, 1, 1);
-
-          scriptProcessor.current.onaudioprocess = (audioProcessingEvent) => {
-            const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
-
-            // Qui usiamo la FIRMA corretta: (data, sampleRateInHz)
-            const pcmBlob = createBlob(inputData, realSampleRate);
-
-            sessionPromise.current?.then((session) => {
-              try {
-                session.sendRealtimeInput({ media: pcmBlob });
-              } catch (e) {
-                console.error('Errore sendRealtimeInput:', e);
-              }
-            });
-          };
-
-          source.connect(scriptProcessor.current);
-          scriptProcessor.current.connect(audioContext.current.destination);
-        },
-        onmessage: (message: LiveServerMessage) => {
-          try {
-            if (message.serverContent?.inputTranscription) {
-              setTranscript(prev => prev + message.serverContent.inputTranscription.text);
-            }
-
-            if (message.toolCall?.functionCalls && message.toolCall.functionCalls.length > 0) {
-              setStatus('processing');
-              const args = message.toolCall.functionCalls[0].args;
-              onParsed({
-                description: args.description as string,
-                amount: args.amount as number,
-                category: args.category as string,
-              });
-              cleanUp();
-            }
-          } catch (e) {
-            console.error('Errore gestione messaggio live:', e, message);
-            setError("Si è verificato un errore durante l'elaborazione della risposta vocale.");
-            setStatus('error');
-            cleanUp();
-          }
-        },
-        onerror: (e: any) => {
-          console.error('Errore sessione live Gemini:', e);
-          setError("Si è verificato un errore durante la sessione vocale.");
+        } catch (e) {
+          console.error('[Voice] Errore durante analisi audio:', e);
+          setError("Si è verificato un errore durante l'analisi vocale.");
           setStatus('error');
+          return;
+        } finally {
           cleanUp();
-        },
-        onclose: () => {
-          // Chiusura normale: se non eravamo in errore, riportiamo lo stato a idle
-          if (status === 'listening' || status === 'processing') {
-            setStatus('idle');
-          }
-        },
-      });
+        }
+      };
+
+      mediaRecorder.start();
+      setStatus('listening');
     } catch (err) {
-      console.error('Errore accesso microfono:', err);
-      setError("Accesso al microfono negato o non disponibile. Controlla le autorizzazioni del browser.");
+      console.error('[Voice] Accesso microfono fallito:', err);
+      setError(
+        'Accesso al microfono negato. Controlla le autorizzazioni del browser / PWA.'
+      );
       setStatus('error');
     }
+  };
+
+  const handleStopClick = () => {
+    if (status !== 'listening') return;
+
+    if (
+      mediaRecorderRef.current &&
+      mediaRecorderRef.current.state === 'recording'
+    ) {
+      mediaRecorderRef.current.stop();
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+    }
+  };
+
+  const handleClose = () => {
+    cleanUp();
+    setStatus('idle');
+    setError(null);
+    setTranscript('');
+    onClose();
   };
 
   useEffect(() => {
     if (isOpen) {
       const timer = setTimeout(() => setIsAnimating(true), 10);
-      startSession();
+      startRecording();
+
       return () => {
         clearTimeout(timer);
         cleanUp();
       };
     } else {
       setIsAnimating(false);
+      setStatus('idle');
+      setError(null);
+      setTranscript('');
+      cleanUp();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   if (!isOpen) return null;
@@ -169,22 +164,28 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({ isOpen, onClose, onPa
       case 'listening':
         return {
           icon: (
-            <div className="w-24 h-24 rounded-full bg-red-500 animate-pulse flex items-center justify-center">
+            <button
+              type="button"
+              onClick={handleStopClick}
+              className="w-24 h-24 rounded-full bg-red-500 animate-pulse flex items-center justify-center focus:outline-none focus:ring-4 focus:ring-red-300"
+              aria-label="Termina registrazione e analizza"
+            >
               <MicrophoneIcon className="w-12 h-12 text-white" />
-            </div>
+            </button>
           ),
           text: 'In ascolto...',
-          subtext: 'Descrivi la tua spesa, ad esempio "25 euro per una cena al ristorante".',
+          subtext:
+            'Parla vicino al microfono. Quando hai finito, tocca il cerchio rosso per analizzare la spesa.',
         };
       case 'processing':
         return {
           icon: (
             <div className="w-24 h-24 rounded-full bg-indigo-500 flex items-center justify-center">
-              <div className="w-12 h-12 text-white animate-spin rounded-full border-4 border-t-transparent border-white"></div>
+              <div className="w-12 h-12 animate-spin rounded-full border-4 border-t-transparent border-white" />
             </div>
           ),
           text: 'Elaborazione...',
-          subtext: 'Sto analizzando la tua richiesta.',
+          subtext: 'Sto analizzando la tua registrazione.',
         };
       case 'error':
         return {
@@ -194,7 +195,7 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({ isOpen, onClose, onPa
             </div>
           ),
           text: 'Errore',
-          subtext: error,
+          subtext: error || 'Qualcosa è andato storto.',
         };
       default:
         return { icon: null, text: '', subtext: '' };
@@ -208,7 +209,7 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({ isOpen, onClose, onPa
       className={`fixed inset-0 z-50 flex justify-center items-center p-4 transition-opacity duration-300 ease-in-out ${
         isAnimating ? 'opacity-100' : 'opacity-0'
       } bg-slate-900/50 backdrop-blur-sm`}
-      onClick={onClose}
+      onClick={handleClose}
       aria-modal="true"
       role="dialog"
     >
@@ -222,7 +223,7 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({ isOpen, onClose, onPa
           <h2 className="text-xl font-bold text-slate-800">Aggiungi con Voce</h2>
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             className="text-slate-500 hover:text-slate-800 transition-colors p-1 rounded-full hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             aria-label="Chiudi"
           >
@@ -234,11 +235,24 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({ isOpen, onClose, onPa
           {icon}
           <p className="text-xl font-semibold text-slate-800 mt-6">{text}</p>
           <p className="text-slate-500 mt-2">{subtext}</p>
+
           {transcript && (
             <div className="mt-6 p-3 bg-slate-100 rounded-md w-full text-left">
-              <p className="text-sm text-slate-600 font-medium">Trascrizione:</p>
-              <p className="text-slate-800">{transcript}</p>
+              <p className="text-sm text-slate-600 font-medium">
+                Descrizione rilevata:
+              </p>
+              <p className="text-slate-800 break-words">{transcript}</p>
             </div>
+          )}
+
+          {status === 'error' && (
+            <button
+              type="button"
+              onClick={startRecording}
+              className="mt-6 px-4 py-2 rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition-colors"
+            >
+              Riprova registrazione
+            </button>
           )}
         </div>
       </div>
