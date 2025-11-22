@@ -5,7 +5,7 @@ import { resetPin } from '../utils/api';
 
 interface ResetPinScreenProps {
   email: string;
-  token: string; // lo riceviamo ma NON lo usiamo più per validare lato server
+  token: string;           // lo riceviamo ma NON lo usiamo più per validare lato server
   onResetSuccess: () => void; // chiamato quando il PIN è stato aggiornato
 }
 
@@ -27,7 +27,7 @@ const ResetPinScreen: React.FC<ResetPinScreenProps> = ({
     e.preventDefault();
     setError(null);
 
-    // Controlli base sul PIN
+    // Controllo base sul PIN
     if (!pin || pin.length !== 4 || !/^\d{4}$/.test(pin)) {
       setError('Inserisci un PIN di 4 cifre.');
       return;
@@ -47,8 +47,8 @@ const ResetPinScreen: React.FC<ResetPinScreenProps> = ({
 
     setIsLoading(true);
     try {
-      // ❗ Qui NON chiamiamo più Apps Script.
-      // resetPin è completamente locale (aggiorna l’utente in localStorage).
+      // 🔴 NIENTE chiamata ad Apps Script qui.
+      // resetPin è locale (localStorage).
       const res = await resetPin(email, token, pin);
 
       if (!res.success) {
@@ -60,7 +60,7 @@ const ResetPinScreen: React.FC<ResetPinScreenProps> = ({
       setSuccessMessage('PIN aggiornato con successo.');
       setIsLoading(false);
 
-      // Piccola pausa per mostrare il messaggio e poi torni alla schermata di login
+      // Piccola pausa per mostrare il messaggio, poi torna al login
       setTimeout(() => {
         onResetSuccess();
       }, 800);
