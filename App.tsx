@@ -39,7 +39,6 @@ const fileToBase64 = (file: File): Promise<string> => {
     reader.readAsDataURL(file);
     reader.onload = () => {
       try {
-        // Data URL → "data:image/jpeg;base64,AAAA..."
         const result = reader.result as string;
         const base64 = result.split(',')[1] || '';
         resolve(base64);
@@ -137,7 +136,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     DEFAULT_ACCOUNTS
   );
 
-  // ================== Migrazione dati localStorage (vecchie chiavi) ==================
+  // ================== Migrazione dati localStorage ==================
   const hasRunMigrationRef = useRef(false);
 
   useEffect(() => {
@@ -147,22 +146,16 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     if (typeof window === 'undefined') return;
 
     try {
-      // Migra SPESE se la chiave nuova è vuota
+      // Migra SPESE
       if (!expenses || expenses.length === 0) {
         const legacyExpenseKeys = ['expenses_v1', 'expenses', 'spese', 'spese_v1'];
-
         for (const key of legacyExpenseKeys) {
           const raw = window.localStorage.getItem(key);
           if (!raw) continue;
-
           try {
             const parsed = JSON.parse(raw);
             if (Array.isArray(parsed) && parsed.length > 0) {
-              console.log(
-                '[MIGRAZIONE] Trovate spese su',
-                key,
-                '→ le copio in expenses_v2'
-              );
+              console.log('[MIGRAZIONE] Spese da', key, '→ expenses_v2');
               setExpenses(parsed as Expense[]);
               break;
             }
@@ -172,22 +165,16 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         }
       }
 
-      // Migra CONTI se la chiave nuova è vuota o default
+      // Migra CONTI
       if (!accounts || accounts.length === 0 || accounts === DEFAULT_ACCOUNTS) {
         const legacyAccountKeys = ['accounts', 'conti'];
-
         for (const key of legacyAccountKeys) {
           const raw = window.localStorage.getItem(key);
           if (!raw) continue;
-
           try {
             const parsed = JSON.parse(raw);
             if (Array.isArray(parsed) && parsed.length > 0) {
-              console.log(
-                '[MIGRAZIONE] Trovati conti su',
-                key,
-                '→ li copio in accounts_v1'
-              );
+              console.log('[MIGRAZIONE] Conti da', key, '→ accounts_v1');
               setAccounts(parsed as Account[]);
               break;
             }
@@ -197,22 +184,16 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         }
       }
 
-      // Migra SPESE RICORRENTI se la chiave nuova è vuota
+      // Migra SPESE RICORRENTI
       if (!recurringExpenses || recurringExpenses.length === 0) {
         const legacyRecurringKeys = ['recurring_expenses', 'ricorrenti', 'recurring'];
-
         for (const key of legacyRecurringKeys) {
           const raw = window.localStorage.getItem(key);
           if (!raw) continue;
-
           try {
             const parsed = JSON.parse(raw);
             if (Array.isArray(parsed) && parsed.length > 0) {
-              console.log(
-                '[MIGRAZIONE] Trovate ricorrenti su',
-                key,
-                '→ le copio in recurring_expenses_v1'
-              );
+              console.log('[MIGRAZIONE] Ricorrenti da', key, '→ recurring_expenses_v1');
               setRecurringExpenses(parsed as Expense[]);
               break;
             }
@@ -222,7 +203,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         }
       }
     } catch (err) {
-      console.error('[MIGRAZIONE] Errore generale di migrazione dati locali', err);
+      console.error('[MIGRAZIONE] Errore generale migrazione', err);
     }
   }, [expenses, accounts, recurringExpenses, setExpenses, setAccounts, setRecurringExpenses]);
 
@@ -246,9 +227,8 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const [prefilledData, setPrefilledData] =
     useState<Partial<Omit<Expense, 'id'>> | undefined>(undefined);
   const [expenseToDeleteId, setExpenseToDeleteId] = useState<string | null>(null);
-  const [multipleExpensesData, setMultipleExpensesData] = useState<
-    Partial<Omit<Expense, 'id'>>
-  >[]>([]);
+  const [multipleExpensesData, setMultipleExpensesData] =
+    useState<Partial<Omit<Expense, 'id'>>[]>([]);
   const [imageForAnalysis, setImageForAnalysis] = useState<OfflineImage | null>(null);
 
   // Offline & Sync States
@@ -275,7 +255,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
     recurringExpenses.forEach((template) => {
       if (!template.date) {
-        console.warn('Skipping recurring expense template with no date:', template);
+        console.warn('Skipping recurring template senza data:', template);
         return;
       }
 
@@ -371,7 +351,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     setToast(toastMessage);
   }, []);
 
-  // Back / popstate
+  // ================== Back / popstate ==================
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
       event.preventDefault();
@@ -634,7 +614,6 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     setToast({ message: 'Spesa programmata eliminata.', type: 'info' });
   };
 
-  // New bulk delete functions
   const deleteExpenses = (ids: string[]) => {
     setExpenses((prev) => prev.filter((e) => !ids.includes(e.id)));
     setToast({ message: `${ids.length} spese eliminate.`, type: 'info' });
@@ -741,7 +720,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     isParsingImage ||
     !!imageForAnalysis;
 
-  // ================== Layout / animazioni ==================
+  // ================== Layout / FAB ==================
   const isAnyModalOpenForFab =
     isCalculatorContainerOpen ||
     isFormOpen ||
@@ -755,7 +734,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     isRecurringScreenOpen ||
     (isHistoryScreenOpen && isHistoryFilterPanelOpen);
 
-  const FAB_MARGIN_ABOVE_PEEK = 12; // ~3mm
+  const FAB_MARGIN_ABOVE_PEEK = 12;
 
   const fabStyle: React.CSSProperties = {
     bottom: isHistoryScreenOpen
@@ -846,7 +825,6 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         isForRecurringTemplate={!!editingRecurringExpense}
       />
 
-      {/* Modal scelta sorgente immagine */}
       {isImageSourceModalOpen && (
         <div
           className="fixed inset-0 z-50 flex justify-center items-end p-4 transition-opacity duration-75 ease-in-out bg-slate-900/60 backdrop-blur-sm"
@@ -887,7 +865,6 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         </div>
       )}
 
-      {/* Overlay analisi immagine */}
       {isParsingImage && (
         <div className="fixed inset-0 bg-white/80 backdrop-blur-md flex flex-col items-center justify-center z-[100]">
           <SpinnerIcon className="w-12 h-12 text-indigo-600" />
@@ -903,7 +880,6 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         onParsed={handleVoiceParsed}
       />
 
-      {/* Conferma eliminazione spesa singola */}
       <ConfirmationModal
         isOpen={isConfirmDeleteModalOpen}
         onClose={() => {
@@ -921,7 +897,6 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         variant="danger"
       />
 
-      {/* Conferma analisi immagine appena scattata */}
       <ConfirmationModal
         isOpen={!!imageForAnalysis}
         onClose={() => {
