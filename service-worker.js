@@ -1,22 +1,23 @@
 // Importa la libreria idb per un accesso più semplice a IndexedDB
 importScripts('https://cdn.jsdelivr.net/npm/idb@8/build/iife/index-min.js');
 
-const CACHE_NAME = 'expense-manager-cache-v32';
-// Aggiunta la pagina di share-target al caching
+const CACHE_NAME = 'expense-manager-cache-v33';
+
+// Tutti i path QUI sono relativi allo scope del SW ( /gestore/ )
 const urlsToCache = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/icon-192.svg',
-  '/icon-512.svg',
-  '/share-target/',
+  './',
+  './index.html',
+  './manifest.json',
+  './icon-192.svg',
+  './icon-512.svg',
+  './share-target/',
   // Key CDN dependencies
   'https://cdn.tailwindcss.com',
   'https://esm.sh/react@18.3.1',
   'https://esm.sh/react-dom@18.3.1/client',
   'https://aistudiocdn.com/@google/genai@^1.21.0',
   'https://esm.sh/recharts@2.12.7',
-  'https://cdn.jsdelivr.net/npm/idb@8/+esm'
+  'https://cdn.jsdelivr.net/npm/idb@8/+esm',
 ];
 
 // --- Funzioni Helper per IndexedDB (replicate da db.ts per l'uso nel Service Worker) ---
@@ -44,79 +45,91 @@ const fileToBase64 = (file) => {
 };
 
 // Install event
-self.addEventListener('install', event => {
+self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => {
+    caches
+      .open(CACHE_NAME)
+      .then((cache) => {
         console.log('Opened cache, caching app shell');
         return cache.addAll(urlsToCache);
       })
-      .then(() => self.skipWaiting())
+      .then(() => self.skipWaiting()),
   );
 });
 
 // Activate event
-self.addEventListener('activate', event => {
+self.addEventListener('activate', (event) => {
   const cacheWhitelist = [CACHE_NAME];
   event.waitUntil(
-    caches.keys().then(cacheNames => {
-      return Promise.all(
-        cacheNames.map(cacheName => {
-          if (cacheWhitelist.indexOf(cacheName) === -1) {
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    }).then(() => self.clients.claim())
+    caches
+      .keys()
+      .then((cacheNames) => {
+        return Promise.all(
+          cacheNames.map((cacheName) => {
+            if (cacheWhitelist.indexOf(cacheName) === -1) {
+              return caches.delete(cacheName);
+            }
+          }),
+        );
+      })
+      .then(() => self.clients.claim()),
   );
 });
 
-self.addEventListener('fetch', event => {
+self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
   // --- Gestione Share Target ---
-  if (event.request.method === 'POST' && url.pathname === '/share-target/') {
-    event.respondWith(Response.redirect('/')); // Rispondi subito con un redirect
-    
-    event.waitUntil(async function() {
-      try {
-        const formData = await event.request.formData();
-        const file = formData.get('screenshot');
-        
-        if (!file || !file.type.startsWith('image/')) {
+  // Sotto /gestore/, la pathname sarà qualcosa come "/gestore/share-target/"
+  if (
+    event.request.method === 'POST' &&
+    url.pathname.endsWith('/share-target/')
+  ) {
+    // rispondi subito con un redirect all'app
+    event.respondWith(Response.redirect('./'));
+
+    event.waitUntil(
+      (async function () {
+        try {
+          const formData = await event.request.formData();
+          const file = formData.get('screenshot');
+
+          if (!file || !file.type.startsWith('image/')) {
             console.warn('Share target: No valid image file received.');
             return;
-        }
+          }
 
-        const base64Image = await fileToBase64(file);
-        
-        const db = await getDb();
-        await db.add(STORE_NAME, {
+          const base64Image = await fileToBase64(file);
+
+          const db = await getDb();
+          await db.add(STORE_NAME, {
             id: crypto.randomUUID(),
             base64Image,
             mimeType: file.type,
-        });
-        
-        console.log('Image from share target saved to IndexedDB.');
+          });
 
-        // Cerca un client (tab/finestra) esistente dell'app e mettilo a fuoco
-        const clients = await self.clients.matchAll({
+          console.log('Image from share target saved to IndexedDB.');
+
+          // Cerca un client (tab/finestra) esistente dell'app e mettilo a fuoco
+          const clients = await self.clients.matchAll({
             type: 'window',
             includeUncontrolled: true,
-        });
+          });
 
-        if (clients.length > 0) {
+          if (clients.length > 0) {
             await clients[0].focus();
-        } else {
-            self.clients.openWindow('/');
-        }
-      } catch (error) {
+          } else {
+            // Apri la root dell'app sotto lo scope del SW
+            self.clients.openWindow('./');
+          }
+        } catch (error) {
           console.error('Error handling share target:', error);
-      }
-    }());
+        }
+      })(),
+    );
     return;
   }
-  
+
   if (event.request.method !== 'GET') {
     return;
   }
@@ -125,34 +138,38 @@ self.addEventListener('fetch', event => {
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request)
-        .then(response => {
+        .then((response) => {
           const responseToCache = response.clone();
-          caches.open(CACHE_NAME).then(cache => {
+          caches.open(CACHE_NAME).then((cache) => {
             cache.put(event.request, responseToCache);
           });
           return response;
         })
-        .catch(() => caches.match(event.request))
+        .catch(() => caches.match(event.request)),
     );
     return;
   }
 
-  // Strategy: Cache first for all other assets
+  // Strategy: Cache first per tutti gli altri asset
   event.respondWith(
-    caches.match(event.request)
-      .then(cachedResponse => {
-        return cachedResponse || fetch(event.request).then(
-          networkResponse => {
-            if (!networkResponse || networkResponse.status !== 200 || networkResponse.type === 'opaque') {
-              return networkResponse;
-            }
-            const responseToCache = networkResponse.clone();
-            caches.open(CACHE_NAME).then(cache => {
-              cache.put(event.request, responseToCache);
-            });
+    caches.match(event.request).then((cachedResponse) => {
+      return (
+        cachedResponse ||
+        fetch(event.request).then((networkResponse) => {
+          if (
+            !networkResponse ||
+            networkResponse.status !== 200 ||
+            networkResponse.type === 'opaque'
+          ) {
             return networkResponse;
           }
-        );
-      })
+          const responseToCache = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseToCache);
+          });
+          return networkResponse;
+        })
+      );
+    }),
   );
 });
