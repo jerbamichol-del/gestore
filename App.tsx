@@ -1,9 +1,13 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Expense, Account } from './types';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
-import { getQueuedImages, deleteImageFromQueue, OfflineImage, addImageToQueue } from './utils/db';
+import {
+  getQueuedImages,
+  deleteImageFromQueue,
+  OfflineImage,
+  addImageToQueue,
+} from './utils/db';
 import { parseExpensesFromImage } from './utils/ai';
 import { DEFAULT_ACCOUNTS } from './utils/defaults';
 
@@ -33,8 +37,17 @@ const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
-    reader.onload = () => resolve((reader.result as string).split(',')[1]);
-    reader.onerror = error => reject(error);
+    reader.onload = () => {
+      try {
+        // Data URL → "data:image/jpeg;base64,AAAA..."
+        const result = reader.result as string;
+        const base64 = result.split(',')[1] || '';
+        resolve(base64);
+      } catch (e) {
+        reject(e);
+      }
+    };
+    reader.onerror = (error) => reject(error);
   });
 };
 
@@ -117,8 +130,12 @@ const calculateNextDueDate = (template: Expense, fromDate: Date): Date | null =>
 
 const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const [expenses, setExpenses] = useLocalStorage<Expense[]>('expenses_v2', []);
-  const [recurringExpenses, setRecurringExpenses] = useLocalStorage<Expense[]>('recurring_expenses_v1', []);
-  const [accounts, setAccounts] = useLocalStorage<Account[]>('accounts_v1', DEFAULT_ACCOUNTS);
+  const [recurringExpenses, setRecurringExpenses] =
+    useLocalStorage<Expense[]>('recurring_expenses_v1', []);
+  const [accounts, setAccounts] = useLocalStorage<Account[]>(
+    'accounts_v1',
+    DEFAULT_ACCOUNTS
+  );
 
   // ================== Migrazione dati localStorage (vecchie chiavi) ==================
   const hasRunMigrationRef = useRef(false);
@@ -141,7 +158,11 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
           try {
             const parsed = JSON.parse(raw);
             if (Array.isArray(parsed) && parsed.length > 0) {
-              console.log('[MIGRAZIONE] Trovate spese su', key, '→ le copio in expenses_v2');
+              console.log(
+                '[MIGRAZIONE] Trovate spese su',
+                key,
+                '→ le copio in expenses_v2'
+              );
               setExpenses(parsed as Expense[]);
               break;
             }
@@ -162,7 +183,11 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
           try {
             const parsed = JSON.parse(raw);
             if (Array.isArray(parsed) && parsed.length > 0) {
-              console.log('[MIGRAZIONE] Trovati conti su', key, '→ li copio in accounts_v1');
+              console.log(
+                '[MIGRAZIONE] Trovati conti su',
+                key,
+                '→ li copio in accounts_v1'
+              );
               setAccounts(parsed as Account[]);
               break;
             }
@@ -183,7 +208,11 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
           try {
             const parsed = JSON.parse(raw);
             if (Array.isArray(parsed) && parsed.length > 0) {
-              console.log('[MIGRAZIONE] Trovate ricorrenti su', key, '→ le copio in recurring_expenses_v1');
+              console.log(
+                '[MIGRAZIONE] Trovate ricorrenti su',
+                key,
+                '→ le copio in recurring_expenses_v1'
+              );
               setRecurringExpenses(parsed as Expense[]);
               break;
             }
@@ -212,10 +241,14 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
   // Data for Modals
   const [editingExpense, setEditingExpense] = useState<Expense | undefined>(undefined);
-  const [editingRecurringExpense, setEditingRecurringExpense] = useState<Expense | undefined>(undefined);
-  const [prefilledData, setPrefilledData] = useState<Partial<Omit<Expense, 'id'>> | undefined>(undefined);
+  const [editingRecurringExpense, setEditingRecurringExpense] =
+    useState<Expense | undefined>(undefined);
+  const [prefilledData, setPrefilledData] =
+    useState<Partial<Omit<Expense, 'id'>> | undefined>(undefined);
   const [expenseToDeleteId, setExpenseToDeleteId] = useState<string | null>(null);
-  const [multipleExpensesData, setMultipleExpensesData] = useState<Partial<Omit<Expense, 'id'>>[]>([]);
+  const [multipleExpensesData, setMultipleExpensesData] = useState<
+    Partial<Omit<Expense, 'id'>>
+  >[]>([]);
   const [imageForAnalysis, setImageForAnalysis] = useState<OfflineImage | null>(null);
 
   // Offline & Sync States
@@ -240,7 +273,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     const newExpenses: Expense[] = [];
     const templatesToUpdate: Expense[] = [];
 
-    recurringExpenses.forEach(template => {
+    recurringExpenses.forEach((template) => {
       if (!template.date) {
         console.warn('Skipping recurring expense template with no date:', template);
         return;
@@ -256,8 +289,8 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
       while (nextDue && nextDue <= today) {
         const totalGenerated =
-          expenses.filter(e => e.recurringExpenseId === template.id).length +
-          newExpenses.filter(e => e.recurringExpenseId === template.id).length;
+          expenses.filter((e) => e.recurringExpenseId === template.id).length +
+          newExpenses.filter((e) => e.recurringExpenseId === template.id).length;
 
         if (
           template.recurrenceEndType === 'date' &&
@@ -276,11 +309,17 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         }
 
         const nextDueDateString = toYYYYMMDD(nextDue);
-        const instanceExists = expenses.some(
-          exp => exp.recurringExpenseId === template.id && exp.date === nextDueDateString,
-        ) || newExpenses.some(
-          exp => exp.recurringExpenseId === template.id && exp.date === nextDueDateString,
-        );
+        const instanceExists =
+          expenses.some(
+            (exp) =>
+              exp.recurringExpenseId === template.id &&
+              exp.date === nextDueDateString
+          ) ||
+          newExpenses.some(
+            (exp) =>
+              exp.recurringExpenseId === template.id &&
+              exp.date === nextDueDateString
+          );
 
         if (!instanceExists) {
           newExpenses.push({
@@ -298,17 +337,20 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         nextDue = calculateNextDueDate(template, cursor);
       }
 
-      if (updatedTemplate.lastGeneratedDate && updatedTemplate.lastGeneratedDate !== template.lastGeneratedDate) {
+      if (
+        updatedTemplate.lastGeneratedDate &&
+        updatedTemplate.lastGeneratedDate !== template.lastGeneratedDate
+      ) {
         templatesToUpdate.push(updatedTemplate);
       }
     });
 
     if (newExpenses.length > 0) {
-      setExpenses(prev => [...newExpenses, ...prev]);
+      setExpenses((prev) => [...newExpenses, ...prev]);
     }
     if (templatesToUpdate.length > 0) {
-      setRecurringExpenses(prev =>
-        prev.map(t => templatesToUpdate.find(ut => ut.id === t.id) || t),
+      setRecurringExpenses((prev) =>
+        prev.map((t) => templatesToUpdate.find((ut) => ut.id === t.id) || t)
       );
     }
   }, [recurringExpenses, expenses, setExpenses, setRecurringExpenses]);
@@ -333,7 +375,8 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
       event.preventDefault();
-      const pushStateAfterHandling = () => window.history.pushState({ view: 'home' }, '');
+      const pushStateAfterHandling = () =>
+        window.history.pushState({ view: 'home' }, '');
 
       if (isHistoryScreenOpen) {
         setIsHistoryScreenOpen(false);
@@ -384,7 +427,11 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       if (backPressExitTimeoutRef.current) {
         clearTimeout(backPressExitTimeoutRef.current);
         backPressExitTimeoutRef.current = null;
-        window.close();
+        try {
+          window.close();
+        } catch (e) {
+          console.log('Window close prevented', e);
+        }
       } else {
         showToast({ message: 'Premi di nuovo per uscire.', type: 'info' });
         backPressExitTimeoutRef.current = window.setTimeout(() => {
@@ -439,10 +486,13 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
   // ================== Pending images (offline queue) ==================
   const refreshPendingImages = useCallback(() => {
-    getQueuedImages().then(images => {
+    getQueuedImages().then((images) => {
       setPendingImages(images);
       if (images.length > pendingImagesCountRef.current) {
-        showToast({ message: "Immagine salvata! Pronta per l'analisi.", type: 'info' });
+        showToast({
+          message: "Immagine salvata! Pronta per l'analisi.",
+          type: 'info',
+        });
       }
       pendingImagesCountRef.current = images.length;
     });
@@ -459,7 +509,10 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
   useEffect(() => {
     if (prevIsOnlineRef.current === false && isOnline && pendingImages.length > 0) {
-      showToast({ message: `Sei online! ${pendingImages.length} immagini in attesa.`, type: 'info' });
+      showToast({
+        message: `Sei online! ${pendingImages.length} immagini in attesa.`,
+        type: 'info',
+      });
     }
     prevIsOnlineRef.current = isOnline;
   }, [isOnline, pendingImages.length, showToast]);
@@ -467,23 +520,27 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   // ================== CRUD Spese ==================
   const addExpense = (newExpense: Omit<Expense, 'id'>) => {
     const expenseWithId: Expense = { ...newExpense, id: crypto.randomUUID() };
-    setExpenses(prev => [expenseWithId, ...prev]);
+    setExpenses((prev) => [expenseWithId, ...prev]);
     triggerSuccessIndicator();
   };
 
   const addRecurringExpense = (newExpenseData: Omit<Expense, 'id'>) => {
     const newTemplate: Expense = { ...newExpenseData, id: crypto.randomUUID() };
-    setRecurringExpenses(prev => [newTemplate, ...prev]);
+    setRecurringExpenses((prev) => [newTemplate, ...prev]);
     triggerSuccessIndicator();
   };
 
   const updateExpense = (updatedExpense: Expense) => {
-    setExpenses(prev => prev.map(e => (e.id === updatedExpense.id ? updatedExpense : e)));
+    setExpenses((prev) =>
+      prev.map((e) => (e.id === updatedExpense.id ? updatedExpense : e))
+    );
     triggerSuccessIndicator();
   };
 
   const updateRecurringExpense = (updatedTemplate: Expense) => {
-    setRecurringExpenses(prev => prev.map(e => (e.id === updatedTemplate.id ? updatedTemplate : e)));
+    setRecurringExpenses((prev) =>
+      prev.map((e) => (e.id === updatedTemplate.id ? updatedTemplate : e))
+    );
     triggerSuccessIndicator();
   };
 
@@ -495,7 +552,9 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       data.frequency !== 'recurring'
     ) {
       // convertita da programmata a singola
-      setRecurringExpenses(prev => prev.filter(e => e.id !== editingRecurringExpense.id));
+      setRecurringExpenses((prev) =>
+        prev.filter((e) => e.id !== editingRecurringExpense.id)
+      );
 
       const newSingleExpenseData: Omit<Expense, 'id'> = {
         ...data,
@@ -536,8 +595,11 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   };
 
   const handleMultipleExpensesSubmit = (expensesToAdd: Omit<Expense, 'id'>[]) => {
-    const expensesWithIds: Expense[] = expensesToAdd.map(exp => ({ ...exp, id: crypto.randomUUID() }));
-    setExpenses(prev => [...expensesWithIds, ...prev]);
+    const expensesWithIds: Expense[] = expensesToAdd.map((exp) => ({
+      ...exp,
+      id: crypto.randomUUID(),
+    }));
+    setExpenses((prev) => [...expensesWithIds, ...prev]);
     setIsMultipleExpensesModalOpen(false);
     setMultipleExpensesData([]);
     triggerSuccessIndicator();
@@ -560,7 +622,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
   const confirmDelete = () => {
     if (expenseToDeleteId) {
-      setExpenses(prev => prev.filter(e => e.id !== expenseToDeleteId));
+      setExpenses((prev) => prev.filter((e) => e.id !== expenseToDeleteId));
       setExpenseToDeleteId(null);
       setIsConfirmDeleteModalOpen(false);
       setToast({ message: 'Spesa eliminata.', type: 'info' });
@@ -568,18 +630,18 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   };
 
   const deleteRecurringExpense = (id: string) => {
-    setRecurringExpenses(prev => prev.filter(e => e.id !== id));
+    setRecurringExpenses((prev) => prev.filter((e) => e.id !== id));
     setToast({ message: 'Spesa programmata eliminata.', type: 'info' });
   };
 
   // New bulk delete functions
   const deleteExpenses = (ids: string[]) => {
-    setExpenses(prev => prev.filter(e => !ids.includes(e.id)));
+    setExpenses((prev) => prev.filter((e) => !ids.includes(e.id)));
     setToast({ message: `${ids.length} spese eliminate.`, type: 'info' });
   };
 
   const deleteRecurringExpenses = (ids: string[]) => {
-    setRecurringExpenses(prev => prev.filter(e => !ids.includes(e.id)));
+    setRecurringExpenses((prev) => prev.filter((e) => !ids.includes(e.id)));
     setToast({ message: `${ids.length} spese programmate eliminate.`, type: 'info' });
   };
 
@@ -590,7 +652,11 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     try {
       const file = await pickImage(source);
       const base64Image = await fileToBase64(file);
-      const newImage: OfflineImage = { id: crypto.randomUUID(), base64Image, mimeType: file.type };
+      const newImage: OfflineImage = {
+        id: crypto.randomUUID(),
+        base64Image,
+        mimeType: file.type,
+      };
       if (isOnline) {
         setImageForAnalysis(newImage);
       } else {
@@ -600,24 +666,39 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     } catch (error) {
       if (!(error instanceof Error && error.message.includes('annullata'))) {
         console.error('Errore selezione immagine:', error);
-        showToast({ message: "Errore durante la selezione dell'immagine.", type: 'error' });
+        showToast({
+          message: "Errore durante la selezione dell'immagine.",
+          type: 'error',
+        });
       }
     } finally {
       setTimeout(() => sessionStorage.removeItem('preventAutoLock'), 2000);
     }
   };
 
-  const handleAnalyzeImage = async (image: OfflineImage, fromQueue: boolean = true) => {
+  const handleAnalyzeImage = async (
+    image: OfflineImage,
+    fromQueue: boolean = true
+  ) => {
     if (!isOnline) {
-      showToast({ message: 'Connettiti a internet per analizzare le immagini.', type: 'error' });
+      showToast({
+        message: 'Connettiti a internet per analizzare le immagini.',
+        type: 'error',
+      });
       return;
     }
     setSyncingImageId(image.id);
     setIsParsingImage(true);
     try {
-      const parsedData = await parseExpensesFromImage(image.base64Image, image.mimeType);
+      console.log('[AI] Analisi immagine, mimeType:', image.mimeType);
+      const parsedData = await parseExpensesFromImage(
+        image.base64Image,
+        image.mimeType
+      );
+      console.log('[AI] Risultato parseExpensesFromImage:', parsedData);
+
       if (parsedData.length === 0) {
-        showToast({ message: 'Nessuna spesa trovata nell\'immagine.', type: 'info' });
+        showToast({ message: "Nessuna spesa trovata nell'immagine.", type: 'info' });
       } else if (parsedData.length === 1) {
         setPrefilledData(parsedData[0]);
         setIsFormOpen(true);
@@ -630,8 +711,11 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         refreshPendingImages();
       }
     } catch (error) {
-      console.error("Error durante l'analisi AI:", error);
-      showToast({ message: "Errore durante l'analisi dell'immagine.", type: 'error' });
+      console.error("Errore durante l'analisi AI:", error);
+      showToast({
+        message: "Errore durante l'analisi dell'immagine.",
+        type: 'error',
+      });
     } finally {
       setIsParsingImage(false);
       setSyncingImageId(null);
@@ -691,7 +775,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       className="h-full w-full bg-slate-100 flex flex-col font-sans"
       style={{ touchAction: 'pan-y' }}
     >
-      <div className={`flex-shrink-0 z-20`}>
+      <div className="flex-shrink-0 z-20">
         <Header
           pendingSyncs={pendingImages.length}
           isOnline={isOnline}
@@ -701,8 +785,11 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         />
       </div>
 
-      <main className={`flex-grow bg-slate-100`}>
-        <div className="w-full h-full overflow-y-auto space-y-6" style={{ touchAction: 'pan-y' }}>
+      <main className="flex-grow bg-slate-100">
+        <div
+          className="w-full h-full overflow-y-auto space-y-6"
+          style={{ touchAction: 'pan-y' }}
+        >
           <Dashboard
             expenses={expenses}
             recurringExpenses={recurringExpenses}
@@ -711,8 +798,8 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
           />
           <PendingImages
             images={pendingImages}
-            onAnalyze={image => handleAnalyzeImage(image, true)}
-            onDelete={async id => {
+            onAnalyze={(image) => handleAnalyzeImage(image, true)}
+            onDelete={async (id) => {
               await deleteImageFromQueue(id);
               refreshPendingImages();
             }}
@@ -731,9 +818,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         />
       )}
 
-      <SuccessIndicator
-        show={showSuccessIndicator && !isAnyModalOpenForFab}
-      />
+      <SuccessIndicator show={showSuccessIndicator && !isAnyModalOpenForFab} />
 
       <CalculatorContainer
         isOpen={isCalculatorContainerOpen}
@@ -771,7 +856,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         >
           <div
             className="bg-slate-50 rounded-lg shadow-xl w-full max-w-lg transform transition-all duration-75 ease-in-out animate-fade-in-up"
-            onClick={e => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
           >
             <header className="flex justify-between items-center p-6 border-b border-slate-200">
               <h2 className="text-xl font-bold text-slate-800">Aggiungi da Immagine</h2>
@@ -872,7 +957,9 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         <HistoryScreen
           expenses={expenses}
           accounts={accounts}
-          onClose={() => { setIsHistoryScreenOpen(false); }}
+          onClose={() => {
+            setIsHistoryScreenOpen(false);
+          }}
           onEditExpense={openEditForm}
           onDeleteExpense={handleDeleteRequest}
           onDeleteExpenses={deleteExpenses}
@@ -888,14 +975,22 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
           recurringExpenses={recurringExpenses}
           expenses={expenses}
           accounts={accounts}
-          onClose={() => { setIsRecurringScreenOpen(false); }}
+          onClose={() => {
+            setIsRecurringScreenOpen(false);
+          }}
           onEdit={openRecurringEditForm}
           onDelete={deleteRecurringExpense}
           onDeleteRecurringExpenses={deleteRecurringExpenses}
         />
       )}
 
-      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
     </div>
   );
 };
