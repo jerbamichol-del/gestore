@@ -23,9 +23,34 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
   const [transcript, setTranscript] = useState('');
   const [error, setError] = useState<string | null>(null);
 
+  // Registrazione audio
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+
+  // Visualizzazione onda
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const dataArrayRef = useRef<Uint8Array | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
+  const visualizerBarRef = useRef<HTMLDivElement | null>(null);
+
+  const stopVisualization = () => {
+    if (animationFrameRef.current !== null) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+    analyserRef.current = null;
+    dataArrayRef.current = null;
+    if (audioContextRef.current) {
+      try {
+        audioContextRef.current.close();
+      } catch {
+        // ignore
+      }
+      audioContextRef.current = null;
+    }
+  };
 
   const cleanUp = () => {
     try {
@@ -46,6 +71,66 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
     mediaRecorderRef.current = null;
     streamRef.current = null;
     chunksRef.current = [];
+
+    stopVisualization();
+  };
+
+  const startVisualization = async (stream: MediaStream) => {
+    try {
+      const AudioContextCtor =
+        (window as any).AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextCtor) {
+        console.warn('AudioContext non supportato: niente visualizzazione onda.');
+        return;
+      }
+
+      const audioCtx = new AudioContextCtor();
+      audioContextRef.current = audioCtx;
+
+      if (audioCtx.state === 'suspended') {
+        try {
+          await audioCtx.resume();
+        } catch {
+          // può fallire su alcune policy, pazienza
+        }
+      }
+
+      const sourceNode = audioCtx.createMediaStreamSource(stream);
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      sourceNode.connect(analyser);
+
+      analyserRef.current = analyser;
+      const bufferLength = analyser.frequencyBinCount;
+      dataArrayRef.current = new Uint8Array(bufferLength);
+
+      const visualize = () => {
+        if (
+          !analyserRef.current ||
+          !dataArrayRef.current ||
+          !visualizerBarRef.current
+        ) {
+          return;
+        }
+
+        analyserRef.current.getByteTimeDomainData(dataArrayRef.current);
+        let sum = 0;
+        for (let i = 0; i < bufferLength; i++) {
+          const v = dataArrayRef.current[i];
+          sum += Math.abs(v - 128);
+        }
+        const amplitude = sum / bufferLength / 128; // ~0–1
+        const scale = 0.2 + amplitude * 1.8; // minimo 0.2, max ~2.0
+
+        visualizerBarRef.current.style.transform = `scaleY(${scale})`;
+
+        animationFrameRef.current = requestAnimationFrame(visualize);
+      };
+
+      visualize();
+    } catch (e) {
+      console.warn('Errore inizializzando la visualizzazione audio:', e);
+    }
   };
 
   const startRecording = async () => {
@@ -89,9 +174,17 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
               amount: parsed.amount,
               category: (parsed.category as string) || undefined,
             });
+          } else if (parsed && parsed.description) {
+            // Ha capito almeno la descrizione, ti faccio precompilare
+            setTranscript(parsed.description);
+            onParsed({
+              description: parsed.description,
+              amount: parsed.amount as number | undefined,
+              category: (parsed.category as string) || undefined,
+            });
           } else {
             setError(
-              'Non sono riuscito a capire la spesa. Riprova parlando chiaramente.'
+              'Non sono riuscito a capire la spesa. Prova a dire, ad esempio: "25 euro per spesa al supermercato, categoria Spesa".'
             );
             setStatus('error');
             return;
@@ -108,6 +201,9 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
 
       mediaRecorder.start();
       setStatus('listening');
+
+      // Avvia anche la visualizzazione onda
+      await startVisualization(stream);
     } catch (err) {
       console.error('[Voice] Accesso microfono fallito:', err);
       setError(
@@ -167,10 +263,23 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
             <button
               type="button"
               onClick={handleStopClick}
-              className="w-24 h-24 rounded-full bg-red-500 animate-pulse flex items-center justify-center focus:outline-none focus:ring-4 focus:ring-red-300"
+              className="relative w-28 h-28 flex items-center justify-center focus:outline-none"
               aria-label="Termina registrazione e analizza"
             >
-              <MicrophoneIcon className="w-12 h-12 text-white" />
+              {/* alone “glow” esterno */}
+              <div className="absolute inset-0 rounded-full bg-red-500/30 animate-ping" />
+              {/* cerchio principale con icona microfono */}
+              <div className="relative w-24 h-24 rounded-full bg-red-500 flex items-center justify-center shadow-lg">
+                <MicrophoneIcon className="w-12 h-12 text-white" />
+              </div>
+              {/* barra visualizzatore a destra */}
+              <div className="absolute -right-6 h-20 w-3 rounded-full bg-red-200 overflow-hidden flex items-end">
+                <div
+                  ref={visualizerBarRef}
+                  className="w-full bg-red-600 origin-bottom"
+                  style={{ transform: 'scaleY(0.2)' }}
+                />
+              </div>
             </button>
           ),
           text: 'In ascolto...',
