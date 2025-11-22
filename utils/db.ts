@@ -37,17 +37,36 @@ const getDb = (): Promise<IDBPDatabase<unknown>> => {
     return dbPromise;
 };
 
+// Helper to retry once on "closing" error
+async function withRetry<T>(operation: (db: IDBPDatabase<unknown>) => Promise<T>): Promise<T> {
+    try {
+        const db = await getDb();
+        return await operation(db);
+    } catch (error: any) {
+        if (error && error.message && error.message.includes('closing')) {
+            console.warn('Database connection closing, retrying...');
+            dbPromise = null; // Force new connection
+            const db = await getDb();
+            return await operation(db);
+        }
+        throw error;
+    }
+}
+
 export const addImageToQueue = async (image: OfflineImage): Promise<void> => {
-  const db = await getDb();
-  await db.add(STORE_NAME, image);
+  await withRetry(async (db) => {
+      await db.add(STORE_NAME, image);
+  });
 };
 
 export const getQueuedImages = async (): Promise<OfflineImage[]> => {
-  const db = await getDb();
-  return await db.getAll(STORE_NAME);
+  return await withRetry(async (db) => {
+      return await db.getAll(STORE_NAME);
+  }) as OfflineImage[];
 };
 
 export const deleteImageFromQueue = async (id: string): Promise<void> => {
-  const db = await getDb();
-  await db.delete(STORE_NAME, id);
+  await withRetry(async (db) => {
+      await db.delete(STORE_NAME, id);
+  });
 };
