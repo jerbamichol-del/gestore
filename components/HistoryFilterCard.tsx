@@ -356,7 +356,7 @@ const PeriodNavigator: React.FC<{
       {isMenuOpen && (
         <div
           className={`absolute left-0 right-0 mx-auto w-40 bg-white border border-slate-200 shadow-lg rounded-lg z-[1000] p-2 space-y-1 ${
-            isPanelOpen ? 'top-full mt-1' : 'bottom-full mb-2'
+            isPanelOpen ? 'top-full mt-1' : 'bottom-full mb-10'
           }`}
         >
           {(['day', 'week', 'month', 'year'] as PeriodType[]).map((v) => (
@@ -393,7 +393,7 @@ const PeriodNavigator: React.FC<{
 
 /* -------------------- HistoryFilterCard (bottom sheet) -------------------- */
 
-export const PEEK_PX = 82;
+export const PEEK_PX = 78;
 
 export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
   const [isPeriodMenuOpen, setIsPeriodMenuOpen] = useState(false);
@@ -454,6 +454,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
     startTranslateY: number; // per verticale
     lastY: number;
     lastT: number;
+    canSwipeHorizontal: boolean;
   }>({
     active: false,
     direction: 'none',
@@ -462,6 +463,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
     startTranslateY: 0,
     lastY: 0,
     lastT: 0,
+    canSwipeHorizontal: false,
   });
 
   // misura e calcola posizione chiusa
@@ -549,6 +551,9 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
 
     tapBridge.onPointerDown(e as any);
 
+    const target = e.target as HTMLElement;
+    const canSwipeHorizontal = !!target.closest('[data-swipe-area]');
+
     dragRef.current = {
       active: true,
       direction: 'none',
@@ -557,6 +562,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
       startTranslateY: translateY,
       lastY: e.clientY,
       lastT: performance.now(),
+      canSwipeHorizontal,
     };
 
     if (anim) setAnim(false);
@@ -580,7 +586,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
       if (Math.abs(dy) > Math.abs(dx)) {
         d.direction = 'vertical';
       } else {
-        if (isPeriodMenuOpen || currentView !== 'main') { // Disable horizontal swipe in sub-views
+        if (isPeriodMenuOpen || currentView !== 'main' || !d.canSwipeHorizontal) { // Disable horizontal swipe in sub-views or non-swipeable areas
             d.active = false;
             return;
         }
@@ -959,7 +965,8 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
       <div className="flex-shrink-0 z-20 relative bg-white rounded-t-2xl">
         
         {/* Header: Date Filters - Highest Z-Index to allow dropdown over inputs */}
-        <div className="pt-2 pb-1 relative z-30">
+        {/* ADDED data-swipe-area to mark this section as the only one allowing horizontal swipe */}
+        <div className="pt-2 pb-1 relative z-30" data-swipe-area>
             <div className={'relative ' + (isPeriodMenuOpen ? 'overflow-visible' : 'overflow-hidden')}>
             <div
                 className="w-[300%] flex"
@@ -999,8 +1006,8 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
             </div>
             </div>
 
-            {/* Pagination Dots */}
-            <div className="flex justify-center items-center pt-1 pb-2 gap-2">
+            {/* Pagination Dots - REDUCED PADDING BOTTOM (pb-2 -> pb-1) */}
+            <div className="flex justify-center items-center pt-1 pb-1 gap-2">
             {[0, 1, 2].map((i) => (
                 <button
                 key={i}
@@ -1018,9 +1025,9 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
             </div>
         </div>
 
-        {/* Header Inputs (Desc & Amount) - Moved Below Date Filters, Lower Z-Index */}
+        {/* Header Inputs (Desc & Amount) - REDUCED PADDING TOP (pt-2 -> pt-1.5) */}
         {currentView === 'main' && (
-            <div className="pt-2 relative z-20">
+            <div className="pt-1.5 relative z-20">
                 {renderHeaderInputs()}
                 {renderBodyMain()}
             </div>
