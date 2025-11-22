@@ -1,186 +1,149 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import AuthLayout from '../components/auth/AuthLayout';
 import PinInput from '../components/auth/PinInput';
-import { resetPin, forgotPassword } from '../utils/api';
-import { SpinnerIcon } from '../components/icons/SpinnerIcon';
+import { resetPin } from '../utils/api';
 
 interface ResetPinScreenProps {
   email: string;
-  token: string;
-  onResetSuccess: () => void;
+  token: string; // lo riceviamo ma NON lo usiamo più per validare lato server
+  onResetSuccess: () => void; // chiamato quando il PIN è stato aggiornato
 }
+
+type Step = 'new_pin' | 'confirm_pin';
 
 const ResetPinScreen: React.FC<ResetPinScreenProps> = ({
   email,
   token,
   onResetSuccess,
 }) => {
-  const [step, setStep] = useState<'new_pin' | 'confirm_pin'>('new_pin');
+  const [step, setStep] = useState<Step>('new_pin');
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
 
-  // stato per "reinvia mail"
-  const [resendBusy, setResendBusy] = useState(false);
-  const [resendDone, setResendDone] = useState(false);
-  const [cooldownLeft, setCooldownLeft] = useState(0);
-
-  // countdown per il reinvio
-  useEffect(() => {
-    if (cooldownLeft <= 0) return;
-    const id = window.setTimeout(
-      () => setCooldownLeft((prev) => Math.max(prev - 1, 0)),
-      1000
-    );
-    return () => window.clearTimeout(id);
-  }, [cooldownLeft]);
-
-  const isConfirming = step === 'confirm_pin';
-
-  const handlePrimaryAction = async () => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     setError(null);
 
+    // Controlli base sul PIN
+    if (!pin || pin.length !== 4 || !/^\d{4}$/.test(pin)) {
+      setError('Inserisci un PIN di 4 cifre.');
+      return;
+    }
+
     if (step === 'new_pin') {
-      if (pin.length !== 4 || !/^\d{4}$/.test(pin)) {
-        setError('Il PIN deve essere di 4 cifre.');
-        return;
-      }
+      // Prima schermata → passa alla conferma
       setStep('confirm_pin');
       return;
     }
 
-    if (step === 'confirm_pin') {
-      if (confirmPin !== pin) {
-        setError('I due PIN non coincidono. Riprova.');
-        setConfirmPin('');
+    // step === 'confirm_pin'
+    if (pin !== confirmPin) {
+      setError('I PIN non coincidono. Riprova.');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      // ❗ Qui NON chiamiamo più Apps Script.
+      // resetPin è completamente locale (aggiorna l’utente in localStorage).
+      const res = await resetPin(email, token, pin);
+
+      if (!res.success) {
+        setError(res.message || 'Errore durante il reset del PIN.');
+        setIsLoading(false);
         return;
       }
 
-      setIsLoading(true);
-      try {
-        const resp = await resetPin(email, token, pin);
+      setSuccessMessage('PIN aggiornato con successo.');
+      setIsLoading(false);
 
-        if (!resp.success) {
-          setError(resp.message || 'Errore durante il reset del PIN.');
-          setIsLoading(false);
-          return;
-        }
-
-        setSuccessMessage(resp.message || 'PIN aggiornato con successo.');
-        setError(null);
-
-        setTimeout(() => {
-          onResetSuccess();
-        }, 1500);
-      } catch (e) {
-        console.error('[ResetPin] Errore:', e);
-        setError('Errore imprevisto durante il reset del PIN.');
-        setIsLoading(false);
-      }
+      // Piccola pausa per mostrare il messaggio e poi torni alla schermata di login
+      setTimeout(() => {
+        onResetSuccess();
+      }, 800);
+    } catch (err) {
+      console.error('[ResetPin] Errore inatteso:', err);
+      setError('Errore imprevisto durante il reset del PIN.');
+      setIsLoading(false);
     }
   };
 
-  const handleResend = async () => {
-    if (resendBusy || cooldownLeft > 0) return;
+  const title =
+    step === 'new_pin'
+      ? 'Imposta un nuovo PIN'
+      : 'Conferma il nuovo PIN';
 
-    setResendBusy(true);
-    setResendDone(false);
-    setError(null);
-
-    try {
-      const res = await forgotPassword(email);
-      if (!res.success) {
-        setError(res.message || 'Non sono riuscito a reinviare il link.');
-      } else {
-        setResendDone(true);
-        // esempio: 60s di cooldown
-        setCooldownLeft(60);
-      }
-    } catch (e) {
-      console.error('[ResetPin] errore reinvio mail:', e);
-      setError('Errore durante il reinvio del link.');
-    } finally {
-      setResendBusy(false);
-    }
-  };
+  const description =
+    step === 'new_pin'
+      ? `Stai reimpostando il PIN per l’account ${email}. Scegli un nuovo PIN a 4 cifre.`
+      : 'Reinserisci il nuovo PIN per conferma.';
 
   return (
-    <AuthLayout>
-      <div className="max-w-sm mx-auto text-center">
-        <h2 className="text-xl font-bold text-slate-800 mb-2">
-          Reimposta il tuo PIN
-        </h2>
-        <p className="text-slate-500 mb-4">
-          Stai reimpostando il PIN per{' '}
-          <span className="font-semibold text-slate-800">{email}</span>.
-        </p>
-
-        <div className="mb-4">
-          <p className="text-sm text-slate-500">
-            {isConfirming
-              ? 'Inserisci di nuovo il PIN per conferma.'
-              : 'Scegli un nuovo PIN di 4 cifre.'}
-          </p>
-        </div>
-
-        <div className="flex justify-center mb-4">
+    <AuthLayout
+      title={title}
+      description={description}
+    >
+      <form onSubmit={handleSubmit} className="space-y-6 mt-4">
+        {step === 'new_pin' && (
           <PinInput
-            pin={isConfirming ? confirmPin : pin}
-            onPinChange={isConfirming ? setConfirmPin : setPin}
+            label="Nuovo PIN"
+            value={pin}
+            onChange={setPin}
+            disabled={isLoading}
+            autoFocus
           />
-        </div>
+        )}
+
+        {step === 'confirm_pin' && (
+          <>
+            <PinInput
+              label="Nuovo PIN"
+              value={pin}
+              onChange={setPin}
+              disabled={isLoading}
+            />
+            <PinInput
+              label="Conferma PIN"
+              value={confirmPin}
+              onChange={setConfirmPin}
+              disabled={isLoading}
+              autoFocus
+            />
+          </>
+        )}
 
         {error && (
-          <p className="text-sm text-red-600 mb-2 min-h-[1.5rem]">{error}</p>
+          <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">
+            {error}
+          </div>
         )}
 
         {successMessage && (
-          <p className="text-sm text-green-600 mb-2 min-h-[1.5rem]">
+          <div className="text-sm text-green-700 bg-green-50 border border-green-100 rounded-md px-3 py-2">
             {successMessage}
-          </p>
+          </div>
         )}
 
         <button
-          type="button"
-          onClick={handlePrimaryAction}
+          type="submit"
           disabled={isLoading}
-          className="w-full mt-2 inline-flex items-center justify-center px-4 py-3 rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-700 disabled:bg-slate-400 disabled:cursor-not-allowed transition-colors"
+          className="w-full inline-flex items-center justify-center px-4 py-2.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed"
         >
-          {isLoading && (
-            <SpinnerIcon className="w-5 h-5 mr-2 animate-spin text-white" />
-          )}
-          {isConfirming ? 'Conferma PIN' : 'Continua'}
+          {isLoading ? 'Salvataggio...' : step === 'new_pin' ? 'Continua' : 'Salva PIN'}
         </button>
 
-        <div className="mt-6 text-left">
-          <p className="text-xs text-slate-500 mb-1">
-            Link non arrivato o non ti fidi? Puoi richiederne un altro:
-          </p>
-          <button
-            type="button"
-            onClick={handleResend}
-            disabled={resendBusy || cooldownLeft > 0}
-            className={`text-sm font-semibold transition-colors ${
-              resendBusy || cooldownLeft > 0
-                ? 'text-slate-400 cursor-not-allowed'
-                : 'text-indigo-600 hover:text-indigo-500'
-            }`}
-          >
-            {resendBusy
-              ? 'Invio in corso…'
-              : cooldownLeft > 0
-              ? `Richiedi nuovo link (${cooldownLeft}s)`
-              : 'Richiedi nuovo link'}
-          </button>
-          {resendDone && (
-            <p className="mt-2 text-xs text-green-600">
-              Se l&apos;email è registrata, riceverai a breve un nuovo link.
-            </p>
-          )}
-        </div>
-      </div>
+        <button
+          type="button"
+          className="w-full text-sm text-slate-500 hover:text-slate-700 mt-2"
+          onClick={onResetSuccess}
+          disabled={isLoading}
+        >
+          Annulla e torna al login
+        </button>
+      </form>
     </AuthLayout>
   );
 };
