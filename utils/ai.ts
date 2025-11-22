@@ -6,7 +6,7 @@ import { CATEGORIES, Expense } from '../types';
 // 🔑 API KEY
 // METTI QUI la TUA chiave NUOVA di Gemini (quella valida, NON la vecchia scaduta)
 // Esempio: const API_KEY = 'AIza...';
-const API_KEY: string = 'AIzaSyDmhOYSgRHgoqeBeHqoBAvhs2S_B8VnMoE';
+const API_KEY: string = 'AIzaSyDOI3eiPbETfS8GBHvljhSH4mfcy0sLAmc';
 
 // ======================================================
 
