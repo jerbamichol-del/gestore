@@ -26,16 +26,15 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'npm'
+          # NIENTE cache qui, così non serve il lockfile
 
       - name: Install dependencies
-      # se usi pnpm/yarn cambia questo comando
-        run: npm ci
+        run: npm install
 
       - name: Build Vite app
         run: npm run build
         env:
-          # QUI usiamo esattamente il secret che hai creato:
+          # usa la secret che hai creato tu
           VITE_GEMINI_API_KEY: ${{ secrets.VITE_GEMINI_API_KEY }}
 
       - name: Upload artifact
