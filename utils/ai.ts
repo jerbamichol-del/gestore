@@ -6,6 +6,7 @@ import { CATEGORIES, Expense } from '../types';
 // In build usiamo process.env.API_KEY, che viene iniettata
 // dal workflow GitHub Actions (secrets.VITE_GEMINI_API_KEY).
 const API_KEY = process.env.API_KEY;
+console.log('[AI] API_KEY prefix:', API_KEY?.slice(0, 8));
 
 if (!API_KEY) {
   console.error(
