@@ -1,27 +1,157 @@
-// utils/api.ts
+// src/utils/api.ts
 import { hashPinWithSalt, verifyPin } from './auth';
 
-// --- MOCK USER DATABASE in localStorage (demo) ---
-export const getUsers = () => {
+// =====================
+// Tipi base (facoltativi ma utili)
+// =====================
+export interface StoredUser {
+  email: string;
+  pinHash: string;
+  pinSalt: string;
+  createdAt: string;
+}
+
+export interface LoginResult {
+  success: boolean;
+  token?: string;
+  message?: string;
+}
+
+export interface RegisterResult {
+  success: boolean;
+  message?: string;
+}
+
+export interface ForgotPasswordResult {
+  success: boolean;
+  message: string;
+}
+
+export interface ResetPinResult {
+  success: boolean;
+  message: string;
+}
+
+// =====================
+// Helpers utente (localStorage)
+// =====================
+
+const USERS_KEY = 'users_db';
+
+export const getUsers = (): Record<string, StoredUser> => {
   try {
-    return JSON.parse(localStorage.getItem('users_db') || '{}');
+    const raw = localStorage.getItem(USERS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
   } catch {
     return {};
   }
 };
 
-export const saveUsers = (users: any) =>
-  localStorage.setItem('users_db', JSON.stringify(users));
+export const saveUsers = (users: Record<string, StoredUser>) => {
+  localStorage.setItem(USERS_KEY, JSON.stringify(users));
+};
 
-const normalizeEmail = (email: string) =>
-  email.trim().toLowerCase();
+const normalizeEmail = (email: string) => email.trim().toLowerCase();
 
-// 👇 METTI QUI il link Web App Apps Script (quello che termina in /exec)
-const SCRIPT_URL = 'https://script.google.com/macros/s/XXXXXXXXXXXX/exec';
+// =====================
+// Registrazione
+// =====================
 
-// =================== FORGOT PASSWORD → invia EMAIL ===================
+export const register = async (
+  email: string,
+  pin: string
+): Promise<RegisterResult> => {
+  const normalizedEmail = normalizeEmail(email);
 
-export const forgotPassword = async (email: string) => {
+  if (!normalizedEmail || !normalizedEmail.includes('@')) {
+    return {
+      success: false,
+      message: 'Inserisci un indirizzo email valido.',
+    };
+  }
+
+  if (!/^\d{4}$/.test(pin)) {
+    return {
+      success: false,
+      message: 'Il PIN deve essere di 4 cifre numeriche.',
+    };
+  }
+
+  const users = getUsers();
+  if (users[normalizedEmail]) {
+    return {
+      success: false,
+      message: 'Esiste già un utente registrato con questa email.',
+    };
+  }
+
+  const { hash, salt } = await hashPinWithSalt(pin);
+
+  const newUser: StoredUser = {
+    email: normalizedEmail,
+    pinHash: hash,
+    pinSalt: salt,
+    createdAt: new Date().toISOString(),
+  };
+
+  users[normalizedEmail] = newUser;
+  saveUsers(users);
+
+  return {
+    success: true,
+    message: 'Registrazione completata.',
+  };
+};
+
+// =====================
+// Login
+// =====================
+
+export const login = async (
+  email: string,
+  pin: string
+): Promise<LoginResult> => {
+  const normalizedEmail = normalizeEmail(email);
+  const users = getUsers();
+  const user = users[normalizedEmail];
+
+  if (!user) {
+    return {
+      success: false,
+      message: 'Credenziali non valide.',
+    };
+  }
+
+  const isValid = await verifyPin(pin, user.pinHash, user.pinSalt);
+  if (!isValid) {
+    return {
+      success: false,
+      message: 'Credenziali non valide.',
+    };
+  }
+
+  // Token solo “di sessione”, usato da AuthGate
+  const token = `${normalizedEmail}:${Date.now()}`;
+
+  return {
+    success: true,
+    token,
+  };
+};
+
+// =====================
+// Forgot password → invio email con link reset
+// =====================
+
+// ⚠️ METTI QUI il tuo URL di Apps Script (quello /exec)
+const SCRIPT_URL =
+  'https://script.google.com/macros/s/XXXXXXXXXXXX/exec';
+
+export const forgotPassword = async (
+  email: string
+): Promise<ForgotPasswordResult> => {
   const normalizedEmail = normalizeEmail(email);
 
   if (!normalizedEmail || !normalizedEmail.includes('@')) {
@@ -38,7 +168,7 @@ export const forgotPassword = async (email: string) => {
       `&email=${encodeURIComponent(normalizedEmail)}` +
       `&redirect=${encodeURIComponent(redirect)}`;
 
-    // fire-and-forget: non ci interessa la risposta
+    // fire-and-forget — non ci interessa la risposta
     await fetch(url, {
       method: 'GET',
       mode: 'no-cors',
@@ -54,14 +184,15 @@ export const forgotPassword = async (email: string) => {
   };
 };
 
-// =================== RESET PIN LOCALE ===================
-// Il token viene usato solo per far partire la schermata, NON più per validare sul server.
+// =====================
+// Reset PIN locale
+// =====================
 
 export const resetPin = async (
   email: string,
-  _token: string,      // ignorato: la mail serve solo a dimostrare che controlli l’account
+  _token: string, // il token dal link non viene più verificato lato server
   newPin: string
-): Promise<{ success: boolean; message: string }> => {
+): Promise<ResetPinResult> => {
   const normalizedEmail = normalizeEmail(email);
   const users = getUsers();
   const user = users[normalizedEmail];
@@ -73,9 +204,15 @@ export const resetPin = async (
     };
   }
 
+  if (!/^\d{4}$/.test(newPin)) {
+    return {
+      success: false,
+      message: 'Il nuovo PIN deve essere di 4 cifre.',
+    };
+  }
+
   try {
     const { hash, salt } = await hashPinWithSalt(newPin);
-
     user.pinHash = hash;
     user.pinSalt = salt;
     users[normalizedEmail] = user;
