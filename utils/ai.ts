@@ -10,7 +10,7 @@ const API_KEY: string = 'AIzaSyDOI3eiPbETfS8GBHvljhSH4mfcy0sLAmc';
 
 // ======================================================
 
-if (!API_KEY || API_KEY === 'INSERISCI_QUI_LA_TUA_CHIAVE_GEMINI') {
+if (!API_KEY || API_KEY === 'AIzaSyDOI3eiPbETfS8GBHvljhSH4mfcy0sLAmc') {
   console.error(
     '[AI] API_KEY non impostata in src/utils/ai.ts. ' +
       'Le funzioni AI (immagini e voce) non funzioneranno.'
