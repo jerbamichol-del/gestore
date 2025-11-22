@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Expense } from '../types';
+import { createLiveSession, createBlob } from '../utils/ai';
 import { XMarkIcon } from './icons/XMarkIcon';
 import { MicrophoneIcon } from './icons/MicrophoneIcon';
 import { LiveServerMessage } from '@google/genai';
@@ -10,36 +11,38 @@ interface VoiceInputModalProps {
   onParsed: (data: Partial<Omit<Expense, 'id'>>) => void;
 }
 
-const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
-  isOpen,
-  onClose,
-  onParsed,
-}) => {
+const VoiceInputModal: React.FC<VoiceInputModalProps> = ({ isOpen, onClose, onParsed }) => {
   const [isAnimating, setIsAnimating] = useState(false);
-  const [status, setStatus] = useState<'idle' | 'listening' | 'processing' | 'error'>(
-    'idle',
-  );
+  const [status, setStatus] = useState<'idle' | 'listening' | 'processing' | 'error'>('idle');
   const [transcript, setTranscript] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  const sessionPromise = useRef<Promise<any> | null>(null);
+  // Sessione Gemini live (Promise della sessione)
+  const sessionPromise = useRef<ReturnType<typeof createLiveSession> | null>(null);
   const audioContext = useRef<AudioContext | null>(null);
   const scriptProcessor = useRef<ScriptProcessorNode | null>(null);
   const stream = useRef<MediaStream | null>(null);
 
   const cleanUp = () => {
     try {
-      stream.current?.getTracks().forEach((track) => track.stop());
-    } catch {}
+      stream.current?.getTracks().forEach(track => track.stop());
+    } catch (_) {}
+
     try {
       scriptProcessor.current?.disconnect();
-    } catch {}
+    } catch (_) {}
+
     try {
       audioContext.current?.close();
-    } catch {}
+    } catch (_) {}
+
     try {
-      sessionPromise.current?.then((session: any) => session.close());
-    } catch {}
+      sessionPromise.current?.then(session => {
+        try {
+          session.close();
+        } catch (_) {}
+      });
+    } catch (_) {}
 
     sessionPromise.current = null;
     audioContext.current = null;
@@ -54,14 +57,10 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
     setStatus('listening');
 
     try {
-      stream.current = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true },
-      });
+      // Richiesta microfono
+      stream.current = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-      // Carica il modulo AI solo quando serve (evita crash all'avvio)
-      const aiModule = await import('../utils/ai');
-      const { createLiveSession, createBlob } = aiModule;
-
+      // Connessione alla sessione live Gemini
       sessionPromise.current = createLiveSession({
         onopen: async () => {
           const AudioContextCtor =
@@ -72,24 +71,34 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
             return;
           }
 
-          const ctx = new AudioContextCtor({ sampleRate: 16000 });
-          audioContext.current = ctx;
+          // AudioContext con sample rate di default del device
+          audioContext.current = new AudioContextCtor();
 
+          // Fix per mobile: se sospeso, prova a riprendere
           if (audioContext.current.state === 'suspended') {
-            await audioContext.current.resume();
+            try {
+              await audioContext.current.resume();
+            } catch (e) {
+              console.error('Impossibile riprendere AudioContext:', e);
+            }
           }
 
-          const source =
-            audioContext.current.createMediaStreamSource(stream.current!);
-          scriptProcessor.current =
-            audioContext.current.createScriptProcessor(4096, 1, 1);
+          const realSampleRate = audioContext.current.sampleRate;
+          const source = audioContext.current.createMediaStreamSource(stream.current!);
+          scriptProcessor.current = audioContext.current.createScriptProcessor(4096, 1, 1);
 
           scriptProcessor.current.onaudioprocess = (audioProcessingEvent) => {
-            const inputData =
-              audioProcessingEvent.inputBuffer.getChannelData(0);
-            const pcmBlob = createBlob(inputData);
-            sessionPromise.current?.then((session: any) => {
-              session.sendRealtimeInput({ media: pcmBlob });
+            const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
+
+            // Qui usiamo la FIRMA corretta: (data, sampleRateInHz)
+            const pcmBlob = createBlob(inputData, realSampleRate);
+
+            sessionPromise.current?.then((session) => {
+              try {
+                session.sendRealtimeInput({ media: pcmBlob });
+              } catch (e) {
+                console.error('Errore sendRealtimeInput:', e);
+              }
             });
           };
 
@@ -97,37 +106,44 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
           scriptProcessor.current.connect(audioContext.current.destination);
         },
         onmessage: (message: LiveServerMessage) => {
-          if (message.serverContent?.inputTranscription) {
-            setTranscript(
-              (prev) => prev + message.serverContent!.inputTranscription!.text,
-            );
-          }
-          if (message.toolCall?.functionCalls) {
-            setStatus('processing');
-            const args = message.toolCall.functionCalls[0].args as any;
-            onParsed({
-              description: args.description as string,
-              amount: args.amount as number,
-              category: args.category as string,
-            });
+          try {
+            if (message.serverContent?.inputTranscription) {
+              setTranscript(prev => prev + message.serverContent.inputTranscription.text);
+            }
+
+            if (message.toolCall?.functionCalls && message.toolCall.functionCalls.length > 0) {
+              setStatus('processing');
+              const args = message.toolCall.functionCalls[0].args;
+              onParsed({
+                description: args.description as string,
+                amount: args.amount as number,
+                category: args.category as string,
+              });
+              cleanUp();
+            }
+          } catch (e) {
+            console.error('Errore gestione messaggio live:', e, message);
+            setError("Si è verificato un errore durante l'elaborazione della risposta vocale.");
+            setStatus('error');
             cleanUp();
           }
         },
-        onerror: (e: ErrorEvent) => {
-          console.error(e);
-          setError('Si è verificato un errore durante la sessione vocale.');
+        onerror: (e: any) => {
+          console.error('Errore sessione live Gemini:', e);
+          setError("Si è verificato un errore durante la sessione vocale.");
           setStatus('error');
           cleanUp();
         },
         onclose: () => {
-          // Session closed
+          // Chiusura normale: se non eravamo in errore, riportiamo lo stato a idle
+          if (status === 'listening' || status === 'processing') {
+            setStatus('idle');
+          }
         },
       });
     } catch (err) {
-      console.error(err);
-      setError(
-        'Accesso al microfono negato o errore inizializzazione AI. Controlla le autorizzazioni del browser.',
-      );
+      console.error('Errore accesso microfono:', err);
+      setError("Accesso al microfono negato o non disponibile. Controlla le autorizzazioni del browser.");
       setStatus('error');
     }
   };
@@ -143,6 +159,7 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
     } else {
       setIsAnimating(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   if (!isOpen) return null;
@@ -157,8 +174,7 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
             </div>
           ),
           text: 'In ascolto...',
-          subtext:
-            'Descrivi la tua spesa, ad esempio "25 euro per una cena al ristorante".',
+          subtext: 'Descrivi la tua spesa, ad esempio "25 euro per una cena al ristorante".',
         };
       case 'processing':
         return {
