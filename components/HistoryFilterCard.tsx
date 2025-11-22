@@ -393,7 +393,7 @@ const PeriodNavigator: React.FC<{
 
 /* -------------------- HistoryFilterCard (bottom sheet) -------------------- */
 
-export const PEEK_PX = 74;
+export const PEEK_PX = 82;
 
 export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
   const [isPeriodMenuOpen, setIsPeriodMenuOpen] = useState(false);
@@ -769,7 +769,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
   );
 
   const renderBodyMain = () => (
-    <div className="space-y-3 pt-2">
+    <div className="space-y-3 pt-2 px-4 pb-4">
         {/* Account Button - Full Width */}
          <button
             type="button"
@@ -1022,6 +1022,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
         {currentView === 'main' && (
             <div className="pt-2 relative z-20">
                 {renderHeaderInputs()}
+                {renderBodyMain()}
             </div>
         )}
       </div>
@@ -1037,7 +1038,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
             touchAction: 'pan-y'
         }}
       >
-          {currentView === 'main' && renderBodyMain()}
+          {/* Removed renderBodyMain here */}
           {currentView === 'account_selection' && renderAccountSelection()}
           {currentView === 'category_selection' && renderCategorySelection()}
           
