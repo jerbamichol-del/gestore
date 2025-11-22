@@ -147,7 +147,7 @@ export const login = async (
 
 // ⚠️ METTI QUI il tuo URL di Apps Script (quello /exec)
 const SCRIPT_URL =
-  'https://script.google.com/macros/s/XXXXXXXXXXXX/exec';
+  'https://script.google.com/macros/s/AKfycbzmq-PTrMcMdrYqCRX29_S034zCaj5ttyc3tZhdhjV77wF6n99LKricFgzy7taGqKOo/exec';
 
 export const forgotPassword = async (
   email: string
