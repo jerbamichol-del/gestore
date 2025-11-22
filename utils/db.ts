@@ -20,6 +20,18 @@ const getDb = (): Promise<IDBPDatabase<unknown>> => {
                     db.createObjectStore(STORE_NAME, { keyPath: 'id' });
                 }
             },
+            blocked() {
+                console.warn('Database blocked');
+            },
+            blocking() {
+                if (dbPromise) {
+                    dbPromise.then((db) => db.close());
+                    dbPromise = null;
+                }
+            },
+            terminated() {
+                dbPromise = null;
+            },
         });
     }
     return dbPromise;
