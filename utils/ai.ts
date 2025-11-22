@@ -1,4 +1,3 @@
-// src/utils/ai.ts
 import {
   GoogleGenAI,
   Type,
@@ -6,18 +5,42 @@ import {
   Modality,
   LiveServerMessage,
 } from '@google/genai';
+import type { Blob as GenAIBlob } from '@google/genai';
 import { CATEGORIES, Expense } from '../types';
 
-// 👉 API key direttamente in chiaro, come richiesto
-const GEMINI_API_KEY = 'AIzaSyD4FUDFh6Q_6PlVLVqJ0He-K6P7YJy-D44';
+// Helper per leggere le env sia in Vite che in Node/AI Studio
+const getEnv = (key: string): string | undefined => {
+  try {
+    if (typeof import.meta !== 'undefined' && (import.meta as any).env?.[key]) {
+      return (import.meta as any).env[key];
+    }
+  } catch {
+    // ignore
+  }
 
-// Non usare process.env / import.meta.env: siamo in browser / GitHub Pages
-if (!GEMINI_API_KEY) {
-  console.error('GEMINI_API_KEY non impostata: le funzionalità AI non funzioneranno.');
+  try {
+    if (typeof process !== 'undefined' && process.env?.[key]) {
+      return process.env[key];
+    }
+  } catch {
+    // ignore
+  }
+
+  return undefined;
+};
+
+// Usa PRIMA la chiave che hai chiamato VITE_GEMINI_API_KEY
+const API_KEY =
+  getEnv('VITE_GEMINI_API_KEY') ||
+  getEnv('VITE_API_KEY') ||
+  getEnv('REACT_APP_API_KEY') ||
+  getEnv('API_KEY');
+
+if (!API_KEY) {
+  console.error('API key Gemini mancante! Le funzionalità AI (voce/immagini) non funzioneranno.');
 }
 
-// Istanza singleton del client
-const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+const ai = new GoogleGenAI({ apiKey: API_KEY ?? '' });
 
 const toYYYYMMDD = (date: Date) => {
   const year = date.getFullYear();
@@ -26,7 +49,7 @@ const toYYYYMMDD = (date: Date) => {
   return `${year}-${month}-${day}`;
 };
 
-// ================== IMAGE PARSING ==================
+// --- Image Parsing Logic ---
 
 const expenseSchema = {
   type: Type.OBJECT,
@@ -47,7 +70,9 @@ const expenseSchema = {
     },
     category: {
       type: Type.STRING,
-      description: `Categoria della spesa. Scegli tra: ${Object.keys(CATEGORIES).join(', ')}.`,
+      description: `Categoria della spesa. Scegli tra: ${Object.keys(
+        CATEGORIES
+      ).join(', ')}.`,
     },
     subcategory: {
       type: Type.STRING,
@@ -67,7 +92,9 @@ const getCategoryPrompt = () => {
   let categoryDetails = '';
   for (const [category, subcategories] of Object.entries(CATEGORIES)) {
     if (subcategories.length > 0) {
-      categoryDetails += `- ${category}: (sottocategorie: ${subcategories.join(', ')})\n`;
+      categoryDetails += `- ${category}: (sottocategorie: ${subcategories.join(
+        ', '
+      )})\n`;
     } else {
       categoryDetails += `- ${category}\n`;
     }
@@ -77,59 +104,70 @@ const getCategoryPrompt = () => {
 
 export async function parseExpensesFromImage(
   base64Image: string,
-  mimeType: string,
+  mimeType: string
 ): Promise<Partial<Expense>[]> {
-  if (!GEMINI_API_KEY) {
-    console.error('parseExpensesFromImage: GEMINI_API_KEY mancante');
-    return [];
+  if (!API_KEY) {
+    console.error('parseExpensesFromImage chiamato senza API_KEY.');
+    throw new Error('API Gemini non configurata.');
   }
 
   const imagePart = {
     inlineData: {
       mimeType,
-      data: base64Image, // deve essere solo la parte base64, senza "data:image/..."
+      data: base64Image,
     },
   };
-
   const textPart = {
-    text: `Analizza questa immagine di una ricevuta o scontrino e estrai TUTTE le informazioni sulle spese presenti. 
-Se ci sono più spese, restituiscile come un array di oggetti.
-
+    text: `Analizza questa immagine di una ricevuta o scontrino e estrai TUTTE le informazioni sulle spese presenti. Se ci sono più spese, restituiscile come un array di oggetti.
 Le categorie e sottocategorie disponibili sono:
 ${getCategoryPrompt()}
-
 Se una categoria o sottocategoria non è chiara, imposta la categoria su "Altro" e lascia vuota la sottocategoria.
 Formatta la data come YYYY-MM-DD. Se non trovi una data, usa la data di oggi: ${toYYYYMMDD(
-      new Date(),
+      new Date()
     )}.
 Estrai una descrizione concisa per ogni spesa.
-Fornisci il risultato esclusivamente in formato JSON, anche se trovi una sola spesa (in quel caso, sarà un array con un solo elemento).
-Se non trovi nessuna spesa valida, restituisci un array vuoto.`,
+Fornisci il risultato esclusivamente in formato JSON, anche se trovi una sola spesa (in quel caso, sarà un array con un solo elemento). Se non trovi nessuna spesa valida, restituisci un array vuoto.`,
   };
 
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: { parts: [imagePart, textPart] },
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: multiExpenseSchema,
-      },
-    });
+  const response: any = await ai.models.generateContent({
+    model: 'gemini-2.5-flash',
+    contents: { parts: [imagePart, textPart] },
+    config: {
+      responseMimeType: 'application/json',
+      responseSchema: multiExpenseSchema,
+    },
+  });
 
-    const jsonStr = response.text.trim();
-    if (!jsonStr) return [];
+  // La libreria espone text() nei sample; gestiamo sia funzione che property
+  let raw: any = '';
+  if (typeof response.text === 'function') {
+    raw = response.text();
+  } else if (typeof response.text === 'string') {
+    raw = response.text;
+  } else if (response.outputText) {
+    raw = response.outputText;
+  }
 
-    const parsed = JSON.parse(jsonStr);
-    if (!Array.isArray(parsed)) return [];
-    return parsed;
-  } catch (err) {
-    console.error('Errore in parseExpensesFromImage:', err);
+  const jsonStr = String(raw || '').trim();
+  if (!jsonStr) {
     return [];
+  }
+
+  try {
+    const parsed = JSON.parse(jsonStr);
+    if (Array.isArray(parsed)) return parsed;
+    return [parsed];
+  } catch (e) {
+    console.error(
+      'Risposta JSON non valida da parseExpensesFromImage:',
+      e,
+      jsonStr
+    );
+    throw new Error('Formato di risposta AI non valido.');
   }
 }
 
-// ================== VOICE PARSING (LIVE) ==================
+// --- Voice Parsing Logic ---
 
 export const addExpenseFunctionDeclaration: FunctionDeclaration = {
   name: 'addExpense',
@@ -139,7 +177,8 @@ export const addExpenseFunctionDeclaration: FunctionDeclaration = {
     properties: {
       description: {
         type: Type.STRING,
-        description: 'Descrizione della spesa. Es: "Caffè al bar", "Biglietto del cinema".',
+        description:
+          'Descrizione della spesa. Es: "Caffè al bar", "Biglietto del cinema".',
       },
       amount: {
         type: Type.NUMBER,
@@ -147,14 +186,16 @@ export const addExpenseFunctionDeclaration: FunctionDeclaration = {
       },
       category: {
         type: Type.STRING,
-        description: `Categoria della spesa. Scegli tra: ${Object.keys(CATEGORIES).join(', ')}.`,
+        description: `Categoria della spesa. Scegli tra: ${Object.keys(
+          CATEGORIES
+        ).join(', ')}.`,
       },
     },
     required: ['amount'],
   },
 };
 
-function encode(bytes: Uint8Array): string {
+export function encode(bytes: Uint8Array): string {
   let binary = '';
   const len = bytes.byteLength;
   for (let i = 0; i < len; i++) {
@@ -163,32 +204,37 @@ function encode(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-// Tipo compatibile con quello che si aspetta ai.live
-export type GenAiBlob = {
-  data: string;
-  mimeType: string;
-};
-
-export function createBlob(data: Float32Array): GenAiBlob {
+// data: Float32Array mono 32-bit
+// sampleRateInHz: sample rate reale dell'AudioContext (es. 44100)
+export function createBlob(
+  data: Float32Array,
+  sampleRateInHz: number
+): GenAIBlob {
   const l = data.length;
   const int16 = new Int16Array(l);
   for (let i = 0; i < l; i++) {
-    int16[i] = data[i] * 32768;
+    let s = data[i];
+    if (s > 1) s = 1;
+    if (s < -1) s = -1;
+    int16[i] = s * 0x7fff;
   }
+
   return {
     data: encode(new Uint8Array(int16.buffer)),
-    mimeType: 'audio/pcm;rate=16000',
+    mimeType: `audio/pcm;rate=${sampleRateInHz}`,
   };
 }
 
+// FIX: callbacks richiesti; aggiunto controllo API_KEY
 export function createLiveSession(callbacks: {
-  onopen: () => void;
+  onopen: () => void | Promise<void>;
   onmessage: (message: LiveServerMessage) => void;
-  onerror: (e: ErrorEvent) => void;
+  onerror: (e: any) => void;
   onclose: (e: CloseEvent) => void;
 }) {
-  if (!GEMINI_API_KEY) {
-    console.error('createLiveSession: GEMINI_API_KEY mancante, la voce non funzionerà.');
+  if (!API_KEY) {
+    console.error('createLiveSession chiamato senza API_KEY.');
+    throw new Error('API Gemini non configurata.');
   }
 
   const sessionPromise = ai.live.connect({
@@ -198,13 +244,12 @@ export function createLiveSession(callbacks: {
       responseModalities: [Modality.AUDIO],
       inputAudioTranscription: {},
       tools: [{ functionDeclarations: [addExpenseFunctionDeclaration] }],
-      systemInstruction: `Sei un assistente vocale per un'app di gestione spese.
+      systemInstruction: `Sei un assistente vocale per un'app di gestione spese. 
 Il tuo compito è capire la spesa descritta dall'utente e chiamare la funzione 'addExpense' con i dati corretti.
 Oggi è ${new Date().toLocaleDateString('it-IT')}.
 Le categorie disponibili sono: ${Object.keys(CATEGORIES).join(', ')}.
 Se la categoria non è specificata, cerca di dedurla dalla descrizione. Se non è possibile, non specificarla.
-Sii conciso e non rispondere con audio a meno che non sia strettamente necessario per una domanda di chiarimento.
-Il tuo output principale è la chiamata di funzione.`,
+Sii conciso e non rispondere con audio a meno che non sia strettamente necessario per una domanda di chiarimento. Il tuo output principale è la chiamata di funzione.`,
     },
   });
 
