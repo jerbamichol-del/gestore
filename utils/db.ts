@@ -43,8 +43,12 @@ async function withRetry<T>(operation: (db: IDBPDatabase<unknown>) => Promise<T>
         const db = await getDb();
         return await operation(db);
     } catch (error: any) {
-        if (error && error.message && error.message.includes('closing')) {
-            console.warn('Database connection closing, retrying...');
+        // Retry if the database connection is closing or closed
+        if (error && (
+            (error.message && (error.message.includes('closing') || error.message.includes('closed'))) || 
+            error.name === 'InvalidStateError'
+        )) {
+            console.warn('Database connection issue, retrying...', error);
             dbPromise = null; // Force new connection
             const db = await getDb();
             return await operation(db);
