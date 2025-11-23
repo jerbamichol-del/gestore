@@ -18,7 +18,10 @@ type VoiceResponse = {
 async function callAiEndpoint<T>(payload: any): Promise<T> {
   const res = await fetch(AI_ENDPOINT, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    // ⚠️ niente application/json, usiamo text/plain per evitare il preflight
+    headers: {
+      'Content-Type': 'text/plain;charset=utf-8',
+    },
     body: JSON.stringify(payload),
   });
 
@@ -26,7 +29,8 @@ async function callAiEndpoint<T>(payload: any): Promise<T> {
     throw new Error(`AI endpoint HTTP ${res.status}`);
   }
 
-  return res.json() as Promise<T>;
+  // Apps Script restituisce JSON puro → ok leggerlo così
+  return (await res.json()) as T;
 }
 
 // Helper per convertire Blob → base64 (senza prefisso data:)
