@@ -1,4 +1,3 @@
-
 // screens/HistoryScreen.tsx
 import React, {
   useMemo,
@@ -7,19 +6,24 @@ import React, {
   useEffect,
   useCallback,
 } from 'react';
-import { Expense, Account, CATEGORIES } from '../types';
+import { Expense, Account } from '../types';
 import { getCategoryStyle } from '../utils/categoryStyles';
 import { formatCurrency } from '../components/icons/formatters';
 import { TrashIcon } from '../components/icons/TrashIcon';
 import { HistoryFilterCard } from '../components/HistoryFilterCard';
 import { ArrowLeftIcon } from '../components/icons/ArrowLeftIcon';
 import { CheckIcon } from '../components/icons/CheckIcon';
+import { ArrowsUpDownIcon } from '../components/icons/ArrowsUpDownIcon';
+import { CalendarIcon } from '../components/icons/CalendarIcon';
+import { CurrencyEuroIcon } from '../components/icons/CurrencyEuroIcon';
+import { TagIcon } from '../components/icons/TagIcon';
 import ConfirmationModal from '../components/ConfirmationModal';
 import { useTapBridge } from '../hooks/useTapBridge';
 
 type DateFilter = 'all' | '7d' | '30d' | '6m' | '1y';
 type PeriodType = 'day' | 'week' | 'month' | 'year';
 type ActiveFilterMode = 'quick' | 'period' | 'custom';
+type SortOption = 'date' | 'amount-desc' | 'amount-asc' | 'category';
 
 interface ExpenseItemProps {
   expense: Expense;
@@ -316,6 +320,7 @@ interface ExpenseGroup {
   year: number;
   week: number;
   label: string;
+  dateRange: string; // Separated date range for styling
   expenses: Expense[];
   total: number;
 }
@@ -333,6 +338,24 @@ const getISOWeek = (date: Date): [number, number] => {
   ];
 };
 
+const getWeekDateRangeLabel = (year: number, week: number) => {
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const jan4Day = jan4.getUTCDay() || 7;
+  const startOfWeek = new Date(jan4);
+  startOfWeek.setUTCDate(jan4.getUTCDate() - (jan4Day - 1) + (week - 1) * 7);
+  
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setUTCDate(startOfWeek.getUTCDate() + 6);
+
+  const fmt = (d: Date) => {
+    const day = String(d.getUTCDate()).padStart(2, '0');
+    const month = d.toLocaleString('it-IT', { month: 'short', timeZone: 'UTC' }).replace('.', '');
+    return `${day}${month}`;
+  };
+
+  return `(${fmt(startOfWeek)}-${fmt(endOfWeek)} ${year})`;
+};
+
 const getWeekLabel = (y: number, w: number) => {
   const now = new Date();
   const [cy, cw] = getISOWeek(now);
@@ -340,7 +363,7 @@ const getWeekLabel = (y: number, w: number) => {
     if (w === cw) return 'Questa Settimana';
     if (w === cw - 1) return 'Settimana Scorsa';
   }
-  return `Settimana ${w}, ${y}`;
+  return `Settimana ${w}`;
 };
 
 const parseLocalYYYYMMDD = (s: string) => {
@@ -378,6 +401,12 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
   const [filterCategories, setFilterCategories] = useState<Set<string>>(new Set());
   const [filterDescription, setFilterDescription] = useState('');
   const [filterAmountRange, setFilterAmountRange] = useState<{ min: string; max: string }>({ min: '', max: '' });
+
+  // Sort State
+  const [sortOption, setSortOption] = useState<SortOption>('date');
+  const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
+  const sortButtonRef = useRef<HTMLButtonElement>(null);
+  const sortMenuRef = useRef<HTMLDivElement>(null);
 
   const [openItemId, setOpenItemId] = useState<string | null>(null);
   const [isInternalDateModalOpen, setIsInternalDateModalOpen] = useState(false);
@@ -433,6 +462,24 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
       if (autoCloseRef.current) clearTimeout(autoCloseRef.current);
     };
   }, [openItemId, isEditingOrDeleting]);
+
+  // Click outside for sort menu
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+        if (
+            isSortMenuOpen &&
+            sortMenuRef.current &&
+            !sortMenuRef.current.contains(event.target as Node) &&
+            sortButtonRef.current &&
+            !sortButtonRef.current.contains(event.target as Node)
+        ) {
+            setIsSortMenuOpen(false);
+        }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isSortMenuOpen]);
 
   const filteredExpenses = useMemo(() => {
     let result = expenses;
@@ -538,18 +585,48 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
 
   const groupedExpenses = useMemo(() => {
     const sorted = [...filteredExpenses].sort((a, b) => {
-      const db = parseLocalYYYYMMDD(b.date);
-      const da = parseLocalYYYYMMDD(a.date);
-      if (b.time) {
-        const [h, m] = b.time.split(':').map(Number);
-        if (!isNaN(h) && !isNaN(m)) db.setHours(h, m);
-      }
-      if (a.time) {
-        const [h, m] = a.time.split(':').map(Number);
-        if (!isNaN(h) && !isNaN(m)) da.setHours(h, m);
-      }
-      return db.getTime() - da.getTime();
+        if (sortOption === 'amount-desc') {
+            return b.amount - a.amount;
+        } else if (sortOption === 'amount-asc') {
+            return a.amount - b.amount;
+        } else if (sortOption === 'category') {
+            return a.category.localeCompare(b.category);
+        } else {
+            // Date Descending
+            const db = parseLocalYYYYMMDD(b.date);
+            const da = parseLocalYYYYMMDD(a.date);
+            if (b.time) {
+                const [h, m] = b.time.split(':').map(Number);
+                if (!isNaN(h) && !isNaN(m)) db.setHours(h, m);
+            }
+            if (a.time) {
+                const [h, m] = a.time.split(':').map(Number);
+                if (!isNaN(h) && !isNaN(m)) da.setHours(h, m);
+            }
+            return db.getTime() - da.getTime();
+        }
     });
+
+    // If not sorting by date, we want a single "global" list (or grouped by category if we implemented that).
+    // For "make it work for all weeks", a single flat list of the sorted items is the most direct interpretation.
+    if (sortOption !== 'date') {
+        const total = sorted.reduce((acc, e) => acc + (Number(e.amount) || 0), 0);
+        let label = 'Tutte le spese';
+        if (sortOption === 'amount-desc') label = 'Per Importo (Decrescente)';
+        if (sortOption === 'amount-asc') label = 'Per Importo (Crescente)';
+        if (sortOption === 'category') label = 'Per Categoria';
+
+        return {
+            'global': {
+                year: 0, // Irrelevant for single group
+                week: 0, // Irrelevant for single group
+                label: label,
+                dateRange: `${sorted.length} risultati`,
+                expenses: sorted,
+                total: total
+            }
+        };
+    }
 
     return sorted.reduce<Record<string, ExpenseGroup>>((acc, e) => {
       const d = parseLocalYYYYMMDD(e.date);
@@ -561,6 +638,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
           year: y,
           week: w,
           label: getWeekLabel(y, w),
+          dateRange: getWeekDateRangeLabel(y, w),
           expenses: [],
           total: 0,
         };
@@ -569,7 +647,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
       acc[key].total += Number(e.amount) || 0;
       return acc;
     }, {});
-  }, [filteredExpenses]);
+  }, [filteredExpenses, sortOption]);
 
   const expenseGroups = (Object.values(groupedExpenses) as ExpenseGroup[]).sort(
     (a, b) => (a.year !== b.year ? b.year - a.year : b.week - a.week),
@@ -625,6 +703,16 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
       setSelectedIds(new Set());
   };
 
+  const handleSortOptionSelect = (value: 'date' | 'amount' | 'category') => {
+      if (value === 'amount') {
+          // Toggle logic: desc -> asc -> desc
+          setSortOption(prev => prev === 'amount-desc' ? 'amount-asc' : 'amount-desc');
+      } else {
+          setSortOption(value);
+      }
+      setIsSortMenuOpen(false);
+  };
+
   return (
     <div
       className={`fixed inset-0 z-20 bg-slate-100 transform transition-transform duration-300 ease-in-out ${
@@ -661,6 +749,52 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
                   <ArrowLeftIcon className="w-6 h-6 text-slate-700" />
                 </button>
                 <h1 className="text-xl font-bold text-slate-800 flex-1">Storico Spese</h1>
+                
+                {/* Sort Button Container */}
+                <div className="relative">
+                    <button
+                        ref={sortButtonRef}
+                        onClick={() => setIsSortMenuOpen(!isSortMenuOpen)}
+                        className={`p-2 rounded-full transition-colors ${sortOption !== 'date' ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-slate-200 text-slate-600'}`}
+                        aria-label="Ordina spese"
+                    >
+                        <ArrowsUpDownIcon className="w-6 h-6" />
+                    </button>
+                    
+                    {/* Dropdown Menu - Positioned right below the arrow */}
+                    {isSortMenuOpen && (
+                        <div 
+                            ref={sortMenuRef}
+                            className="absolute top-full right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-slate-100 z-50 overflow-hidden animate-fade-in-up"
+                            style={{ animationDuration: '150ms' }}
+                        >
+                            <div className="py-1">
+                                <button
+                                    onClick={() => handleSortOptionSelect('amount')}
+                                    className={`w-full text-left px-4 py-2.5 text-sm font-semibold flex items-center justify-between hover:bg-slate-50 ${(sortOption === 'amount-desc' || sortOption === 'amount-asc') ? 'text-indigo-600 bg-indigo-50' : 'text-slate-700'}`}
+                                >
+                                    <span>Per Importo {sortOption === 'amount-asc' ? '(Crescente)' : '(Decrescente)'}</span>
+                                    {(sortOption === 'amount-desc' || sortOption === 'amount-asc') && <CheckIcon className="w-4 h-4" />}
+                                </button>
+                                <button
+                                    onClick={() => handleSortOptionSelect('category')}
+                                    className={`w-full text-left px-4 py-2.5 text-sm font-semibold flex items-center justify-between hover:bg-slate-50 ${sortOption === 'category' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-700'}`}
+                                >
+                                    <span>Per Categoria</span>
+                                    {sortOption === 'category' && <CheckIcon className="w-4 h-4" />}
+                                </button>
+                                <div className="border-t border-slate-100 my-1"></div>
+                                <button
+                                    onClick={() => handleSortOptionSelect('date')}
+                                    className={`w-full text-left px-4 py-2.5 text-sm font-semibold flex items-center justify-between hover:bg-slate-50 ${sortOption === 'date' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-500'}`}
+                                >
+                                    <span>Per Data (Default)</span>
+                                    {sortOption === 'date' && <CheckIcon className="w-4 h-4" />}
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
             </>
         )}
       </header>
@@ -677,7 +811,12 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
             expenseGroups.map((group) => (
               <div key={group.label} className="mb-6 last:mb-0">
                 <div className="flex items-center justify-between font-bold text-slate-800 text-lg px-4 py-2 sticky top-0 bg-slate-100/80 backdrop-blur-sm z-10">
-                  <h2>{group.label}</h2>
+                  <h2 className="flex items-baseline flex-wrap gap-x-2">
+                    <span>{group.label}{group.label.startsWith('Settimana') && /\d/.test(group.label) ? ',' : ''}</span>
+                    <span className="text-sm font-normal text-slate-500">
+                        {group.dateRange}
+                    </span>
+                  </h2>
                   <p className="font-bold text-indigo-600 text-xl">
                     {formatCurrency(group.total)}
                   </p>
