@@ -1,5 +1,5 @@
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Sector } from 'recharts';
 import { Expense } from '../types';
 import { formatCurrency } from './icons/formatters';
@@ -7,6 +7,7 @@ import { getCategoryStyle } from '../utils/categoryStyles';
 import { useTapBridge } from '../hooks/useTapBridge';
 import { ChevronLeftIcon } from './icons/ChevronLeftIcon';
 import { ChevronRightIcon } from './icons/ChevronRightIcon';
+import { CloudArrowUpIcon } from './icons/CloudArrowUpIcon';
 
 const categoryHexColors: Record<string, string> = {
     'Alimentari': '#16a34a', // green-600
@@ -57,6 +58,7 @@ interface DashboardProps {
   recurringExpenses: Expense[];
   onNavigateToRecurring: () => void;
   onNavigateToHistory: () => void;
+  onImportFile: (file: File) => void;
 }
 
 const parseLocalYYYYMMDD = (s: string): Date => {
@@ -97,11 +99,12 @@ const calculateNextDueDate = (template: Expense, fromDate: Date): Date | null =>
 
 type ViewMode = 'weekly' | 'monthly' | 'yearly';
 
-const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNavigateToRecurring, onNavigateToHistory }) => {
+const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNavigateToRecurring, onNavigateToHistory, onImportFile }) => {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('monthly');
   const tapBridge = useTapBridge();
   const activeIndex = selectedIndex;
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleLegendItemClick = (index: number, event: React.MouseEvent) => {
     event.stopPropagation();
@@ -110,6 +113,16 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
   
   const handleChartBackgroundClick = () => {
     setSelectedIndex(null);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files && e.target.files[0]) {
+          onImportFile(e.target.files[0]);
+      }
+      // Reset input so same file can be selected again if needed
+      if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+      }
   };
 
   const cycleViewMode = (direction: 'prev' | 'next') => {
@@ -237,59 +250,78 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
   return (
     <div className="p-4 md:p-6 space-y-6">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-1 bg-white p-6 rounded-2xl shadow-lg flex flex-col justify-between">
-                <div>
-                    <div className="flex justify-between items-center mb-4">
-                        <button 
-                            onClick={() => cycleViewMode('prev')}
-                            className="p-2 rounded-full text-slate-800 hover:text-black transition-colors active:bg-transparent focus:outline-none"
-                        >
-                            <ChevronLeftIcon className="w-6 h-6" strokeWidth={3} />
-                        </button>
-                        
-                        <h3 className="text-xl font-bold text-slate-700 text-center flex-1">{periodLabel}</h3>
-
-                        <button 
-                            onClick={() => cycleViewMode('next')}
-                            className="p-2 rounded-full text-slate-800 hover:text-black transition-colors active:bg-transparent focus:outline-none"
-                        >
-                            <ChevronRightIcon className="w-6 h-6" strokeWidth={3} />
-                        </button>
-                    </div>
-                    <div className="flex justify-between items-baseline">
-                        <p className="text-4xl font-extrabold text-indigo-600">{formatCurrency(totalExpenses)}</p>
-                        {recurringCountInPeriod > 0 && (
-                            <span className="text-base font-bold text-slate-900 bg-amber-100 border border-amber-400 px-2.5 py-1 rounded-lg" title={`${recurringCountInPeriod} spese programmate previste in questo periodo`}>
-                                {recurringCountInPeriod} P
-                            </span>
-                        )}
-                    </div>
-                </div>
-                <div className="mt-4 pt-4 border-t border-slate-200">
+            <div className="lg:col-span-1 flex flex-col gap-4">
+                <div className="bg-white p-6 rounded-2xl shadow-lg flex flex-col justify-between">
                     <div>
-                        <h4 className="text-sm font-medium text-slate-500">Oggi</h4>
-                        <p className="text-xl font-bold text-slate-800">{formatCurrency(dailyTotal)}</p>
-                    </div>
-                    <div className="mt-4 grid grid-cols-2 gap-3">
-                        <button
-                            onClick={onNavigateToRecurring}
-                            style={{ touchAction: 'manipulation' }}
-                            className="flex items-center justify-center py-2 px-3 text-center font-semibold text-slate-900 bg-amber-100 rounded-xl hover:bg-amber-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition-all border border-amber-400"
-                            {...tapBridge}
-                        >
-                            <span className="text-sm">S. Programmate</span>
-                        </button>
+                        <div className="flex justify-between items-center mb-4">
+                            <button 
+                                onClick={() => cycleViewMode('prev')}
+                                className="p-2 rounded-full text-slate-800 hover:text-black transition-colors active:bg-transparent focus:outline-none"
+                            >
+                                <ChevronLeftIcon className="w-6 h-6" strokeWidth={3} />
+                            </button>
+                            
+                            <h3 className="text-xl font-bold text-slate-700 text-center flex-1">{periodLabel}</h3>
 
-                        <button
-                            onClick={onNavigateToHistory}
-                            style={{ touchAction: 'manipulation' }}
-                            className="flex items-center justify-center py-2 px-3 text-center font-semibold text-slate-900 bg-amber-100 rounded-xl hover:bg-amber-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition-all border border-amber-400"
-                            {...tapBridge}
-                        >
-                            <span className="text-sm">Storico Spese</span>
-                        </button>
+                            <button 
+                                onClick={() => cycleViewMode('next')}
+                                className="p-2 rounded-full text-slate-800 hover:text-black transition-colors active:bg-transparent focus:outline-none"
+                            >
+                                <ChevronRightIcon className="w-6 h-6" strokeWidth={3} />
+                            </button>
+                        </div>
+                        <div className="flex justify-between items-baseline">
+                            <p className="text-4xl font-extrabold text-indigo-600">{formatCurrency(totalExpenses)}</p>
+                            {recurringCountInPeriod > 0 && (
+                                <span className="text-base font-bold text-slate-900 bg-amber-100 border border-amber-400 px-2.5 py-1 rounded-lg" title={`${recurringCountInPeriod} spese programmate previste in questo periodo`}>
+                                    {recurringCountInPeriod} P
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                    <div className="mt-4 pt-4 border-t border-slate-200">
+                        <div>
+                            <h4 className="text-sm font-medium text-slate-500">Oggi</h4>
+                            <p className="text-xl font-bold text-slate-800">{formatCurrency(dailyTotal)}</p>
+                        </div>
+                        <div className="mt-4 grid grid-cols-2 gap-3">
+                            <button
+                                onClick={onNavigateToRecurring}
+                                style={{ touchAction: 'manipulation' }}
+                                className="flex items-center justify-center py-2 px-3 text-center font-semibold text-slate-900 bg-amber-100 rounded-xl hover:bg-amber-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition-all border border-amber-400"
+                                {...tapBridge}
+                            >
+                                <span className="text-sm">S. Programmate</span>
+                            </button>
+
+                            <button
+                                onClick={onNavigateToHistory}
+                                style={{ touchAction: 'manipulation' }}
+                                className="flex items-center justify-center py-2 px-3 text-center font-semibold text-slate-900 bg-amber-100 rounded-xl hover:bg-amber-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition-all border border-amber-400"
+                                {...tapBridge}
+                            >
+                                <span className="text-sm">Storico Spese</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
+
+                {/* Pulsante Importa File */}
+                <input
+                    type="file"
+                    ref={fileInputRef}
+                    className="hidden"
+                    accept=".csv, .xlsx, .xls"
+                    onChange={handleFileChange}
+                />
+                <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-indigo-50 text-indigo-700 font-bold rounded-2xl border border-indigo-100 shadow-sm hover:bg-indigo-100 transition-colors"
+                    {...tapBridge}
+                >
+                    <CloudArrowUpIcon className="w-6 h-6" />
+                    Importa Estratto Conto (CSV/Excel)
+                </button>
             </div>
 
             <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-lg flex flex-col">
