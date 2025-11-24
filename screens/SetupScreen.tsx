@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react'; 
+import React, { useState, useEffect } from 'react';
 import AuthLayout from '../components/auth/AuthLayout';
 import PinInput from '../components/auth/PinInput';
 import { register, login } from '../utils/api';
 import { EnvelopeIcon } from '../components/icons/EnvelopeIcon';
 import { SpinnerIcon } from '../components/icons/SpinnerIcon';
-
+import { ExclamationTriangleIcon } from '../components/icons/ExclamationTriangleIcon';
+import { XMarkIcon } from '../components/icons/XMarkIcon';
 // biometria
 import {
   isBiometricsAvailable,
@@ -23,6 +24,12 @@ interface SetupScreenProps {
 
 type Step = 'email' | 'pin_setup' | 'pin_confirm' | 'bio_offer' | 'processing';
 
+const TelegramIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
+    <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 11.944 0zm4.963 8.219-1.57 7.407c-.117.537-.442.67-.896.417l-2.48-1.828-1.197 1.152c-.132.133-.243.244-.496.244l.176-2.525 4.6-4.157c.2-.178-.043-.277-.31-.098l-5.685 3.58-2.45-.765c-.533-.166-.543-.533.112-.789l9.573-3.689c.444-.166.833.1.574.812z" />
+  </svg>
+);
+
 const SetupScreen: React.FC<SetupScreenProps> = ({ onSetupSuccess, onGoToLogin }) => {
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
@@ -32,12 +39,22 @@ const SetupScreen: React.FC<SetupScreenProps> = ({ onSetupSuccess, onGoToLogin }
   const [isLoading, setIsLoading] = useState(false);
   const [bioSupported, setBioSupported] = useState<boolean | null>(null);
   const [bioBusy, setBioBusy] = useState(false);
+  
+  // Stato per gestire l'avviso Telegram
+  const [hasOpenedTelegram, setHasOpenedTelegram] = useState(false);
+  const [showTelegramWarning, setShowTelegramWarning] = useState(false);
 
   const handleEmailSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (email.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       setError(null);
-      setStep('pin_setup');
+      // Se non ha aperto il link Telegram e non ha ancora visto/ignorato l'avviso
+      if (!hasOpenedTelegram && !showTelegramWarning) {
+        setShowTelegramWarning(true);
+      } else {
+        // Procedi se ha cliccato il link OPPURE se sta cliccando continua (o chiudi banner) dopo aver visto l'avviso
+        setStep('pin_setup');
+      }
     } else {
       setError('Inserisci un indirizzo email valido.');
     }
@@ -129,6 +146,32 @@ const SetupScreen: React.FC<SetupScreenProps> = ({ onSetupSuccess, onGoToLogin }
           <div className="text-center">
             <h2 className="text-xl font-bold text-slate-800 mb-2">Crea un Account</h2>
             <p className="text-slate-500 mb-6 h-10 flex items-center justify-center">{error || 'Inizia inserendo i tuoi dati.'}</p>
+            
+            {showTelegramWarning && (
+              <div className="mb-6 bg-amber-50 border border-amber-200 rounded-lg p-3 text-left animate-fade-in-up relative">
+                <div className="flex gap-3">
+                  <div className="flex-shrink-0">
+                    <ExclamationTriangleIcon className="h-5 w-5 text-amber-500" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-amber-800">
+                      Attenzione
+                    </p>
+                    <p className="text-sm text-amber-700 mt-1">
+                      Senza registrare la mail su Telegram non sarà possibile recuperarla in futuro.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setStep('pin_setup')}
+                    className="flex-shrink-0 text-amber-400 hover:text-amber-600 transition-colors"
+                    title="Ignora e procedi"
+                  >
+                    <XMarkIcon className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+            )}
+
             <form onSubmit={handleEmailSubmit} className="space-y-4">
               <div>
                 <label htmlFor="email-register" className="sr-only">Email</label>
@@ -156,11 +199,34 @@ const SetupScreen: React.FC<SetupScreenProps> = ({ onSetupSuccess, onGoToLogin }
               </button>
             </form>
             <p className="text-sm text-slate-500 mt-6">
-              Hai già an account?{' '}
+              Hai già un account?{' '}
               <button onClick={onGoToLogin} className="font-semibold text-indigo-600 hover:text-indigo-500">
                 Accedi
               </button>
             </p>
+
+            <div className="mt-8 pt-6 border-t border-slate-200">
+                {/* MODIFICATO: Link dinamico con deep linking */}
+                <a 
+                    href={`https://t.me/mailsendreset_bot?start=reg_${email}`}
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    onClick={(e) => {
+                      if (!email) {
+                        e.preventDefault();
+                        setError('Inserisci prima la tua email nel campo sopra.');
+                      } else {
+                        setHasOpenedTelegram(true);
+                      }
+                    }}
+                    className={`inline-flex items-center gap-2 text-sm font-medium transition-colors bg-sky-50 px-4 py-2 rounded-full hover:bg-sky-100 ${
+                      !email ? 'text-slate-400 cursor-not-allowed' : 'text-sky-600 hover:text-sky-700'
+                    }`}
+                >
+                    <TelegramIcon className="w-5 h-5" />
+                    Registra mail su telegram
+                </a>
+            </div>
           </div>
         );
 
