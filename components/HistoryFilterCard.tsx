@@ -22,8 +22,8 @@ import { getCategoryStyle } from '../utils/categoryStyles';
 import { ArrowLeftIcon } from './icons/ArrowLeftIcon';
 import { CheckIcon } from './icons/CheckIcon';
 
-type DateFilter = 'all' | '7d' | '30d' | '6m' | '1y';
-type PeriodType = 'day' | 'week' | 'month' | 'year';
+export type DateFilter = 'all' | '7d' | '30d' | '6m' | '1y';
+export type PeriodType = 'day' | 'week' | 'month' | 'year';
 
 // Internal View State for the panel content
 type PanelView = 'main' | 'account_selection' | 'category_selection';
@@ -62,7 +62,7 @@ interface HistoryFilterCardProps {
 }
 
 /* -------------------- Checkbox Component -------------------- */
-const Checkbox: React.FC<{ checked: boolean; onChange: () => void }> = ({ checked, onChange }) => (
+export const Checkbox: React.FC<{ checked: boolean; onChange: () => void }> = ({ checked, onChange }) => (
     <div 
         className={`w-6 h-6 rounded border flex items-center justify-center transition-colors cursor-pointer ${checked ? 'bg-indigo-600 border-black' : 'bg-white border-black'}`}
         onClick={(e) => { e.stopPropagation(); onChange(); }}
@@ -73,7 +73,7 @@ const Checkbox: React.FC<{ checked: boolean; onChange: () => void }> = ({ checke
 
 
 /* -------------------- QuickFilterControl -------------------- */
-const QuickFilterControl: React.FC<{
+export const QuickFilterControl: React.FC<{
   onSelect: (value: DateFilter) => void;
   currentValue: DateFilter;
   isActive: boolean;
@@ -118,7 +118,7 @@ const QuickFilterControl: React.FC<{
 };
 
 /* -------------------- CustomDateRangeInputs -------------------- */
-const CustomDateRangeInputs: React.FC<{
+export const CustomDateRangeInputs: React.FC<{
   range: { start: string | null; end: string | null };
   onChange: (range: { start: string | null; end: string | null }) => void;
   isActive: boolean;
@@ -192,7 +192,7 @@ const CustomDateRangeInputs: React.FC<{
 };
 
 /* -------------------- PeriodNavigator -------------------- */
-const PeriodNavigator: React.FC<{
+export const PeriodNavigator: React.FC<{
   periodType: PeriodType;
   periodDate: Date;
   onTypeChange: (type: PeriodType) => void;
