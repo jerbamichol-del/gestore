@@ -14,8 +14,8 @@ import { TrashIcon } from '../components/icons/TrashIcon';
 import { HistoryFilterCard } from '../components/HistoryFilterCard';
 import { ArrowLeftIcon } from '../components/icons/ArrowLeftIcon';
 import { CheckIcon } from '../components/icons/CheckIcon';
-// FIX: Ensure casing matches the file present on the disk (ArrowsUpDownicon.tsx)
-import { ArrowsUpDownicon } from '../components/icons/ArrowsUpDownicon';
+// FIX: Ensure casing matches the exported component name (ArrowsUpDownIcon)
+import { ArrowsUpDownIcon } from '../components/icons/ArrowsUpDownIcon';
 import { CalendarIcon } from '../components/icons/CalendarIcon';
 import { CurrencyEuroIcon } from '../components/icons/CurrencyEuroIcon';
 import { TagIcon } from '../components/icons/TagIcon';
