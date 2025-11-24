@@ -1,0 +1,98 @@
+
+import * as XLSX from 'xlsx';
+
+/**
+ * Converte una stringa di testo in un'immagine base64 (PNG).
+ * Usato per passare dati testuali (CSV) all'AI che accetta immagini.
+ */
+const textToImage = (text: string): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    try {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        throw new Error('Canvas context not available');
+      }
+
+      const lines = text.split('\n');
+      const fontSize = 14;
+      const lineHeight = 18;
+      const padding = 20;
+      const fontFamily = 'Courier New, monospace'; // Monospace per allineamento migliore
+
+      // Calcola dimensioni
+      ctx.font = `${fontSize}px ${fontFamily}`;
+      let maxWidth = 0;
+      lines.forEach(line => {
+        const width = ctx.measureText(line).width;
+        if (width > maxWidth) maxWidth = width;
+      });
+
+      // Limiti dimensioni per evitare canvas giganti
+      const finalWidth = Math.min(Math.max(maxWidth + padding * 2, 600), 2000);
+      // Tagliamo se troppe righe per evitare errori AI o memory, 
+      // ma Gemini gestisce bene immagini alte. Limitiamo a ~300 righe per sicurezza performance
+      const maxLines = 300; 
+      const renderLines = lines.slice(0, maxLines);
+      const finalHeight = renderLines.length * lineHeight + padding * 2;
+
+      canvas.width = finalWidth;
+      canvas.height = finalHeight;
+
+      // Sfondo bianco
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Testo nero
+      ctx.fillStyle = '#000000';
+      ctx.font = `${fontSize}px ${fontFamily}`;
+      ctx.textBaseline = 'top';
+
+      renderLines.forEach((line, index) => {
+        ctx.fillText(line, padding, padding + index * lineHeight);
+      });
+
+      if (lines.length > maxLines) {
+          ctx.fillStyle = '#666666';
+          ctx.fillText(`... e altre ${lines.length - maxLines} righe ...`, padding, padding + maxLines * lineHeight);
+      }
+
+      // Export
+      const dataUrl = canvas.toDataURL('image/png');
+      resolve(dataUrl.split(',')[1]);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+export const processFileToImage = async (file: File): Promise<{ base64: string; mimeType: string }> => {
+  let textContent = '';
+
+  if (file.name.endsWith('.csv')) {
+    textContent = await file.text();
+  } else if (file.name.match(/\.(xlsx|xls)$/i)) {
+    // Leggi Excel usando SheetJS
+    const buffer = await file.arrayBuffer();
+    const workbook = XLSX.read(buffer, { type: 'array' });
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+    // Converti in CSV per semplicità di rappresentazione testuale
+    textContent = XLSX.utils.sheet_to_csv(sheet);
+  } else {
+    throw new Error('Formato file non supportato. Usa CSV o Excel.');
+  }
+
+  // Se il contenuto è vuoto
+  if (!textContent.trim()) {
+    throw new Error('Il file sembra vuoto.');
+  }
+
+  // Converti il testo CSV in un'immagine "screenshot"
+  const base64Image = await textToImage(textContent);
+  
+  return {
+    base64: base64Image,
+    mimeType: 'image/png',
+  };
+};
