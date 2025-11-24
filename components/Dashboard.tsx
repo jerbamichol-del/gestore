@@ -332,8 +332,8 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
                             {/* Recurring indicator - Right Edge Square */}
                             {recurringCountInPeriod > 0 && (
                                 <div className="absolute right-0 top-1/2 -translate-y-1/2">
-                                     <span className="w-8 h-8 flex items-center justify-center text-sm font-bold text-slate-900 bg-amber-100 border border-amber-400 rounded-lg shadow-sm" title="Spese programmate in arrivo">
-                                        {recurringCountInPeriod}
+                                     <span className="w-8 h-8 flex items-center justify-center text-xs font-bold text-slate-900 bg-amber-100 border border-amber-400 rounded-lg shadow-sm" title="Spese programmate in arrivo">
+                                        P{recurringCountInPeriod}
                                     </span>
                                 </div>
                             )}
@@ -351,7 +351,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
                                 }}
                             >
                                 {/* Page 0: Quick Filters - Nascondi se menu aperto */}
-                                <div className={`w-1/3 px-1 ${isPeriodMenuOpen ? 'opacity-0 pointer-events-none' : 'opacity-100 transition-opacity duration-200'}`}>
+                                <div className={`w-1/3 px-1 ${isPeriodMenuOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
                                     <QuickFilterControl 
                                         isActive={activeViewIndex === 0}
                                         currentValue={quickFilter}
@@ -373,7 +373,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
                                     />
                                 </div>
                                 {/* Page 2: Custom Range - Nascondi se menu aperto */}
-                                <div className={`w-1/3 px-1 ${isPeriodMenuOpen ? 'opacity-0 pointer-events-none' : 'opacity-100 transition-opacity duration-200'}`}>
+                                <div className={`w-1/3 px-1 ${isPeriodMenuOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
                                     <CustomDateRangeInputs 
                                         isActive={activeViewIndex === 2}
                                         range={customRange}
