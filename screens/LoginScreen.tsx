@@ -6,7 +6,6 @@ import { SpinnerIcon } from '../components/icons/SpinnerIcon';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import LoginEmail from '../components/auth/LoginEmail';
 import { FingerprintIcon } from '../components/icons/FingerprintIcon';
-
 // biometria
 import {
   isBiometricsAvailable,
@@ -130,7 +129,6 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
   const autoPromptEmail = activeEmail ?? biometricEmail ?? null;
 
   // Autoprompt biometrico: 1 solo tentativo totale per sessione.
-  // Ora funziona anche se siamo sulla schermata EMAIL, usando autoPromptEmail.
   useEffect(() => {
     if (!autoPromptEmail) return;
     if (!bioSupported || !bioEnabled) return;
@@ -221,19 +219,14 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
 
     try {
       setBioBusy(true);
-      // FIX: Removed typo 'clearBiometricSnoozed' and duplicate 'clearBiometricSnooze'
       const { clearBiometricSnooze, setBiometricSnooze } =
         (await import('../services/biometrics')) as unknown as BioHelpers;
-
       // login richiesto esplicitamente → azzero lo snooze
       clearBiometricSnooze();
-
       const ok = await unlockWithBiometric('Sblocca con impronta / FaceID');
       setBioBusy(false);
-
       if (ok) {
         const normalized = emailForBio.toLowerCase();
-
         // salva anche qui la mail biometrica
         try {
           if (typeof window !== 'undefined') {
@@ -270,7 +263,6 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
       await registerBiometric('Profilo locale');
       setBioEnabled(true);
       setBioBusy(false);
-
       const normalized = emailForBio.toLowerCase();
 
       // salva email biometrica dedicata
@@ -295,7 +287,6 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
 
   const optOutBiometrics = () => {
     try {
-      // funzione definita come setBiometricsOptOut(boolean)
       setBiometricsOptOut(true);
     } catch {
       // se fallisce non è la fine del mondo
@@ -337,12 +328,15 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
           )}
 
           <div className="mt-4 space-y-3">
-            <button
-              onClick={onGoToForgotEmail}
-              className="text-sm font-semibold text-indigo-600 hover:text-indigo-500"
+            {/* MODIFICATO: DEEP LINK per recupero email */}
+            <a
+              href="https://t.me/mailsendreset_bot?start=recover"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block text-sm font-semibold text-indigo-600 hover:text-indigo-500"
             >
               Email dimenticata?
-            </button>
+            </a>
             <p className="text-sm text-slate-500">
               Non hai un account?{' '}
               <button
