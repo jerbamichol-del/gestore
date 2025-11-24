@@ -1,9 +1,11 @@
+
 // CalculatorContainer.tsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Expense, Account } from '../types';
 import CalculatorInputScreen from './CalculatorInputScreen';
 import TransactionDetailPage from './TransactionDetailPage';
 import { useSwipe } from '../hooks/useSwipe';
+import { useTapBridge } from '../hooks/useTapBridge';
 
 interface CalculatorContainerProps {
   isOpen: boolean;
@@ -55,8 +57,12 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
 
   // NEW: gate per riattivare lo swipe a ogni apertura
   const [swipeReady, setSwipeReady] = useState(false);
+  
+  // NEW: track if entry animation is finished to prevent inner transition artifacts
+  const [isEntryAnimationFinished, setIsEntryAnimationFinished] = useState(false);
 
   const timeoutsRef = useRef<number[]>([]);
+  const tapBridgeHandlers = useTapBridge();
 
   const addTimeout = useCallback((timeout: number) => {
     timeoutsRef.current.push(timeout);
@@ -111,15 +117,21 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
       setView('calculator');
       // gate: disabilita e riabilita swipe dopo breve delay per forzare rebind
       setSwipeReady(false);
+      setIsEntryAnimationFinished(false); // Disable transitions initially
+
       const t1 = addTimeout(window.setTimeout(() => setIsAnimating(true), 10));
       const t2 = addTimeout(window.setTimeout(() => setSwipeReady(true), 50));
+      const t3 = addTimeout(window.setTimeout(() => setIsEntryAnimationFinished(true), 300));
+
       return () => {
         clearTimeout(t1);
         clearTimeout(t2);
+        clearTimeout(t3);
       };
     } else {
       setIsAnimating(false);
       setSwipeReady(false);
+      setIsEntryAnimationFinished(false);
       const t = addTimeout(window.setTimeout(() => {
         setFormData(resetFormData());
         setDateError(false);
@@ -194,7 +206,8 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
 
   const transformStyle = isDesktop ? {} : {
     transform: `translateX(${finalTranslate}%)`,
-    transition: isSwiping ? 'none' : 'transform 0.25s ease-out',
+    // Disable transition during entry animation to prevent diagonal artifacts
+    transition: (isSwiping || !isEntryAnimationFinished) ? 'none' : 'transform 0.25s ease-out',
     willChange: 'transform',
   };
 
@@ -206,6 +219,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
       aria-modal="true"
       role="dialog"
       style={{ touchAction: 'pan-y' }}
+      {...tapBridgeHandlers}
     >
       <div
         ref={containerRef}
