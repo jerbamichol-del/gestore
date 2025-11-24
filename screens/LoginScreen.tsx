@@ -13,7 +13,6 @@ import {
   isBiometricsEnabled,
   unlockWithBiometric,
   registerBiometric,
-  shouldOfferBiometricEnable,
   setBiometricsOptOut,
 } from '../services/biometrics';
 
@@ -109,13 +108,9 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
           // già attivata → mostra direttamente il pulsante impronta
           shouldShow = true;
         } else if (activeEmail) {
-          // decide se proporre l'abilitazione (funzione senza argomenti)
-          try {
-            const offer = await shouldOfferBiometricEnable();
-            shouldShow = offer;
-          } catch {
-            shouldShow = false;
-          }
+          // Se siamo sulla schermata PIN e supportato ma non attivo, mostriamo sempre "Abilita"
+          // (ignoriamo eventuali opt-out passati per permettere l'attivazione ritardata)
+          shouldShow = true;
         }
       }
 
