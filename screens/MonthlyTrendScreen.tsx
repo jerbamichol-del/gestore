@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Sector } from 'recharts';
 import { Expense } from '../types';
@@ -92,7 +93,7 @@ const MonthlyTrendScreen: React.FC<MonthlyTrendScreenProps> = ({ expenses }) => 
                         <ResponsiveContainer width="100%" height={300}>
                             <PieChart>
                                 <Pie
-                                    activeIndex={activePieIndex ?? undefined}
+                                    {...({ activeIndex: activePieIndex ?? undefined } as any)}
                                     activeShape={renderActiveShape}
                                     data={monthlyData}
                                     cx="50%"
