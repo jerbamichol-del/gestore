@@ -64,7 +64,12 @@ const parseLocalYYYYMMDD = (s: string): Date => {
   return new Date(p[0], p[1] - 1, p[2]);
 };
 
-const toYYYYMMDD = (date: Date) => date.toISOString().split('T')[0];
+const toYYYYMMDD = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 const calculateNextDueDate = (template: Expense, fromDate: Date): Date | null => {
   if (template.frequency !== 'recurring' || !template.recurrence) return null;
@@ -127,7 +132,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
     const now = new Date();
     
     // Calculate Daily Total regardless of view mode
-    const todayString = now.toISOString().split('T')[0];
+    const todayString = toYYYYMMDD(now);
     const daily = validExpenses
         .filter(expense => expense.date === todayString)
         .reduce((acc, expense) => acc + Number(expense.amount), 0);
@@ -169,9 +174,15 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
     recurringExpenses.forEach(template => {
         if (!template.date) return;
 
+        // Iniziamo a contare dalla data di inizio della spesa programmata
         let nextDue = parseLocalYYYYMMDD(template.date);
         const totalGenerated = expenses.filter(e => e.recurringExpenseId === template.id).length;
-        let generatedThisRun = 0;
+        
+        // Contatore locale per simulare quante volte scatterebbe in questo loop
+        // (utile se recurrenceEndType è 'count')
+        // Nota: questo è approssimativo se abbiamo già generato spese in passato, 
+        // ma serve per non sforare il limite nel futuro visualizzato.
+        let simulatedOccurrences = 0; 
 
         while (nextDue) {
             if (nextDue > end) {
@@ -181,15 +192,22 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
             if (template.recurrenceEndType === 'date' && template.recurrenceEndDate && toYYYYMMDD(nextDue) > template.recurrenceEndDate) {
                 break;
             }
-            if (template.recurrenceEndType === 'count' && template.recurrenceCount && (totalGenerated + generatedThisRun) >= template.recurrenceCount) {
-                break;
+            
+            // Se c'è un limite di conteggio, verifichiamo approssimativamente
+            // (Non è perfetto perché non sappiamo quante ne sono cadute prima di 'start', ma è una buona stima per la visualizzazione)
+            if (template.recurrenceEndType === 'count' && template.recurrenceCount) {
+                 // Se abbiamo superato il totale teorico (basato su quanto generato + quanto contato ora), stop.
+                 // Nota: questo controllo è semplice e mira a non mostrare ricorrenze "infinite" se il limite è raggiunto.
+                 if (simulatedOccurrences >= template.recurrenceCount) break; 
             }
 
+            // Se la data di scadenza cade nel periodo visualizzato, incrementiamo il contatore "P".
+            // Includiamo anche le spese già generate (es. oggi), come richiesto.
             if (nextDue >= start) {
                 recurringCount++;
-                generatedThisRun++;
             }
             
+            simulatedOccurrences++;
             nextDue = calculateNextDueDate(template, nextDue);
         }
     });
@@ -316,7 +334,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
                             paddingAngle={2}
                             dataKey="value"
                             nameKey="name"
-                            activeIndex={activeIndex ?? undefined}
+                            {...({ activeIndex: activeIndex ?? undefined } as any)}
                             activeShape={renderActiveShape}
                         >
                             {categoryData.map((entry) => (
