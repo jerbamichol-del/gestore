@@ -1,3 +1,4 @@
+
 // src/components/VoiceInputModal.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import { Expense } from '../types';
@@ -27,6 +28,9 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  
+  // Ref per tracciare se l'utente ha annullato l'operazione
+  const isCancelledRef = useRef(false);
 
   // Visualizzazione onda
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -136,6 +140,7 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
   const startRecording = async () => {
     setError(null);
     setTranscript('');
+    isCancelledRef.current = false; // Reset dello stato di cancellazione
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -158,11 +163,17 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
       };
 
       mediaRecorder.onstop = async () => {
+        // Se l'utente ha annullato (chiuso il modale), non facciamo nulla
+        if (isCancelledRef.current) return;
+
         const audioBlob = new Blob(chunksRef.current, { type: mimeType });
         setStatus('processing');
 
         try {
           const parsed = await parseExpenseFromAudio(audioBlob);
+          // Controllo ulteriore post-await nel caso l'utente chiuda durante il processing
+          if (isCancelledRef.current) return;
+
           if (
             parsed &&
             typeof parsed.amount === 'number' &&
@@ -190,6 +201,7 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
             return;
           }
         } catch (e) {
+          if (isCancelledRef.current) return;
           console.error('[Voice] Errore durante analisi audio:', e);
           setError("Si è verificato un errore durante l'analisi vocale.");
           setStatus('error');
@@ -216,6 +228,7 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
   const handleStopClick = () => {
     if (status !== 'listening') return;
 
+    // NON settiamo isCancelledRef qui, perché vogliamo che onstop proceda
     if (
       mediaRecorderRef.current &&
       mediaRecorderRef.current.state === 'recording'
@@ -228,6 +241,8 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
   };
 
   const handleClose = () => {
+    // Segnaliamo che l'operazione è annullata, così onstop non farà nulla
+    isCancelledRef.current = true;
     cleanUp();
     setStatus('idle');
     setError(null);
@@ -242,6 +257,8 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
 
       return () => {
         clearTimeout(timer);
+        // Anche nel cleanup dell'effect, assicuriamoci di annullare
+        isCancelledRef.current = true;
         cleanUp();
       };
     } else {
@@ -249,6 +266,7 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
       setStatus('idle');
       setError(null);
       setTranscript('');
+      isCancelledRef.current = true;
       cleanUp();
     }
   }, [isOpen]);
