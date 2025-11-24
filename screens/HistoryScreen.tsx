@@ -1,3 +1,4 @@
+
 // screens/HistoryScreen.tsx
 import React, {
   useMemo,
@@ -13,7 +14,8 @@ import { TrashIcon } from '../components/icons/TrashIcon';
 import { HistoryFilterCard } from '../components/HistoryFilterCard';
 import { ArrowLeftIcon } from '../components/icons/ArrowLeftIcon';
 import { CheckIcon } from '../components/icons/CheckIcon';
-import { ArrowsUpDownIcon } from '../components/icons/ArrowsUpDownicon';
+// FIX: Ensure casing matches the file present on the disk (ArrowsUpDownicon.tsx)
+import { ArrowsUpDownicon } from '../components/icons/ArrowsUpDownicon';
 import { CalendarIcon } from '../components/icons/CalendarIcon';
 import { CurrencyEuroIcon } from '../components/icons/CurrencyEuroIcon';
 import { TagIcon } from '../components/icons/TagIcon';
@@ -60,7 +62,11 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
   const tapBridge = useTapBridge();
 
   const isRecurringInstance = !!expense.recurringExpenseId;
-  const itemBgClass = isSelected ? 'bg-indigo-50 ring-1 ring-inset ring-indigo-200' : isRecurringInstance ? 'bg-amber-50' : 'bg-white';
+  const itemBgClass = isSelected 
+    ? 'bg-indigo-50 ring-1 ring-inset ring-indigo-200' 
+    : isRecurringInstance 
+      ? 'bg-amber-50' 
+      : 'bg-white';
 
   // Long press logic
   const longPressTimer = useRef<number | null>(null);
@@ -266,7 +272,10 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
         style={{ touchAction: 'pan-y' }}
       >
         {isRecurringInstance && !isSelectionMode && (
-          <span className="absolute top-1.5 right-1.5 w-5 h-5 bg-amber-200 text-amber-800 text-xs font-bold rounded-full flex items-center justify-center border-2 border-amber-50" title="Spesa Programmata">
+          <span 
+            className="absolute top-1.5 right-1.5 w-5 h-5 text-slate-900 bg-amber-100 border border-amber-400 text-[10px] font-bold rounded-full flex items-center justify-center z-20" 
+            title="Spesa Programmata"
+          >
             P
           </span>
         )}
@@ -277,8 +286,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
                      </span>
         ) : (
             <span
-              className={`w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center ${style.bgColor} transition-transform duration-200`}
-            >
+              className={`w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center ${style.bgColor} transition-transform duration-200`}>
               <style.Icon className={`w-6 h-6 ${style.color}`} />
             </span>
         )}
@@ -892,7 +900,6 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
         // Advanced Filter Props
         accounts={accounts}
         selectedAccountId={filterAccount}
-        onSelectAccount={setFilterAccount}
         
         selectedCategoryFilters={filterCategories}
         onToggleCategoryFilter={handleToggleCategoryFilter}
@@ -902,6 +909,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
         onDescriptionChange={setFilterDescription}
         amountRange={filterAmountRange}
         onAmountRangeChange={setFilterAmountRange}
+        onSelectAccount={setFilterAccount}
       />
 
       <ConfirmationModal
