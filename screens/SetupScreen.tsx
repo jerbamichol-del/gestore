@@ -6,7 +6,6 @@ import { EnvelopeIcon } from '../components/icons/EnvelopeIcon';
 import { SpinnerIcon } from '../components/icons/SpinnerIcon';
 import { ExclamationTriangleIcon } from '../components/icons/ExclamationTriangleIcon';
 import { XMarkIcon } from '../components/icons/XMarkIcon';
-// biometria
 import {
   isBiometricsAvailable,
   registerBiometric,
@@ -44,6 +43,22 @@ const SetupScreen: React.FC<SetupScreenProps> = ({ onSetupSuccess, onGoToLogin }
   const [hasOpenedTelegram, setHasOpenedTelegram] = useState(false);
   const [showTelegramWarning, setShowTelegramWarning] = useState(false);
 
+  // ——— FUNZIONE PER GENERARE LINK SICURO ———
+  const getTelegramLink = () => {
+    if (!email) return '#';
+    try {
+      // 1. Codifica la mail in Base64
+      const base64 = btoa(email);
+      // 2. Rende la stringa "URL Safe" per Telegram (sostituisce caratteri proibiti)
+      const urlSafe = base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      
+      // USERNAME BOT CORRETTO
+      return `https://t.me/mailsendreset_bot?start=reg_${urlSafe}`;
+    } catch {
+      return '#';
+    }
+  };
+
   const handleEmailSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (email.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -52,7 +67,7 @@ const SetupScreen: React.FC<SetupScreenProps> = ({ onSetupSuccess, onGoToLogin }
       if (!hasOpenedTelegram && !showTelegramWarning) {
         setShowTelegramWarning(true);
       } else {
-        // Procedi se ha cliccato il link OPPURE se sta cliccando continua (o chiudi banner) dopo aver visto l'avviso
+        // Procedi se ha cliccato il link OPPURE se sta cliccando continua dopo aver visto l'avviso
         setStep('pin_setup');
       }
     } else {
@@ -60,7 +75,6 @@ const SetupScreen: React.FC<SetupScreenProps> = ({ onSetupSuccess, onGoToLogin }
     }
   };
 
-  // flusso finale: registrazione + login
   const doRegisterAndLogin = async () => {
     setStep('processing');
     setIsLoading(true);
@@ -206,9 +220,9 @@ const SetupScreen: React.FC<SetupScreenProps> = ({ onSetupSuccess, onGoToLogin }
             </p>
 
             <div className="mt-8 pt-6 border-t border-slate-200">
-                {/* MODIFICATO: Link dinamico con deep linking */}
+                {/* LINK DINAMICO CON BASE64 */}
                 <a 
-                    href={`https://t.me/mailsendreset_bot?start=reg_${email}`}
+                    href={getTelegramLink()}
                     target="_blank" 
                     rel="noopener noreferrer"
                     onClick={(e) => {
@@ -263,12 +277,10 @@ const SetupScreen: React.FC<SetupScreenProps> = ({ onSetupSuccess, onGoToLogin }
                     try {
                       setBioBusy(true);
                       await registerBiometric('Profilo locale');
-                      // registrazione riuscita: eventuale auto-prompt verrà gestito dalla Login
-                      clearBiometricSnooze(); // assicura che non resti in stato “annullato”
+                      clearBiometricSnooze(); 
                       setBioBusy(false);
                     } catch {
                       setBioBusy(false);
-                      // anche se annulla la registrazione, proseguiamo col flusso
                     } finally {
                       await doRegisterAndLogin();
                     }
@@ -281,7 +293,7 @@ const SetupScreen: React.FC<SetupScreenProps> = ({ onSetupSuccess, onGoToLogin }
 
                 <button
                   onClick={async () => {
-                    setBiometricsOptOut(true); // non riproporre in login
+                    setBiometricsOptOut(true); 
                     await doRegisterAndLogin();
                   }}
                   disabled={bioBusy}
