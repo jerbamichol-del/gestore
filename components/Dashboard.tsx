@@ -1,13 +1,20 @@
 
-import React, { useMemo, useState, useRef } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Sector } from 'recharts';
 import { Expense } from '../types';
 import { formatCurrency } from './icons/formatters';
 import { getCategoryStyle } from '../utils/categoryStyles';
 import { useTapBridge } from '../hooks/useTapBridge';
-import { ChevronLeftIcon } from './icons/ChevronLeftIcon';
-import { ChevronRightIcon } from './icons/ChevronRightIcon';
 import { CloudArrowUpIcon } from './icons/CloudArrowUpIcon';
+// Import components from HistoryFilterCard
+import { 
+    QuickFilterControl, 
+    PeriodNavigator, 
+    CustomDateRangeInputs,
+    DateFilter,
+    PeriodType
+} from './HistoryFilterCard';
+import { useSwipe } from '../hooks/useSwipe';
 
 const categoryHexColors: Record<string, string> = {
     'Alimentari': '#16a34a', // green-600
@@ -35,7 +42,7 @@ const renderActiveShape = (props: any) => {
       <text x={cx} y={cy + 12} textAnchor="middle" fill={fill} className="text-xl font-extrabold">
         {formatCurrency(payload.value)}
       </text>
-      <text x={cx} y={cy + 32} textAnchor="middle" fill="#64748b" className="text-xs">
+      <text x={cx} y={cy + 32} textAnchor="middle" fill="#334155" className="text-sm font-bold">
         {`(${(percent * 100).toFixed(2)}%)`}
       </text>
       
@@ -97,14 +104,26 @@ const calculateNextDueDate = (template: Expense, fromDate: Date): Date | null =>
   return nextDate;
 };
 
-type ViewMode = 'weekly' | 'monthly' | 'yearly';
-
 const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNavigateToRecurring, onNavigateToHistory, onImportFile }) => {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>('monthly');
+  
+  // View State for Filter Swiper (0: Quick, 1: Period, 2: Custom)
+  const [activeViewIndex, setActiveViewIndex] = useState(1); // Default to Period view (middle)
+  
+  // Filter States
+  const [quickFilter, setQuickFilter] = useState<DateFilter>('30d');
+  const [periodType, setPeriodType] = useState<PeriodType>('month');
+  const [periodDate, setPeriodDate] = useState<Date>(new Date());
+  const [customRange, setCustomRange] = useState<{ start: string | null; end: string | null }>({ start: null, end: null });
+  
+  const [isPeriodMenuOpen, setIsPeriodMenuOpen] = useState(false);
+  const [isSwipeAnimating, setIsSwipeAnimating] = useState(false);
+  const [swipeOffset, setSwipeOffset] = useState(0);
+
   const tapBridge = useTapBridge();
   const activeIndex = selectedIndex;
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const headerContainerRef = useRef<HTMLDivElement>(null);
 
   const handleLegendItemClick = (index: number, event: React.MouseEvent) => {
     event.stopPropagation();
@@ -119,60 +138,120 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
       if (e.target.files && e.target.files[0]) {
           onImportFile(e.target.files[0]);
       }
-      // Reset input so same file can be selected again if needed
       if (fileInputRef.current) {
           fileInputRef.current.value = '';
       }
   };
 
-  const cycleViewMode = (direction: 'prev' | 'next') => {
-    setViewMode(prev => {
-      if (direction === 'next') {
-        if (prev === 'weekly') return 'monthly';
-        if (prev === 'monthly') return 'yearly';
-        return 'weekly';
-      } else {
-        if (prev === 'weekly') return 'yearly';
-        if (prev === 'monthly') return 'weekly';
-        return 'monthly';
+  // Swipe Handler for Header
+  const { progress } = useSwipe(headerContainerRef, {
+      onSwipeLeft: () => {
+          if (activeViewIndex < 2 && !isPeriodMenuOpen) {
+              setActiveViewIndex(prev => prev + 1);
+              setIsSwipeAnimating(true);
+          }
+      },
+      onSwipeRight: () => {
+          if (activeViewIndex > 0 && !isPeriodMenuOpen) {
+              setActiveViewIndex(prev => prev - 1);
+              setIsSwipeAnimating(true);
+          }
       }
-    });
-    setSelectedIndex(null); // Reset selection on view change
-  };
+  }, { threshold: 40, slop: 10, enabled: !isPeriodMenuOpen });
 
-  const { totalExpenses, dailyTotal, categoryData, recurringCountInPeriod, periodLabel } = useMemo(() => {
+  useEffect(() => {
+      if (isSwipeAnimating) {
+          const timer = setTimeout(() => setIsSwipeAnimating(false), 200);
+          return () => clearTimeout(timer);
+      }
+  }, [isSwipeAnimating]);
+
+  // Reset menu when swiping
+  useEffect(() => {
+      setIsPeriodMenuOpen(false);
+  }, [activeViewIndex]);
+
+  const { totalExpenses, dailyTotal, categoryData, recurringCountInPeriod, periodLabel, dateRangeLabel } = useMemo(() => {
     const validExpenses = expenses.filter(e => e.amount != null && !isNaN(Number(e.amount)));
     const now = new Date();
     
-    // Calculate Daily Total regardless of view mode
+    // Daily total (always relative to today for the small text)
     const todayString = toYYYYMMDD(now);
     const daily = validExpenses
         .filter(expense => expense.date === todayString)
         .reduce((acc, expense) => acc + Number(expense.amount), 0);
 
-    let start: Date, end: Date, label: string;
+    let start: Date, end: Date, label: string, rangeLabel = '';
 
-    if (viewMode === 'weekly') {
-        const day = now.getDay(); // 0 is Sunday
-        const diff = now.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
+    // Filter Logic based on Active View
+    if (activeViewIndex === 0) { // Quick Filters
+        end = new Date(now);
+        end.setHours(23, 59, 59, 999);
         start = new Date(now);
-        start.setDate(diff);
         start.setHours(0, 0, 0, 0);
         
-        end = new Date(start);
-        end.setDate(start.getDate() + 6);
+        switch(quickFilter) {
+            case '7d': start.setDate(start.getDate() - 6); label = "Ultimi 7 Giorni"; break;
+            case '30d': start.setDate(start.getDate() - 29); label = "Ultimi 30 Giorni"; break;
+            case '6m': start.setMonth(start.getMonth() - 6); label = "Ultimi 6 Mesi"; break;
+            case '1y': start.setFullYear(start.getFullYear() - 1); label = "Ultimo Anno"; break;
+            default: label = "Tutto"; start = new Date(0); break;
+        }
+        const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
+        rangeLabel = `${start.toLocaleDateString('it-IT', opts)} - Oggi`;
+
+    } else if (activeViewIndex === 2) { // Custom Range
+        if (customRange.start && customRange.end) {
+            start = parseLocalYYYYMMDD(customRange.start);
+            end = parseLocalYYYYMMDD(customRange.end);
+            end.setHours(23, 59, 59, 999);
+            label = "Periodo Personalizzato";
+            const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
+            const yOpts: Intl.DateTimeFormatOptions = { year: '2-digit' };
+            rangeLabel = `${start.toLocaleDateString('it-IT', opts)} - ${end.toLocaleDateString('it-IT', opts)} '${end.toLocaleDateString('it-IT', yOpts)}`;
+        } else {
+            // Fallback if range not set
+            start = new Date();
+            end = new Date();
+            label = "Seleziona Date";
+            rangeLabel = "-";
+        }
+    } else { // Period View (Default)
+        start = new Date(periodDate);
+        start.setHours(0, 0, 0, 0);
+        end = new Date(periodDate);
         end.setHours(23, 59, 59, 999);
-        
-        label = "Spesa Settimanale";
-    } else if (viewMode === 'yearly') {
-        start = new Date(now.getFullYear(), 0, 1);
-        end = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
-        label = "Spesa Annuale";
-    } else {
-        // Monthly default
-        start = new Date(now.getFullYear(), now.getMonth(), 1);
-        end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
-        label = "Spesa Mensile";
+
+        if (periodType === 'day') {
+            const isToday = toYYYYMMDD(start) === toYYYYMMDD(now);
+            label = isToday ? "Spesa di Oggi" : "Spesa Giornaliera";
+            rangeLabel = start.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'long' });
+        } else if (periodType === 'week') { // Changed 'weekly' to 'week' to match PeriodType
+            const day = start.getDay();
+            const diff = start.getDate() - day + (day === 0 ? -6 : 1);
+            start.setDate(diff);
+            end = new Date(start);
+            end.setDate(start.getDate() + 6);
+            end.setHours(23, 59, 59, 999);
+            label = "Spesa Settimanale";
+            rangeLabel = `${start.getDate()} ${start.toLocaleString('it-IT', { month: 'short' })} - ${end.getDate()} ${end.toLocaleString('it-IT', { month: 'short' })}`;
+        } else if (periodType === 'month') { // 'month'
+            start.setDate(1);
+            end = new Date(start);
+            end.setMonth(end.getMonth() + 1);
+            end.setDate(0);
+            end.setHours(23, 59, 59, 999);
+            label = "Spesa Mensile";
+            rangeLabel = start.toLocaleString('it-IT', { month: 'long', year: 'numeric' });
+        } else { // 'year'
+            start.setMonth(0, 1);
+            end = new Date(start);
+            end.setFullYear(end.getFullYear() + 1);
+            end.setMonth(0, 0);
+            end.setHours(23, 59, 59, 999);
+            label = "Spesa Annuale";
+            rangeLabel = start.getFullYear().toString();
+        }
     }
     
     const periodExpenses = validExpenses.filter(e => {
@@ -182,51 +261,30 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
         
     const total = periodExpenses.reduce((acc, expense) => acc + Number(expense.amount), 0);
     
-    // Calculate recurring expenses in this period
+    // Recurring count logic
     let recurringCount = 0;
-    recurringExpenses.forEach(template => {
-        if (!template.date) return;
+    // Only calc if valid dates
+    if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+        recurringExpenses.forEach(template => {
+            if (!template.date) return;
+            const totalGenerated = expenses.filter(e => e.recurringExpenseId === template.id).length;
+            if (template.recurrenceEndType === 'count' && template.recurrenceCount && totalGenerated >= template.recurrenceCount) return;
+            if (template.recurrenceEndType === 'date' && template.recurrenceEndDate && template.lastGeneratedDate && template.lastGeneratedDate >= template.recurrenceEndDate) return;
 
-        const totalGenerated = expenses.filter(e => e.recurringExpenseId === template.id).length;
+            let nextDue = parseLocalYYYYMMDD(template.date);
+            let simulatedOccurrences = 0; 
+            while (nextDue) {
+                if (nextDue > end) break;
+                if (template.recurrenceEndType === 'date' && template.recurrenceEndDate && toYYYYMMDD(nextDue) > template.recurrenceEndDate) break;
+                if (template.recurrenceEndType === 'count' && template.recurrenceCount && simulatedOccurrences >= template.recurrenceCount) break; 
 
-        // Checks if the recurrence is exhausted
-        if (template.recurrenceEndType === 'count' && template.recurrenceCount && totalGenerated >= template.recurrenceCount) {
-            return;
-        }
-        if (template.recurrenceEndType === 'date' && template.recurrenceEndDate && template.lastGeneratedDate && template.lastGeneratedDate >= template.recurrenceEndDate) {
-            return;
-        }
-
-        // Iniziamo a contare dalla data di inizio della spesa programmata
-        let nextDue = parseLocalYYYYMMDD(template.date);
-        
-        // Contatore locale per simulare quante volte scatterebbe in questo loop
-        let simulatedOccurrences = 0; 
-
-        while (nextDue) {
-            if (nextDue > end) {
-                break;
+                if (nextDue >= start) recurringCount++;
+                
+                simulatedOccurrences++;
+                nextDue = calculateNextDueDate(template, nextDue);
             }
-
-            if (template.recurrenceEndType === 'date' && template.recurrenceEndDate && toYYYYMMDD(nextDue) > template.recurrenceEndDate) {
-                break;
-            }
-            
-            // Se c'è un limite di conteggio, verifichiamo approssimativamente
-            if (template.recurrenceEndType === 'count' && template.recurrenceCount) {
-                 // Se abbiamo superato il totale teorico, stop.
-                 if (simulatedOccurrences >= template.recurrenceCount) break; 
-            }
-
-            // Se la data di scadenza cade nel periodo visualizzato, incrementiamo il contatore "P".
-            if (nextDue >= start) {
-                recurringCount++;
-            }
-            
-            simulatedOccurrences++;
-            nextDue = calculateNextDueDate(template, nextDue);
-        }
-    });
+        });
+    }
         
     const categoryTotals = periodExpenses.reduce((acc: Record<string, number>, expense) => {
       const category = expense.category || 'Altro';
@@ -243,45 +301,104 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
         dailyTotal: daily,
         categoryData: sortedCategoryData,
         recurringCountInPeriod: recurringCount,
-        periodLabel: label
+        periodLabel: label,
+        dateRangeLabel: rangeLabel
     };
-  }, [expenses, recurringExpenses, viewMode]);
+  }, [expenses, recurringExpenses, activeViewIndex, quickFilter, periodType, periodDate, customRange]);
+  
+  const listTx = -activeViewIndex * (100 / 3);
   
   return (
     <div className="p-4 md:p-6 space-y-6">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-1 flex flex-col gap-4">
-                <div className="bg-white p-6 rounded-2xl shadow-lg flex flex-col justify-between">
-                    <div>
-                        <div className="flex justify-between items-center mb-4">
-                            <button 
-                                onClick={() => cycleViewMode('prev')}
-                                className="p-2 rounded-full text-slate-800 hover:text-black transition-colors active:bg-transparent focus:outline-none"
-                            >
-                                <ChevronLeftIcon className="w-6 h-6" strokeWidth={3} />
-                            </button>
-                            
-                            <h3 className="text-xl font-bold text-slate-700 text-center flex-1">{periodLabel}</h3>
-
-                            <button 
-                                onClick={() => cycleViewMode('next')}
-                                className="p-2 rounded-full text-slate-800 hover:text-black transition-colors active:bg-transparent focus:outline-none"
-                            >
-                                <ChevronRightIcon className="w-6 h-6" strokeWidth={3} />
-                            </button>
-                        </div>
-                        <div className="flex justify-between items-baseline">
-                            <p className="text-4xl font-extrabold text-indigo-600">{formatCurrency(totalExpenses)}</p>
-                            {recurringCountInPeriod > 0 && (
-                                <span className="text-base font-bold text-slate-900 bg-amber-100 border border-amber-400 px-2.5 py-1 rounded-lg" title={`${recurringCountInPeriod} spese programmate previste in questo periodo`}>
-                                    {recurringCountInPeriod} P
+                {/* Modificato: Rimosso overflow-hidden dalla card principale */}
+                <div className="bg-white p-6 rounded-2xl shadow-lg flex flex-col justify-between relative">
+                    
+                    {/* Totals Section (Spostata SOPRA i filtri) */}
+                    <div className="text-center mb-6 relative z-10">
+                        <h3 className="text-xs font-bold text-black leading-tight uppercase tracking-wide">{periodLabel}</h3>
+                        <p className="text-sm font-medium text-slate-400 capitalize mb-1">{dateRangeLabel}</p>
+                        
+                        {/* Importo Centrato con Euro accanto */}
+                        <div className="relative flex justify-center items-center text-indigo-600 mt-1">
+                            <div className="relative flex items-baseline">
+                                <span className="absolute right-full mr-1.5 text-2xl font-semibold opacity-80 top-1/2 -translate-y-1/2">€</span>
+                                <span className="text-4xl font-extrabold tracking-tight">
+                                    {formatCurrency(totalExpenses).replace('€', '').trim()}
                                 </span>
+                            </div>
+                            
+                            {/* Recurring indicator - Right Edge Square */}
+                            {recurringCountInPeriod > 0 && (
+                                <div className="absolute right-0 top-1/2 -translate-y-1/2">
+                                     <span className="w-8 h-8 flex items-center justify-center text-sm font-bold text-slate-900 bg-amber-100 border border-amber-400 rounded-lg shadow-sm" title="Spese programmate in arrivo">
+                                        {recurringCountInPeriod}
+                                    </span>
+                                </div>
                             )}
                         </div>
                     </div>
-                    <div className="mt-4 pt-4 border-t border-slate-200">
+
+                    {/* Filter Container - (Spostata SOTTO l'importo) */}
+                    <div className="mb-2 relative z-20" ref={headerContainerRef} style={{ touchAction: 'pan-y' }}>
+                        {/* Modificato: overflow-hidden diventa condizionale */}
+                        <div className={`relative ${isPeriodMenuOpen ? 'overflow-visible' : 'overflow-hidden'}`}>
+                            <div 
+                                className="w-[300%] flex transition-transform duration-300 ease-out"
+                                style={{ 
+                                    transform: `translateX(${listTx}%)` 
+                                }}
+                            >
+                                {/* Page 0: Quick Filters - Nascondi se menu aperto */}
+                                <div className={`w-1/3 px-1 ${isPeriodMenuOpen ? 'opacity-0 pointer-events-none' : 'opacity-100 transition-opacity duration-200'}`}>
+                                    <QuickFilterControl 
+                                        isActive={activeViewIndex === 0}
+                                        currentValue={quickFilter}
+                                        onSelect={(v) => { setQuickFilter(v); setActiveViewIndex(0); }}
+                                    />
+                                </div>
+                                {/* Page 1: Period Navigator - Sempre visibile (è quello col menu) */}
+                                <div className="w-1/3 px-1 relative z-20">
+                                    <PeriodNavigator 
+                                        isActive={activeViewIndex === 1}
+                                        periodType={periodType}
+                                        periodDate={periodDate}
+                                        onTypeChange={setPeriodType}
+                                        onDateChange={setPeriodDate}
+                                        onActivate={() => setActiveViewIndex(1)}
+                                        isMenuOpen={isPeriodMenuOpen}
+                                        onMenuToggle={setIsPeriodMenuOpen}
+                                        isPanelOpen={true} // Always drop down in dashboard
+                                    />
+                                </div>
+                                {/* Page 2: Custom Range - Nascondi se menu aperto */}
+                                <div className={`w-1/3 px-1 ${isPeriodMenuOpen ? 'opacity-0 pointer-events-none' : 'opacity-100 transition-opacity duration-200'}`}>
+                                    <CustomDateRangeInputs 
+                                        isActive={activeViewIndex === 2}
+                                        range={customRange}
+                                        onChange={(r) => { setCustomRange(r); setActiveViewIndex(2); }}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                        
+                        {/* Dots */}
+                        <div className="flex justify-center items-center mt-3 gap-2">
+                            {[0, 1, 2].map((i) => (
+                                <button
+                                    key={i}
+                                    onClick={() => setActiveViewIndex(i)}
+                                    className={`w-2 h-2 rounded-full transition-colors ${activeViewIndex === i ? 'bg-indigo-600' : 'bg-slate-300 hover:bg-slate-400'}`}
+                                    aria-label={`Vai alla pagina filtri ${i + 1}`}
+                                />
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="mt-4 pt-4 border-t border-slate-200 relative z-10">
                         <div>
-                            <h4 className="text-sm font-medium text-slate-500">Oggi</h4>
+                            <h4 className="text-sm font-medium text-slate-500">Spesa Oggi</h4>
                             <p className="text-xl font-bold text-slate-800">{formatCurrency(dailyTotal)}</p>
                         </div>
                         <div className="mt-4 grid grid-cols-2 gap-3">
@@ -325,7 +442,11 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
             </div>
 
             <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-lg flex flex-col">
-                <h3 className="text-xl font-bold text-slate-700 mb-4">Riepilogo Categorie</h3>
+                <div className="mb-4">
+                    <h3 className="text-xl font-bold text-slate-700">Riepilogo Categorie</h3>
+                    <p className="text-sm text-slate-500 font-medium capitalize">{dateRangeLabel}</p>
+                </div>
+                
                 {categoryData.length > 0 ? (
                     <div className="space-y-4 flex-grow">
                         {categoryData.map(cat => {
@@ -349,12 +470,16 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
                             )
                         })}
                     </div>
-                ) : <p className="text-center text-slate-500 flex-grow flex items-center justify-center">Nessuna spesa registrata.</p>}
+                ) : <p className="text-center text-slate-500 flex-grow flex items-center justify-center">Nessuna spesa registrata in questo periodo.</p>}
             </div>
         </div>
 
         <div className="bg-white p-6 rounded-2xl shadow-lg">
-            <h3 className="text-xl font-bold text-slate-700 mb-2 text-center">Spese per Categoria</h3>
+            <div className="mb-2 text-center">
+                <h3 className="text-xl font-bold text-slate-700">Spese per Categoria</h3>
+                <p className="text-sm text-slate-500 font-medium capitalize">{dateRangeLabel}</p>
+            </div>
+            
             {categoryData.length > 0 ? (
                 <div className="relative cursor-pointer" onClick={handleChartBackgroundClick}>
                     <ResponsiveContainer width="100%" height={300}>
@@ -380,7 +505,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
                     </ResponsiveContainer>
                     {activeIndex === null && (
                         <div className="absolute inset-0 flex flex-col justify-center items-center pointer-events-none">
-                            <span className="text-slate-500 text-sm">Totale Periodo</span>
+                            <span className="text-slate-500 text-sm">Totale</span>
                             <span className="text-2xl font-extrabold text-slate-800 mt-1">
                                 {formatCurrency(totalExpenses)}
                             </span>
