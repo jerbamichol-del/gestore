@@ -221,24 +221,24 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
                     <div className="flex justify-between items-center mb-4">
                         <button 
                             onClick={() => cycleViewMode('prev')}
-                            className="p-2 rounded-full hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors"
+                            className="p-2 rounded-full text-slate-800 hover:text-black transition-colors active:bg-transparent focus:outline-none"
                         >
-                            <ChevronLeftIcon className="w-5 h-5" />
+                            <ChevronLeftIcon className="w-6 h-6" strokeWidth={3} />
                         </button>
                         
                         <h3 className="text-xl font-bold text-slate-700 text-center flex-1">{periodLabel}</h3>
 
                         <button 
                             onClick={() => cycleViewMode('next')}
-                            className="p-2 rounded-full hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors"
+                            className="p-2 rounded-full text-slate-800 hover:text-black transition-colors active:bg-transparent focus:outline-none"
                         >
-                            <ChevronRightIcon className="w-5 h-5" />
+                            <ChevronRightIcon className="w-6 h-6" strokeWidth={3} />
                         </button>
                     </div>
                     <div className="flex justify-between items-baseline">
                         <p className="text-4xl font-extrabold text-indigo-600">{formatCurrency(totalExpenses)}</p>
                         {recurringCountInPeriod > 0 && (
-                            <span className="text-base font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-lg" title={`${recurringCountInPeriod} spese programmate previste in questo periodo`}>
+                            <span className="text-base font-bold text-slate-900 bg-amber-100 border border-amber-400 px-2.5 py-1 rounded-lg" title={`${recurringCountInPeriod} spese programmate previste in questo periodo`}>
                                 {recurringCountInPeriod} P
                             </span>
                         )}
