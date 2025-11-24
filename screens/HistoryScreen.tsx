@@ -13,7 +13,7 @@ import { TrashIcon } from '../components/icons/TrashIcon';
 import { HistoryFilterCard } from '../components/HistoryFilterCard';
 import { ArrowLeftIcon } from '../components/icons/ArrowLeftIcon';
 import { CheckIcon } from '../components/icons/CheckIcon';
-import { ArrowsUpDownIcon } from '../components/icons/ArrowsUpDownIcon';
+import { ArrowsUpDownIcon } from '../components/icons/ArrowsUpDownicon';
 import { CalendarIcon } from '../components/icons/CalendarIcon';
 import { CurrencyEuroIcon } from '../components/icons/CurrencyEuroIcon';
 import { TagIcon } from '../components/icons/TagIcon';
@@ -274,7 +274,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
         {isSelected ? (
              <span className={`w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center bg-indigo-600 text-white transition-transform duration-200 transform scale-100`}>
                 <CheckIcon className="w-6 h-6" strokeWidth={3} />
-             </span>
+                     </span>
         ) : (
             <span
               className={`w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center ${style.bgColor} transition-transform duration-200`}
