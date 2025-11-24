@@ -162,7 +162,13 @@ const calculateNextDueDate = (template: Expense, fromDate: Date): Date | null =>
   return nextDate;
 };
 
-const toISODate = (date: Date) => date.toISOString().split('T')[0];
+// CORRECT: Use local time components to avoid timezone issues (e.g. UTC-1 resulting in previous day)
+const toISODate = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const [expenses, setExpenses] = useLocalStorage<Expense[]>('expenses_v2', []);
@@ -293,16 +299,29 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     recurringExpenses.forEach((template) => {
       if (!template.date) return;
 
+      // Se esiste una data di ultima generazione, partiamo da lì, altrimenti dalla data di inizio
       const cursorDateString = template.lastGeneratedDate || template.date;
-      let cursor = new Date(cursorDateString);
+      
+      // Use local parsing for YYYY-MM-DD to ensure 00:00 local time
+      const p = cursorDateString.split('-').map(Number);
+      let cursor = new Date(p[0], p[1] - 1, p[2]);
+      
       if (Number.isNaN(cursor.getTime())) return;
+
+      // Se non è mai stata generata (lastGeneratedDate è undefined), il primo check è la data stessa.
+      // Se è già stata generata, calcoliamo la prossima scadenza.
+      let nextDue: Date | null = null;
+      if (!template.lastGeneratedDate) {
+          // Start date parsed as local
+          const pStart = template.date.split('-').map(Number);
+          nextDue = new Date(pStart[0], pStart[1] - 1, pStart[2]);
+      } else {
+          nextDue = calculateNextDueDate(template, cursor);
+      }
 
       let updatedTemplate = { ...template };
 
-      let nextDue = !template.lastGeneratedDate
-        ? new Date(template.date)
-        : calculateNextDueDate(template, cursor);
-
+      // Cicla finché la prossima scadenza è oggi o nel passato
       while (nextDue && nextDue <= today) {
         const totalGenerated =
           expenses.filter((e) => e.recurringExpenseId === template.id).length +
@@ -326,6 +345,8 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         }
 
         const nextDueDateString = toISODate(nextDue);
+        
+        // Controllo duplicati (importante per non rigenerare se già presente)
         const instanceExists =
           expenses.some(
             (exp) =>
@@ -345,10 +366,11 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
             date: nextDueDateString,
             frequency: 'single',
             recurringExpenseId: template.id,
-            lastGeneratedDate: undefined,
+            lastGeneratedDate: undefined, // Le istanze generate non hanno lastGeneratedDate
           });
         }
 
+        // Aggiorniamo il cursore e il template per la prossima iterazione
         cursor = nextDue;
         updatedTemplate.lastGeneratedDate = toISODate(cursor);
         nextDue = calculateNextDueDate(template, cursor);
