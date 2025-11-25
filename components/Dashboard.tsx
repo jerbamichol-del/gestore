@@ -39,7 +39,7 @@ const renderActiveShape = (props: any) => {
       <text x={cx} y={cy - 12} textAnchor="middle" fill="#1e293b" className="text-base font-bold">
         {payload.name}
       </text>
-      <text x={cx} y={cy + 12} textAnchor="middle" fill={fill} className="text-xl font-extrabold">
+      <text x={cx} y={cy + 12} textAnchor="middle" fill={fill} className="text-lg font-extrabold">
         {formatCurrency(payload.value)}
       </text>
       <text x={cx} y={cy + 32} textAnchor="middle" fill="#334155" className="text-sm font-bold">
@@ -316,15 +316,15 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
                 <div className="bg-white p-6 rounded-2xl shadow-lg flex flex-col justify-between relative">
                     
                     {/* Totals Section (Spostata SOPRA i filtri) */}
-                    <div className="text-center mb-6 relative z-10">
-                        <h3 className="text-xs font-bold text-black leading-tight uppercase tracking-wide">{periodLabel}</h3>
+                    <div className="text-center mb-2 relative z-10">
+                        <h3 className="text-lg font-bold text-black leading-tight uppercase tracking-wide">{periodLabel}</h3>
                         <p className="text-sm font-medium text-slate-400 capitalize mb-1">{dateRangeLabel}</p>
                         
                         {/* Importo Centrato con Euro accanto */}
                         <div className="relative flex justify-center items-center text-indigo-600 mt-1">
                             <div className="relative flex items-baseline">
-                                <span className="absolute right-full mr-1.5 text-2xl font-semibold opacity-80 top-1/2 -translate-y-1/2">€</span>
-                                <span className="text-4xl font-extrabold tracking-tight">
+                                <span className="absolute right-full mr-2 text-3xl font-semibold opacity-80 top-1/2 -translate-y-1/2">€</span>
+                                <span className="text-5xl font-extrabold tracking-tight">
                                     {formatCurrency(totalExpenses).replace('€', '').trim()}
                                 </span>
                             </div>
