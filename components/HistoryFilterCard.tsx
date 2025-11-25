@@ -77,7 +77,8 @@ export const QuickFilterControl: React.FC<{
   onSelect: (value: DateFilter) => void;
   currentValue: DateFilter;
   isActive: boolean;
-}> = ({ onSelect, currentValue, isActive }) => {
+  compact?: boolean;
+}> = ({ onSelect, currentValue, isActive, compact }) => {
   const filters: { value: DateFilter; label: string }[] = [
     { value: '7d', label: '7G' },
     { value: '30d', label: '30G' },
@@ -88,7 +89,7 @@ export const QuickFilterControl: React.FC<{
   return (
     <div
       className={
-        'w-full h-10 flex border rounded-lg overflow-hidden transition-colors ' +
+        `w-full ${compact ? 'h-8' : 'h-10'} flex border rounded-lg overflow-hidden transition-colors ` +
         (isActive ? 'border-indigo-600' : 'border-slate-400')
       }
     >
@@ -100,7 +101,7 @@ export const QuickFilterControl: React.FC<{
             onClick={() => onSelect(f.value)}
             type="button"
             className={
-              'flex-1 flex items-center justify-center px-2 text-center font-semibold text-sm transition-colors duration-200 focus:outline-none ' +
+              `flex-1 flex items-center justify-center px-2 text-center font-semibold ${compact ? 'text-xs' : 'text-sm'} transition-colors duration-200 focus:outline-none ` +
               (i > 0 ? 'border-l ' : '') +
               (active
                 ? 'bg-indigo-600 text-white border-indigo-600'
@@ -122,9 +123,10 @@ export const CustomDateRangeInputs: React.FC<{
   range: { start: string | null; end: string | null };
   onChange: (range: { start: string | null; end: string | null }) => void;
   isActive: boolean;
-}> = ({ range, onChange, isActive }) => {
+  compact?: boolean;
+}> = ({ range, onChange, isActive, compact }) => {
   const textColor = isActive ? 'text-indigo-700' : 'text-slate-700';
-  const textSize = 'text-sm font-semibold';
+  const textSize = compact ? 'text-xs font-semibold' : 'text-sm font-semibold';
 
   const formatDate = (iso: string) => {
     if (!iso) return '';
@@ -154,7 +156,7 @@ export const CustomDateRangeInputs: React.FC<{
   return (
     <div
       className={
-        'w-full h-10 flex border rounded-lg overflow-hidden transition-colors relative ' +
+        `w-full ${compact ? 'h-8' : 'h-10'} flex border rounded-lg overflow-hidden transition-colors relative ` +
         (isActive ? 'border-indigo-600 bg-indigo-50' : 'border-slate-400 bg-slate-100')
       }
     >
@@ -202,6 +204,7 @@ export const PeriodNavigator: React.FC<{
   isMenuOpen: boolean;
   onMenuToggle: (isOpen: boolean) => void;
   isPanelOpen: boolean;
+  compact?: boolean;
 }> = ({
   periodType,
   periodDate,
@@ -212,6 +215,7 @@ export const PeriodNavigator: React.FC<{
   isMenuOpen,
   onMenuToggle,
   isPanelOpen,
+  compact,
 }) => {
   const wrapperRef = useRef<HTMLDivElement>(null);
 
@@ -319,7 +323,7 @@ export const PeriodNavigator: React.FC<{
     <div
       ref={wrapperRef}
       className={
-        'relative w-full h-10 flex items-center justify-between border rounded-lg bg-white ' +
+        `relative w-full ${compact ? 'h-8' : 'h-10'} flex items-center justify-between border rounded-lg bg-white ` +
         (isActive ? 'border-indigo-600' : 'border-slate-400')
       }
     >
@@ -335,7 +339,7 @@ export const PeriodNavigator: React.FC<{
         onClick={() => onMenuToggle(!isMenuOpen)}
         type="button"
         className={
-          'flex-1 h-full text-sm font-semibold ' +
+          `flex-1 h-full ${compact ? 'text-xs' : 'text-sm'} font-semibold ` +
           (isActive
             ? 'bg-indigo-100 text-indigo-700'
             : 'bg-slate-100 text-slate-700') +
