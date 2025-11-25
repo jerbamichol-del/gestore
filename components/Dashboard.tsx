@@ -341,7 +341,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
                     </div>
 
                     {/* Filter Container - (Spostata SOTTO l'importo) */}
-                    <div className="mb-2 relative z-20" ref={headerContainerRef} style={{ touchAction: 'pan-y' }}>
+                    <div className="mb-2 relative z-20 mx-5" ref={headerContainerRef} style={{ touchAction: 'pan-y' }}>
                         {/* Modificato: overflow-hidden diventa condizionale */}
                         <div className={`relative ${isPeriodMenuOpen ? 'overflow-visible' : 'overflow-hidden'}`}>
                             <div 
@@ -436,7 +436,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
                 />
                 <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-indigo-50 text-indigo-700 font-bold rounded-2xl border border-indigo-100 shadow-sm hover:bg-indigo-100 transition-colors"
+                    className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-indigo-5 text-indigo-700 font-bold rounded-2xl border border-indigo-100 shadow-sm hover:bg-indigo-100 transition-colors"
                     {...tapBridge}
                 >
                     <CloudArrowUpIcon className="w-6 h-6" />
