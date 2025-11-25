@@ -1,11 +1,12 @@
 // Importa la libreria idb per un accesso più semplice a IndexedDB
 importScripts('https://cdn.jsdelivr.net/npm/idb@8/build/iife/index-min.js');
 
-const CACHE_NAME = 'expense-manager-cache-v32';
+const CACHE_NAME = 'expense-manager-cache-v33';
 // Aggiunta la pagina di share-target al caching
 const urlsToCache = [
   '/',
   '/index.html',
+  '/index.tsx',
   '/manifest.json',
   '/icon-192.svg',
   '/icon-512.svg',
@@ -13,10 +14,12 @@ const urlsToCache = [
   // Key CDN dependencies
   'https://cdn.tailwindcss.com',
   'https://esm.sh/react@18.3.1',
+  'https://esm.sh/react-dom@18.3.1',
   'https://esm.sh/react-dom@18.3.1/client',
   'https://aistudiocdn.com/@google/genai@^1.21.0',
   'https://esm.sh/recharts@2.12.7',
-  'https://cdn.jsdelivr.net/npm/idb@8/+esm'
+  'https://cdn.jsdelivr.net/npm/idb@8/+esm',
+  'https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs'
 ];
 
 // --- Funzioni Helper per IndexedDB (replicate da db.ts per l'uso nel Service Worker) ---
