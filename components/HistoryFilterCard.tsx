@@ -126,7 +126,8 @@ export const CustomDateRangeInputs: React.FC<{
   compact?: boolean;
 }> = ({ range, onChange, isActive, compact }) => {
   const textColor = isActive ? 'text-indigo-700' : 'text-slate-700';
-  const textSize = compact ? 'text-xs font-semibold' : 'text-sm font-semibold';
+  // User requested larger text for right filter table in compact mode
+  const textSize = 'text-sm font-semibold';
 
   const formatDate = (iso: string) => {
     if (!iso) return '';
@@ -339,7 +340,8 @@ export const PeriodNavigator: React.FC<{
         onClick={() => onMenuToggle(!isMenuOpen)}
         type="button"
         className={
-          `flex-1 h-full ${compact ? 'text-xs' : 'text-sm'} font-semibold ` +
+          // User requested larger text for center filter table in compact mode
+          `flex-1 h-full text-sm font-semibold ` +
           (isActive
             ? 'bg-indigo-100 text-indigo-700'
             : 'bg-slate-100 text-slate-700') +
