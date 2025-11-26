@@ -338,7 +338,7 @@ export const PeriodNavigator: React.FC<{
       <button
         onClick={() => step(-1)}
         type="button"
-        className="h-full px-4 hover:bg-slate-100 rounded-l-lg"
+        className={`h-full px-4 rounded-l-lg ${compact ? '' : 'hover:bg-slate-100'}`}
         aria-label="Periodo precedente"
         {...tapBridge}
       >
@@ -348,12 +348,11 @@ export const PeriodNavigator: React.FC<{
         onClick={() => onMenuToggle(!isMenuOpen)}
         type="button"
         className={
-          // User requested larger text for center filter table in compact mode
           `flex-1 h-full text-sm font-semibold ` +
           (isActive
             ? 'bg-indigo-100 text-indigo-700'
             : 'bg-slate-100 text-slate-700') +
-          ' hover:bg-slate-200'
+          (compact ? '' : ' hover:bg-slate-200')
         }
         {...tapBridge}
       >
@@ -362,7 +361,7 @@ export const PeriodNavigator: React.FC<{
       <button
         onClick={() => step(+1)}
         type="button"
-        className="h-full px-4 hover:bg-slate-100 rounded-r-lg"
+        className={`h-full px-4 rounded-r-lg ${compact ? '' : 'hover:bg-slate-100'}`}
         aria-label="Periodo successivo"
         {...tapBridge}
       >
@@ -1011,6 +1010,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
                     isMenuOpen={isPeriodMenuOpen}
                     onMenuToggle={setIsPeriodMenuOpen}
                     isPanelOpen={isPanelOpen}
+                    compact={false} // Always standard in History panel
                 />
                 </div>
                 <div className="w-1/3 px-4 py-1">
