@@ -78,7 +78,8 @@ export const QuickFilterControl: React.FC<{
   currentValue: DateFilter;
   isActive: boolean;
   compact?: boolean;
-}> = ({ onSelect, currentValue, isActive, compact }) => {
+  tapBridge?: any;
+}> = ({ onSelect, currentValue, isActive, compact, tapBridge }) => {
   const filters: { value: DateFilter; label: string }[] = [
     { value: '7d', label: '7G' },
     { value: '30d', label: '30G' },
@@ -109,6 +110,7 @@ export const QuickFilterControl: React.FC<{
                     isActive ? 'border-indigo-600' : 'border-slate-400'
                   }`)
             }
+            {...tapBridge}
           >
             {f.label}
           </button>
@@ -124,7 +126,8 @@ export const CustomDateRangeInputs: React.FC<{
   onChange: (range: { start: string | null; end: string | null }) => void;
   isActive: boolean;
   compact?: boolean;
-}> = ({ range, onChange, isActive, compact }) => {
+  tapBridge?: any;
+}> = ({ range, onChange, isActive, compact, tapBridge }) => {
   const textColor = isActive ? 'text-indigo-700' : 'text-slate-700';
   // User requested larger text for right filter table in compact mode
   const textSize = 'text-sm font-semibold';
@@ -173,6 +176,7 @@ export const CustomDateRangeInputs: React.FC<{
           onBlur={(e) => e.target.blur()}
           className="absolute inset-0 w-full h-full opacity-0 z-20 cursor-pointer"
           style={{ touchAction: 'none' }}
+          {...tapBridge}
         />
       </label>
       <div className={`w-px my-1 ${isActive ? 'bg-indigo-200' : 'bg-slate-300'}`} />
@@ -188,6 +192,7 @@ export const CustomDateRangeInputs: React.FC<{
           onBlur={(e) => e.target.blur()}
           className="absolute inset-0 w-full h-full opacity-0 z-20 cursor-pointer"
           style={{ touchAction: 'none' }}
+          {...tapBridge}
         />
       </label>
     </div>
@@ -206,6 +211,7 @@ export const PeriodNavigator: React.FC<{
   onMenuToggle: (isOpen: boolean) => void;
   isPanelOpen: boolean;
   compact?: boolean;
+  tapBridge?: any;
 }> = ({
   periodType,
   periodDate,
@@ -217,6 +223,7 @@ export const PeriodNavigator: React.FC<{
   onMenuToggle,
   isPanelOpen,
   compact,
+  tapBridge
 }) => {
   const wrapperRef = useRef<HTMLDivElement>(null);
 
@@ -333,6 +340,7 @@ export const PeriodNavigator: React.FC<{
         type="button"
         className="h-full px-4 hover:bg-slate-100 rounded-l-lg"
         aria-label="Periodo precedente"
+        {...tapBridge}
       >
         <ChevronLeftIcon className="w-5 h-5 text-slate-700" />
       </button>
@@ -347,6 +355,7 @@ export const PeriodNavigator: React.FC<{
             : 'bg-slate-100 text-slate-700') +
           ' hover:bg-slate-200'
         }
+        {...tapBridge}
       >
         {label}
       </button>
@@ -355,6 +364,7 @@ export const PeriodNavigator: React.FC<{
         type="button"
         className="h-full px-4 hover:bg-slate-100 rounded-r-lg"
         aria-label="Periodo successivo"
+        {...tapBridge}
       >
         <ChevronRightIcon className="w-5 h-5 text-slate-700" />
       </button>
@@ -381,6 +391,7 @@ export const PeriodNavigator: React.FC<{
                   ? 'bg-indigo-100 text-indigo-800'
                   : 'bg-slate-50 text-slate-800 hover:bg-slate-200')
               }
+              {...tapBridge}
             >
               {v === 'day'
                 ? 'Giorno'
