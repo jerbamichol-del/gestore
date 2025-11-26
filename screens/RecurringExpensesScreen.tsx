@@ -240,7 +240,7 @@ const RecurringExpenseItem: React.FC<{
     };
 
     return (
-        <div className={`relative overflow-hidden transition-colors duration-200 ${isSelected ? 'bg-indigo-50 ring-1 ring-inset ring-indigo-200' : 'bg-white'}`}>
+        <div className={`relative overflow-hidden transition-colors duration-200 ${isSelected ? 'bg-indigo-50 ring-1 ring-inset ring-indigo-200' : 'bg-amber-50'}`}>
             <div className="absolute top-0 right-0 h-full flex items-center z-0">
                 <button
                     onClick={() => onDeleteRequest(expense.id)}
@@ -259,7 +259,7 @@ const RecurringExpenseItem: React.FC<{
                 onPointerUp={handlePointerUp}
                 onPointerCancel={handlePointerCancel}
                 onClick={handleClick}
-                className={`relative flex items-center gap-4 py-3 px-4 ${isSelected ? 'bg-indigo-50' : 'bg-white'} z-10 cursor-pointer transition-colors duration-200`}
+                className={`relative flex items-center gap-4 py-3 px-4 ${isSelected ? 'bg-indigo-50' : 'bg-amber-50'} z-10 cursor-pointer transition-colors duration-200`}
                 style={{ touchAction: 'pan-y' }}
             >
                 {isSelected ? (
