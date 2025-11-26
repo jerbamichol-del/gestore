@@ -357,6 +357,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
                                         currentValue={quickFilter}
                                         onSelect={(v) => { setQuickFilter(v); setActiveViewIndex(0); }}
                                         compact={true}
+                                        tapBridge={tapBridge}
                                     />
                                 </div>
                                 {/* Page 1: Period Navigator - Sempre visibile (è quello col menu) */}
@@ -372,6 +373,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
                                         onMenuToggle={setIsPeriodMenuOpen}
                                         isPanelOpen={true} // Always drop down in dashboard
                                         compact={true}
+                                        tapBridge={tapBridge}
                                     />
                                 </div>
                                 {/* Page 2: Custom Range - Nascondi se menu aperto */}
@@ -381,6 +383,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
                                         range={customRange}
                                         onChange={(r) => { setCustomRange(r); setActiveViewIndex(2); }}
                                         compact={true}
+                                        tapBridge={tapBridge}
                                     />
                                 </div>
                             </div>
