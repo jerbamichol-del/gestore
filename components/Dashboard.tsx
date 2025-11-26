@@ -333,7 +333,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
                             {recurringCountInPeriod > 0 && (
                                 <div className="absolute right-0 top-1/2 -translate-y-1/2">
                                      <span className="w-8 h-8 flex items-center justify-center text-xs font-bold text-slate-900 bg-amber-100 border border-amber-400 rounded-lg shadow-sm" title="Spese programmate in arrivo">
-                                        P{recurringCountInPeriod}
+                                        {recurringCountInPeriod}P
                                     </span>
                                 </div>
                             )}
