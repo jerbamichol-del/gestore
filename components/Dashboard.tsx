@@ -511,7 +511,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
                     </ResponsiveContainer>
                     {activeIndex === null && (
                         <div className="absolute inset-0 flex flex-col justify-center items-center pointer-events-none">
-                            <span className="text-slate-500 text-sm">Totale</span>
+                            <span className="text-slate-800 text-base font-bold">Totale</span>
                             <span className="text-2xl font-extrabold text-slate-800 mt-1">
                                 {formatCurrency(totalExpenses)}
                             </span>
