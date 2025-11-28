@@ -1,7 +1,7 @@
 importScripts('https://cdn.jsdelivr.net/npm/idb@8/build/iife/index-min.js');
 
 // CAMBIA QUESTO NUMERO per forzare l'aggiornamento immediato
-const CACHE_NAME = 'expense-manager-github-v40';
+const CACHE_NAME = 'expense-manager-github-v41';
 
 const urlsToCache = [
   './',
