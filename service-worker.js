@@ -1,5 +1,5 @@
 // --- CONFIGURAZIONE ---
-const CACHE_NAME = 'expense-manager-v47-nocors'; // Nuova versione
+const CACHE_NAME = 'expense-manager-v48-final-fix'; // Versione incrementata
 const DB_NAME = 'expense-manager-db';
 const STORE_NAME = 'offline-images';
 const DB_VERSION = 1;
@@ -10,7 +10,7 @@ const urlsToCache = [
   './manifest.json',
   './icon-192.svg',
   './icon-512.svg',
-  // RIMOSSO Tailwind per evitare errori CORS
+  // RIMOSSO Tailwind per evitare il blocco CORS che impedisce l'aggiornamento
   'https://esm.sh/react@18.3.1',
   'https://esm.sh/react-dom@18.3.1',
   'https://esm.sh/react-dom@18.3.1/client',
@@ -24,7 +24,7 @@ self.addEventListener('install', event => {
   
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
-      // Usiamo Promise.allSettled per ignorare errori su file esterni (come Tailwind se fosse rimasto)
+      // Usiamo Promise.allSettled per non bloccare tutto se un file fallisce
       return Promise.allSettled(urlsToCache.map(url => 
         cache.add(url).catch(err => console.warn('Skipping cache for:', url))
       ));
@@ -64,7 +64,7 @@ function saveToIndexedDB(data) {
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // 1. SHARE TARGET (POST) - Solo se interno all'app
+  // 1. SHARE TARGET (POST) - Solo per richieste interne (es. dalla galleria)
   if (event.request.method === 'POST' && url.origin === self.location.origin) {
     event.respondWith(
       (async () => {
@@ -101,10 +101,10 @@ self.addEventListener('fetch', event => {
       event.respondWith(
         caches.match(event.request).then(response => {
           return response || fetch(event.request).then(netResponse => {
-            // Cachiamo solo se è HTTP/HTTPS e NON è un CDN che dà problemi CORS
+            // Cachiamo solo se è HTTP/HTTPS e NON è Tailwind (che blocca)
             if(netResponse && netResponse.status === 200 && 
                event.request.url.startsWith('http') && 
-               !url.href.includes('cdn.tailwindcss.com')) { // Protezione extra
+               !url.href.includes('cdn.tailwindcss.com')) { 
                
                const clone = netResponse.clone();
                caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
