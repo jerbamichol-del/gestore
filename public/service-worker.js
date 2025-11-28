@@ -1,5 +1,5 @@
 // --- CONFIGURAZIONE ---
-const CACHE_NAME = 'expense-manager-v46-final'; // Nuova versione
+const CACHE_NAME = 'expense-manager-v47-nocors'; // Nuova versione
 const DB_NAME = 'expense-manager-db';
 const STORE_NAME = 'offline-images';
 const DB_VERSION = 1;
@@ -10,7 +10,7 @@ const urlsToCache = [
   './manifest.json',
   './icon-192.svg',
   './icon-512.svg',
-  'https://cdn.tailwindcss.com',
+  // RIMOSSO Tailwind per evitare errori CORS
   'https://esm.sh/react@18.3.1',
   'https://esm.sh/react-dom@18.3.1',
   'https://esm.sh/react-dom@18.3.1/client',
@@ -24,7 +24,10 @@ self.addEventListener('install', event => {
   self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
-      return Promise.allSettled(urlsToCache.map(url => cache.add(url).catch(console.warn)));
+      // Usiamo Promise.allSettled per ignorare errori su file esterni (come Tailwind se fosse rimasto)
+      return Promise.allSettled(urlsToCache.map(url => 
+        cache.add(url).catch(err => console.warn('Skipping cache for:', url))
+      ));
     })
   );
 });
@@ -57,20 +60,17 @@ function saveToIndexedDB(data) {
   });
 }
 
-// --- FETCH (LA CORREZIONE È QUI) ---
+// --- FETCH ---
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // 1. GESTIONE SHARE TARGET (POST)
-  // Intercettiamo SOLO se è una POST E l'URL è interno alla nostra app (stessa origine)
-  // Questo esclude le chiamate verso script.google.com!
+  // 1. SHARE TARGET (POST) - Solo se interno all'app
   if (event.request.method === 'POST' && url.origin === self.location.origin) {
     event.respondWith(
       (async () => {
         try {
           const formData = await event.request.formData();
           const file = formData.get('screenshot');
-
           if (file) {
             const buffer = await file.arrayBuffer();
             let binary = '';
@@ -86,11 +86,9 @@ self.addEventListener('fetch', event => {
               mimeType: file.type || 'image/png',
               timestamp: Date.now()
             });
-            console.log('SW: Share salvato!');
           }
           return Response.redirect('./?shared=true', 303);
         } catch (e) {
-          console.error('SW Share Error:', e);
           return Response.redirect('./', 303);
         }
       })()
@@ -98,16 +96,15 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // 2. GESTIONE CACHE STANDARD
-  // Ignoriamo richieste non-GET o verso API esterne dinamiche (come google script)
+  // 2. CACHE STANDARD
   if (event.request.method === 'GET') {
       event.respondWith(
         caches.match(event.request).then(response => {
           return response || fetch(event.request).then(netResponse => {
-            // Cachiamo solo risorse statiche HTTP/HTTPS, evitiamo chiamate API
+            // Cachiamo solo se è HTTP/HTTPS e NON è un CDN che dà problemi CORS
             if(netResponse && netResponse.status === 200 && 
                event.request.url.startsWith('http') && 
-               !url.href.includes('script.google.com')) { 
+               !url.href.includes('cdn.tailwindcss.com')) { // Protezione extra
                
                const clone = netResponse.clone();
                caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
