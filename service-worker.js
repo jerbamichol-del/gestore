@@ -1,15 +1,14 @@
 importScripts('https://cdn.jsdelivr.net/npm/idb@8/build/iife/index-min.js');
 
-// Aumenta questo numero ogni volta che modifichi il SW per forzare l'aggiornamento
-const CACHE_NAME = 'expense-manager-v36-github-fix';
+// CAMBIA QUESTO NUMERO per forzare l'aggiornamento immediato
+const CACHE_NAME = 'expense-manager-github-v40';
 
 const urlsToCache = [
-  './',                // Usa ./ invece di / per compatibilità con sottocartelle GitHub
+  './',
   './index.html',
   './manifest.json',
   './icon-192.svg',
   './icon-512.svg',
-  // RIMOSSO '/share-target/' -> Non esiste su GitHub Pages!
   'https://cdn.tailwindcss.com',
   'https://esm.sh/react@18.3.1',
   'https://esm.sh/react-dom@18.3.1',
@@ -46,16 +45,15 @@ const fileToBase64 = (file) => {
 
 // --- Install ---
 self.addEventListener('install', event => {
+  self.skipWaiting(); // Forza l'attivazione immediata
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
-        console.log('Service Worker: Caching files');
-        // Usiamo map per cachare i file singolarmente. Se uno fallisce, gli altri continuano.
+        // Usiamo Promise.allSettled: se un'icona manca, non rompe tutto il worker
         return Promise.allSettled(
-            urlsToCache.map(url => cache.add(url).catch(err => console.warn(`Failed to cache ${url}:`, err)))
+            urlsToCache.map(url => cache.add(url).catch(e => console.warn(e)))
         );
       })
-      .then(() => self.skipWaiting())
   );
 });
 
@@ -66,23 +64,20 @@ self.addEventListener('activate', event => {
       return Promise.all(
         cacheNames.map(cacheName => {
           if (cacheName !== CACHE_NAME) {
-            console.log('Service Worker: Clearing old cache');
             return caches.delete(cacheName);
           }
         })
       );
-    }).then(() => self.clients.claim())
+    }).then(() => self.clients.claim()) // Prende controllo immediato della pagina
   );
 });
 
-// --- Fetch (Il cuore del problema) ---
+// --- FETCH: LA SOLUZIONE DEFINITIVA ---
 self.addEventListener('fetch', event => {
-  const url = new URL(event.request.url);
-
-  // 1. GESTIONE CONDIVISIONE (POST)
-  // Intercetta QUALSIASI richiesta POST che contiene "share-target"
-  if (event.request.method === 'POST' && url.href.includes('share-target')) {
-    
+  
+  // 1. Intercetta TUTTE le POST. 
+  // Su GitHub Pages statico, le POST sono solo errori (405) o Share Target.
+  if (event.request.method === 'POST') {
     event.respondWith(
       (async () => {
         try {
@@ -98,43 +93,36 @@ self.addEventListener('fetch', event => {
                 mimeType: file.type || 'image/png',
                 timestamp: Date.now()
              });
-             console.log('Immagine salvata dal SW!');
+             console.log('SW: Immagine salvata correttamente');
           }
           
-          // IMPORTANTE: Rispondi con un Redirect 303 alla Home
-          // Questo blocca la richiesta verso GitHub Pages
+          // Redirect alla home con parametro
+          // NOTA: Usiamo Response.redirect che è supportato dai browser moderni
           return Response.redirect('./?shared=true', 303);
           
         } catch (e) {
-          console.error('Errore nel salvataggio screenshot:', e);
-          // Anche in caso di errore, redirigi alla home per non mostrare errori all'utente
+          console.error('SW Error:', e);
+          // In caso di errore, torna alla home pulita
           return Response.redirect('./', 303);
         }
       })()
     );
-    return; // Stop qui, non andare in rete
+    return;
   }
 
-  // 2. GESTIONE CACHE NORMALE (GET)
-  if (event.request.method === 'GET') {
-      event.respondWith(
-        caches.match(event.request).then(cachedResponse => {
-            return cachedResponse || fetch(event.request).then(networkResponse => {
-                // Cache dinamica solo per richieste http valide
-                if(networkResponse && networkResponse.status === 200 && url.protocol.startsWith('http')) {
-                    const responseToCache = networkResponse.clone();
-                    caches.open(CACHE_NAME).then(cache => {
-                        cache.put(event.request, responseToCache);
-                    });
-                }
-                return networkResponse;
-            }).catch(() => {
-                // Fallback offline (opzionale, se vuoi mostrare index.html quando sei offline su altre pagine)
-                if (event.request.mode === 'navigate') {
-                    return caches.match('./index.html');
-                }
-            });
-        })
-      );
-  }
+  // 2. Gestione Cache standard per le GET
+  event.respondWith(
+    caches.match(event.request).then(cachedResponse => {
+        // Strategia: Stale-while-revalidate (mostra cache, aggiorna in background)
+        // O Cache-First classica (qui uso Cache-first + Network fallback)
+        return cachedResponse || fetch(event.request).then(networkResponse => {
+            // Cache solo se successo e http/https
+            if(networkResponse && networkResponse.status === 200 && event.request.url.startsWith('http')) {
+                const responseToCache = networkResponse.clone();
+                caches.open(CACHE_NAME).then(cache => cache.put(event.request, responseToCache));
+            }
+            return networkResponse;
+        });
+    })
+  );
 });
