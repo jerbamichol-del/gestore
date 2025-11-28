@@ -701,6 +701,38 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   };
 
   // ================== Immagini / AI ==================
+  
+  // --- NUOVO: Handler per file condivisi (Share Target) ---
+  const handleSharedFile = async (file: File) => {
+    try {
+        showToast({ message: 'Elaborazione immagine condivisa...', type: 'info' });
+        const { base64: base64Image, mimeType } = await processImageFile(file);
+
+        const newImage: OfflineImage = {
+            id: crypto.randomUUID(),
+            base64Image,
+            mimeType,
+        };
+
+        if (isOnline) {
+            // Se online, imposta come immagine corrente per analisi (apre il modale di conferma)
+            setImageForAnalysis(newImage);
+        } else {
+            // Se offline, salva direttamente in coda
+            await addImageToQueue(newImage);
+            refreshPendingImages();
+            showToast({ message: 'Immagine salvata in coda (offline).', type: 'info' });
+        }
+    } catch (error) {
+        console.error('Errore gestione file condiviso:', error);
+        showToast({
+            message: "Errore durante l'elaborazione del file condiviso.",
+            type: 'error',
+        });
+    }
+  };
+  // --------------------------------------------------------
+
   const handleImagePick = async (source: 'camera' | 'gallery') => {
     setIsImageSourceModalOpen(false);
     sessionStorage.setItem('preventAutoLock', 'true');
@@ -854,6 +886,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
             recurringExpenses={recurringExpenses}
             onNavigateToRecurring={() => setIsRecurringScreenOpen(true)}
             onNavigateToHistory={() => setIsHistoryScreenOpen(true)}
+            onReceiveSharedFile={handleSharedFile} // <--- Passiamo il gestore qui
           />
           <PendingImages
             images={pendingImages}
