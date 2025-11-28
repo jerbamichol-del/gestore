@@ -1,10 +1,10 @@
-
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Sector } from 'recharts';
 import { Expense } from '../types';
 import { formatCurrency } from './icons/formatters';
 import { getCategoryStyle } from '../utils/categoryStyles';
 import { useTapBridge } from '../hooks/useTapBridge';
+import { useSharedIntent } from '../hooks/useSharedIntent'; // <--- NUOVO IMPORT
 import { CloudArrowUpIcon } from './icons/CloudArrowUpIcon';
 // Import components from HistoryFilterCard
 import { 
@@ -66,6 +66,7 @@ interface DashboardProps {
   onNavigateToRecurring: () => void;
   onNavigateToHistory: () => void;
   onImportFile: (file: File) => void;
+  onReceiveSharedFile: (file: File) => void; // <--- NUOVA PROP per gestire lo screenshot
 }
 
 const parseLocalYYYYMMDD = (s: string): Date => {
@@ -104,7 +105,21 @@ const calculateNextDueDate = (template: Expense, fromDate: Date): Date | null =>
   return nextDate;
 };
 
-const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNavigateToRecurring, onNavigateToHistory, onImportFile }) => {
+const Dashboard: React.FC<DashboardProps> = ({ 
+    expenses, 
+    recurringExpenses, 
+    onNavigateToRecurring, 
+    onNavigateToHistory, 
+    onImportFile,
+    onReceiveSharedFile // <--- Destructuring della nuova prop
+}) => {
+  
+  // --- INTEGRAZIONE SCREENSHOT CONDIVISI ---
+  // Questo hook ascolta automaticamente ?shared=true, recupera il file dal DB
+  // e chiama la funzione passata (onReceiveSharedFile)
+  useSharedIntent(onReceiveSharedFile);
+  // -----------------------------------------
+
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   
   // View State for Filter Swiper (0: Quick, 1: Period, 2: Custom)
