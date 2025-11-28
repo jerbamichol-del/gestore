@@ -138,15 +138,15 @@ const getIntervalLabel = (recurrence?: 'daily' | 'weekly' | 'monthly' | 'yearly'
 const daysOfWeekForPicker = [ { label: 'Lun', value: 1 }, { label: 'Mar', value: 2 }, { label: 'Mer', value: 3 }, { label: 'Gio', value: 4 }, { label: 'Ven', value: 5 }, { label: 'Sab', value: 6 }, { label: 'Dom', value: 0 }];
 
 const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, initialData, prefilledData, accounts, isForRecurringTemplate = false }) => {
-  // --- PROTEZIONE CRASH: array sicuro ---
-  // Se 'accounts' arriva undefined dal padre, usiamo un array vuoto per evitare crash
+  // --- FIX 1: Protezione contro array non definito ---
+  // Questo impedisce il crash "Cannot read properties of undefined (reading 'length')"
   const safeAccounts = accounts || [];
-  // -------------------------------------
+  // --------------------------------------------------
 
   const [isAnimating, setIsAnimating] = useState(false);
   const [isClosableByBackdrop, setIsClosableByBackdrop] = useState(false);
   
-  // FIX: Inizializza con i tipi corretti per evitare perdita dati
+  // FIX 2: Inizializza correttamente anche tags e receipts
   const [formData, setFormData] = useState<Partial<Omit<Expense, 'id' | 'amount'>> & { amount?: number | string }>({});
   
   const [error, setError] = useState<string | null>(null);
@@ -185,7 +185,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
   }, [formData.date]);
 
   const resetForm = useCallback(() => {
-    // Usa safeAccounts invece di accounts per evitare errori di length su undefined
+    // Usa safeAccounts per evitare errori se accounts è undefined
     const defaultAccountId = safeAccounts.length > 0 ? safeAccounts[0].id : '';
     setFormData({
       description: '',
@@ -196,12 +196,12 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
       subcategory: '',
       accountId: defaultAccountId,
       frequency: 'single',
-      tags: [],     // Init array vuoto per evitare undefined
-      receipts: [], // Init array vuoto per evitare undefined
+      tags: [],     // FIX 3: Inizializza array vuoto
+      receipts: [], // FIX 3: Inizializza array vuoto
     });
     setError(null);
     setOriginalExpenseState(null);
-  }, [safeAccounts]);
+  }, [safeAccounts]); // Dipendenza aggiornata a safeAccounts
   
   const forceClose = () => {
     setIsAnimating(false);
@@ -233,9 +233,8 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
         setFormData(dataWithTime);
         setOriginalExpenseState(dataWithTime);
       } else if (prefilledData) {
-        // Usa safeAccounts
+        // Usa safeAccounts anche qui
         const defaultAccountId = safeAccounts.length > 0 ? safeAccounts[0].id : '';
-        // FIX: Carica dati AI o array vuoti se mancano
         setFormData({
           description: prefilledData.description || '',
           amount: prefilledData.amount || '',
@@ -245,8 +244,9 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
           subcategory: prefilledData.subcategory || '',
           accountId: prefilledData.accountId || defaultAccountId,
           frequency: 'single',
-          tags: prefilledData.tags || [],         // Carry over tags
-          receipts: prefilledData.receipts || [], // Carry over receipts (image)
+          // FIX 4: Carica i dati dell'AI, se mancano usa array vuoti
+          tags: prefilledData.tags || [],
+          receipts: prefilledData.receipts || [],
         });
         setOriginalExpenseState(null);
       } else {
@@ -444,7 +444,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
       description: formData.description || '',
       category: formData.category || '',
       subcategory: formData.subcategory || undefined,
-      // FIX 3: Salva array vuoti se undefined per sicurezza
+      // FIX 5: Assicurati che vengano salvati anche questi campi
       tags: formData.tags || [],
       receipts: formData.receipts || [],
     };
@@ -484,7 +484,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
     ? CATEGORIES[formData.category].map(sub => ({ value: sub, label: sub }))
     : [];
     
-  // Usa safeAccounts invece di accounts per il map
+  // Usa safeAccounts qui per la mappa
   const accountOptions = safeAccounts.map(acc => ({
       value: acc.id,
       label: acc.name,
