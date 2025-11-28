@@ -1,14 +1,14 @@
+// Importa la libreria idb
 importScripts('https://cdn.jsdelivr.net/npm/idb@8/build/iife/index-min.js');
 
-// CAMBIA QUESTO NUMERO per forzare l'aggiornamento immediato
-const CACHE_NAME = 'expense-manager-github-v41';
-
+const CACHE_NAME = 'expense-manager-cache-v41-fix'; // Ho aggiornato la versione
 const urlsToCache = [
-  './',
+  './',                // IMPORTANTE: Punto davanti allo slash
   './index.html',
   './manifest.json',
   './icon-192.svg',
   './icon-512.svg',
+  // Dipendenze esterne rimangono uguali
   'https://cdn.tailwindcss.com',
   'https://esm.sh/react@18.3.1',
   'https://esm.sh/react-dom@18.3.1',
@@ -45,13 +45,13 @@ const fileToBase64 = (file) => {
 
 // --- Install ---
 self.addEventListener('install', event => {
-  self.skipWaiting(); // Forza l'attivazione immediata
+  self.skipWaiting(); // Forza attivazione immediata
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
-        // Usiamo Promise.allSettled: se un'icona manca, non rompe tutto il worker
+        // Usa map con catch per evitare che un file mancante blocchi tutto
         return Promise.allSettled(
-            urlsToCache.map(url => cache.add(url).catch(e => console.warn(e)))
+          urlsToCache.map(url => cache.add(url).catch(err => console.warn('Cache error:', url, err)))
         );
       })
   );
@@ -68,15 +68,14 @@ self.addEventListener('activate', event => {
           }
         })
       );
-    }).then(() => self.clients.claim()) // Prende controllo immediato della pagina
+    }).then(() => self.clients.claim())
   );
 });
 
-// --- FETCH: LA SOLUZIONE DEFINITIVA ---
+// --- Fetch (Cuore del problema 405) ---
 self.addEventListener('fetch', event => {
   
-  // 1. Intercetta TUTTE le POST. 
-  // Su GitHub Pages statico, le POST sono solo errori (405) o Share Target.
+  // 1. Intercetta TUTTE le richieste POST
   if (event.request.method === 'POST') {
     event.respondWith(
       (async () => {
@@ -93,33 +92,37 @@ self.addEventListener('fetch', event => {
                 mimeType: file.type || 'image/png',
                 timestamp: Date.now()
              });
-             console.log('SW: Immagine salvata correttamente');
           }
           
-          // Redirect alla home con parametro
-          // NOTA: Usiamo Response.redirect che è supportato dai browser moderni
-          return Response.redirect('./?shared=true', 303);
+          // CRUCIALE PER GITHUB PAGES:
+          // Costruisce l'URL di redirect relativo alla posizione del SW.
+          // Invece di '/?shared=true' (che va alla root del dominio),
+          // usa la location corrente del SW per restare nella cartella /gestore/
+          const targetUrl = new URL('./?shared=true', self.location.href).href;
+          
+          return Response.redirect(targetUrl, 303);
           
         } catch (e) {
-          console.error('SW Error:', e);
-          // In caso di errore, torna alla home pulita
-          return Response.redirect('./', 303);
+          console.error('SW Post Error:', e);
+          // Fallback alla home in caso di errore
+          const homeUrl = new URL('./', self.location.href).href;
+          return Response.redirect(homeUrl, 303);
         }
       })()
     );
     return;
   }
 
-  // 2. Gestione Cache standard per le GET
+  // 2. Gestione Cache per le GET
   event.respondWith(
     caches.match(event.request).then(cachedResponse => {
-        // Strategia: Stale-while-revalidate (mostra cache, aggiorna in background)
-        // O Cache-First classica (qui uso Cache-first + Network fallback)
         return cachedResponse || fetch(event.request).then(networkResponse => {
-            // Cache solo se successo e http/https
+            // Cacha solo richieste http(s) valide
             if(networkResponse && networkResponse.status === 200 && event.request.url.startsWith('http')) {
                 const responseToCache = networkResponse.clone();
-                caches.open(CACHE_NAME).then(cache => cache.put(event.request, responseToCache));
+                caches.open(CACHE_NAME).then(cache => {
+                    cache.put(event.request, responseToCache);
+                });
             }
             return networkResponse;
         });
