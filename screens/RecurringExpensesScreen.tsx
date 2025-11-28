@@ -314,6 +314,9 @@ const RecurringExpensesScreen: React.FC<RecurringExpensesScreenProps> = ({ recur
   const isSelectionMode = selectedIds.size > 0;
 
   const activeRecurringExpenses = useMemo(() => {
+    // Check if expenses is defined before using it
+    const safeExpenses = expenses || [];
+    
     return recurringExpenses.filter(template => {
         if (template.frequency !== 'recurring') {
             return false;
@@ -325,7 +328,7 @@ const RecurringExpensesScreen: React.FC<RecurringExpensesScreenProps> = ({ recur
 
         if (template.recurrenceEndType === 'count') {
             if (!template.recurrenceCount || template.recurrenceCount <= 0) return true; 
-            const generatedCount = expenses.filter(e => e.recurringExpenseId === template.id).length;
+            const generatedCount = safeExpenses.filter(e => e.recurringExpenseId === template.id).length;
             return generatedCount < template.recurrenceCount;
         }
 
