@@ -1,8 +1,7 @@
 // Importa la libreria idb per un accesso più semplice a IndexedDB
 importScripts('https://cdn.jsdelivr.net/npm/idb@8/build/iife/index-min.js');
 
-const CACHE_NAME = 'expense-manager-cache-v33';
-// Aggiunta la pagina di share-target al caching
+const CACHE_NAME = 'expense-manager-cache-v34'; // Incrementato versione per forzare aggiornamento
 const urlsToCache = [
   '/',
   '/index.html',
@@ -22,11 +21,12 @@ const urlsToCache = [
   'https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs'
 ];
 
-// --- Funzioni Helper per IndexedDB (replicate da db.ts per l'uso nel Service Worker) ---
+// --- Configurazione IndexedDB ---
 const DB_NAME = 'expense-manager-db';
 const STORE_NAME = 'offline-images';
 const DB_VERSION = 1;
 
+// Helper per aprire il DB
 const getDb = () => {
   return idb.openDB(DB_NAME, DB_VERSION, {
     upgrade(db) {
@@ -37,6 +37,7 @@ const getDb = () => {
   });
 };
 
+// Helper per convertire file in Base64
 const fileToBase64 = (file) => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -74,57 +75,69 @@ self.addEventListener('activate', event => {
   );
 });
 
+// Fetch event (Gestione Richieste)
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // --- Gestione Share Target ---
-  if (event.request.method === 'POST' && url.pathname === '/share-target/') {
-    event.respondWith(Response.redirect('/')); // Rispondi subito con un redirect
+  // --- Gestione Share Target (CORRETTA) ---
+  // Verifica se è una POST verso lo share-target
+  if (event.request.method === 'POST' && url.pathname.includes('/share-target/')) {
     
-    event.waitUntil(async function() {
-      try {
-        const formData = await event.request.formData();
-        const file = formData.get('screenshot');
-        
-        if (!file || !file.type.startsWith('image/')) {
-            console.warn('Share target: No valid image file received.');
-            return;
-        }
+    // Usiamo respondWith con una funzione async per gestire il salvataggio PRIMA del redirect
+    event.respondWith(
+      (async () => {
+        try {
+          const formData = await event.request.formData();
+          const file = formData.get('screenshot');
 
-        const base64Image = await fileToBase64(file);
-        
-        const db = await getDb();
-        await db.add(STORE_NAME, {
-            id: crypto.randomUUID(),
+          if (!file || !file.type.startsWith('image/')) {
+             console.warn('Share target: No valid image file received.');
+             // Redirect comunque alla home anche se fallisce, per non lasciare l'utente su pagina bianca
+             return Response.redirect('/', 303);
+          }
+
+          // Converti e Salva nel DB
+          const base64Image = await fileToBase64(file);
+          const db = await getDb();
+          
+          // Usa crypto.randomUUID se disponibile, altrimenti fallback su timestamp
+          const id = self.crypto && self.crypto.randomUUID ? self.crypto.randomUUID() : Date.now().toString();
+
+          await db.add(STORE_NAME, {
+            id: id,
             base64Image,
             mimeType: file.type,
-        });
-        
-        console.log('Image from share target saved to IndexedDB.');
+            timestamp: Date.now() // Utile per ordinare
+          });
 
-        // Cerca un client (tab/finestra) esistente dell'app e mettilo a fuoco
-        const clients = await self.clients.matchAll({
-            type: 'window',
-            includeUncontrolled: true,
-        });
+          console.log('Image from share target saved to IndexedDB successfully.');
 
-        if (clients.length > 0) {
-            await clients[0].focus();
-        } else {
-            self.clients.openWindow('/');
-        }
-      } catch (error) {
+          // Notifica ai client aperti (opzionale, ma utile per refresh istantaneo)
+          const clients = await self.clients.matchAll({ type: 'window' });
+          for (const client of clients) {
+            client.postMessage({ type: 'NEW_SCREENSHOT_SHARED' });
+          }
+
+          // FONDAMENTALE: Redirect 303 (See Other) alla home page
+          // Aggiungiamo un parametro query per dire al frontend che c'è un file condiviso
+          return Response.redirect('/?shared=true', 303);
+
+        } catch (error) {
           console.error('Error handling share target:', error);
-      }
-    }());
-    return;
+          // In caso di errore critico, redirect comunque alla home
+          return Response.redirect('/', 303);
+        }
+      })()
+    );
+    return; // Stop execution here for POST requests
   }
   
+  // Ignora altre richieste non-GET (eccetto la POST gestita sopra)
   if (event.request.method !== 'GET') {
     return;
   }
 
-  // Strategy: Network falling back to cache for navigation
+  // Strategy: Network falling back to cache for navigation (HTML)
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request)
@@ -140,12 +153,13 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Strategy: Cache first for all other assets
+  // Strategy: Cache first for all other assets (CSS, JS, Images)
   event.respondWith(
     caches.match(event.request)
       .then(cachedResponse => {
         return cachedResponse || fetch(event.request).then(
           networkResponse => {
+            // Check for valid response
             if (!networkResponse || networkResponse.status !== 200 || networkResponse.type === 'opaque') {
               return networkResponse;
             }
