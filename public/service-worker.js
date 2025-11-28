@@ -1,5 +1,5 @@
 // --- CONFIGURAZIONE ---
-const CACHE_NAME = 'expense-manager-v44-vanilla';
+const CACHE_NAME = 'expense-manager-v46-final'; // Nuova versione
 const DB_NAME = 'expense-manager-db';
 const STORE_NAME = 'offline-images';
 const DB_VERSION = 1;
@@ -24,8 +24,7 @@ self.addEventListener('install', event => {
   self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
-      // Ignoriamo errori su singoli file per non bloccare tutto
-      return Promise.allSettled(urlsToCache.map(url => cache.add(url).catch(e => console.warn(e))));
+      return Promise.allSettled(urlsToCache.map(url => cache.add(url).catch(console.warn)));
     })
   );
 });
@@ -39,39 +38,33 @@ self.addEventListener('activate', event => {
   );
 });
 
-// --- HELPER: Salvataggio DB senza librerie esterne ---
+// --- HELPER DB ---
 function saveToIndexedDB(data) {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-    request.onupgradeneeded = (event) => {
-      const db = event.target.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME, { keyPath: 'id' });
-      }
+    request.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME, { keyPath: 'id' });
     };
-
-    request.onsuccess = (event) => {
-      const db = event.target.result;
+    request.onsuccess = (e) => {
+      const db = e.target.result;
       const tx = db.transaction(STORE_NAME, 'readwrite');
-      const store = tx.objectStore(STORE_NAME);
-      store.add(data);
-
-      tx.oncomplete = () => {
-        db.close();
-        resolve();
-      };
+      tx.objectStore(STORE_NAME).add(data);
+      tx.oncomplete = () => { db.close(); resolve(); };
       tx.onerror = () => reject(tx.error);
     };
-
     request.onerror = () => reject(request.error);
   });
 }
 
-// --- FETCH: GESTIONE SHARE TARGET ---
+// --- FETCH (LA CORREZIONE È QUI) ---
 self.addEventListener('fetch', event => {
-  // 1. Intercetta TUTTE le POST (Share Target)
-  if (event.request.method === 'POST') {
+  const url = new URL(event.request.url);
+
+  // 1. GESTIONE SHARE TARGET (POST)
+  // Intercettiamo SOLO se è una POST E l'URL è interno alla nostra app (stessa origine)
+  // Questo esclude le chiamate verso script.google.com!
+  if (event.request.method === 'POST' && url.origin === self.location.origin) {
     event.respondWith(
       (async () => {
         try {
@@ -79,7 +72,6 @@ self.addEventListener('fetch', event => {
           const file = formData.get('screenshot');
 
           if (file) {
-            // Converti Blob in Base64
             const buffer = await file.arrayBuffer();
             let binary = '';
             const bytes = new Uint8Array(buffer);
@@ -88,18 +80,17 @@ self.addEventListener('fetch', event => {
             }
             const base64Image = btoa(binary);
 
-            // Salva nel DB usando la funzione manuale
             await saveToIndexedDB({
               id: crypto.randomUUID(),
               base64Image,
               mimeType: file.type || 'image/png',
               timestamp: Date.now()
             });
-            console.log('SW: Immagine salvata!');
+            console.log('SW: Share salvato!');
           }
           return Response.redirect('./?shared=true', 303);
         } catch (e) {
-          console.error('SW Error:', e);
+          console.error('SW Share Error:', e);
           return Response.redirect('./', 303);
         }
       })()
@@ -107,16 +98,23 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // 2. Gestione Cache standard
-  event.respondWith(
-    caches.match(event.request).then(response => {
-      return response || fetch(event.request).then(netResponse => {
-        if(netResponse && netResponse.status === 200 && event.request.url.startsWith('http')) {
-           const clone = netResponse.clone();
-           caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
-        }
-        return netResponse;
-      });
-    })
-  );
+  // 2. GESTIONE CACHE STANDARD
+  // Ignoriamo richieste non-GET o verso API esterne dinamiche (come google script)
+  if (event.request.method === 'GET') {
+      event.respondWith(
+        caches.match(event.request).then(response => {
+          return response || fetch(event.request).then(netResponse => {
+            // Cachiamo solo risorse statiche HTTP/HTTPS, evitiamo chiamate API
+            if(netResponse && netResponse.status === 200 && 
+               event.request.url.startsWith('http') && 
+               !url.href.includes('script.google.com')) { 
+               
+               const clone = netResponse.clone();
+               caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+            }
+            return netResponse;
+          });
+        })
+      );
+  }
 });
