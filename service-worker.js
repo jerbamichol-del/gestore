@@ -1,16 +1,14 @@
-// Importa la libreria idb per un accesso più semplice a IndexedDB
 importScripts('https://cdn.jsdelivr.net/npm/idb@8/build/iife/index-min.js');
 
-const CACHE_NAME = 'expense-manager-cache-v34'; // Incrementato versione per forzare aggiornamento
+const CACHE_NAME = 'expense-manager-cache-v35'; // Ho alzato la versione
 const urlsToCache = [
   '/',
   '/index.html',
-  '/index.tsx',
+  // '/index.tsx', // RIMOSSO: I browser non leggono TSX, leggono il JS compilato (es. main.js o assets/...)
   '/manifest.json',
   '/icon-192.svg',
   '/icon-512.svg',
-  '/share-target/',
-  // Key CDN dependencies
+  // RIMOSSO '/share-target/' -> CAUSAVA L'ERRORE DI INSTALLAZIONE!
   'https://cdn.tailwindcss.com',
   'https://esm.sh/react@18.3.1',
   'https://esm.sh/react-dom@18.3.1',
@@ -21,12 +19,13 @@ const urlsToCache = [
   'https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs'
 ];
 
-// --- Configurazione IndexedDB ---
+// ... (Il resto del codice DB_NAME, getDb, fileToBase64 rimane identico a prima) ...
+// Copia qui le funzioni helper DB_NAME, STORE_NAME, getDb, fileToBase64 che ti ho dato prima
+
 const DB_NAME = 'expense-manager-db';
 const STORE_NAME = 'offline-images';
 const DB_VERSION = 1;
 
-// Helper per aprire il DB
 const getDb = () => {
   return idb.openDB(DB_NAME, DB_VERSION, {
     upgrade(db) {
@@ -37,7 +36,6 @@ const getDb = () => {
   });
 };
 
-// Helper per convertire file in Base64
 const fileToBase64 = (file) => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -47,26 +45,28 @@ const fileToBase64 = (file) => {
   });
 };
 
-// Install event
+// --- Install ---
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
-        console.log('Opened cache, caching app shell');
-        return cache.addAll(urlsToCache);
+        console.log('Opened cache');
+        // Usiamo Promise.allSettled o catch per evitare che un solo file mancante rompa tutto il SW
+        return cache.addAll(urlsToCache).catch(err => {
+            console.error("Errore caching file:", err);
+        });
       })
       .then(() => self.skipWaiting())
   );
 });
 
-// Activate event
+// --- Activate ---
 self.addEventListener('activate', event => {
-  const cacheWhitelist = [CACHE_NAME];
   event.waitUntil(
     caches.keys().then(cacheNames => {
       return Promise.all(
         cacheNames.map(cacheName => {
-          if (cacheWhitelist.indexOf(cacheName) === -1) {
+          if (cacheName !== CACHE_NAME) {
             return caches.delete(cacheName);
           }
         })
@@ -75,101 +75,53 @@ self.addEventListener('activate', event => {
   );
 });
 
-// Fetch event (Gestione Richieste)
+// --- Fetch ---
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // --- Gestione Share Target (CORRETTA) ---
-  // Verifica se è una POST verso lo share-target
+  // 1. Intercettiamo la POST di condivisione
   if (event.request.method === 'POST' && url.pathname.includes('/share-target/')) {
-    
-    // Usiamo respondWith con una funzione async per gestire il salvataggio PRIMA del redirect
     event.respondWith(
       (async () => {
         try {
           const formData = await event.request.formData();
-          const file = formData.get('screenshot');
+          const file = formData.get('screenshot'); // Deve combaciare col name nel manifest
 
-          if (!file || !file.type.startsWith('image/')) {
-             console.warn('Share target: No valid image file received.');
-             // Redirect comunque alla home anche se fallisce, per non lasciare l'utente su pagina bianca
-             return Response.redirect('/', 303);
+          if (file) {
+             const base64Image = await fileToBase64(file);
+             const db = await getDb();
+             await db.add(STORE_NAME, {
+                id: crypto.randomUUID(),
+                base64Image,
+                mimeType: file.type || 'image/png',
+                timestamp: Date.now()
+             });
           }
-
-          // Converti e Salva nel DB
-          const base64Image = await fileToBase64(file);
-          const db = await getDb();
-          
-          // Usa crypto.randomUUID se disponibile, altrimenti fallback su timestamp
-          const id = self.crypto && self.crypto.randomUUID ? self.crypto.randomUUID() : Date.now().toString();
-
-          await db.add(STORE_NAME, {
-            id: id,
-            base64Image,
-            mimeType: file.type,
-            timestamp: Date.now() // Utile per ordinare
-          });
-
-          console.log('Image from share target saved to IndexedDB successfully.');
-
-          // Notifica ai client aperti (opzionale, ma utile per refresh istantaneo)
-          const clients = await self.clients.matchAll({ type: 'window' });
-          for (const client of clients) {
-            client.postMessage({ type: 'NEW_SCREENSHOT_SHARED' });
-          }
-
-          // FONDAMENTALE: Redirect 303 (See Other) alla home page
-          // Aggiungiamo un parametro query per dire al frontend che c'è un file condiviso
+          // Redirect 303 fondamentale
           return Response.redirect('/?shared=true', 303);
-
-        } catch (error) {
-          console.error('Error handling share target:', error);
-          // In caso di errore critico, redirect comunque alla home
+        } catch (e) {
+          console.error(e);
           return Response.redirect('/', 303);
         }
       })()
     );
-    return; // Stop execution here for POST requests
-  }
-  
-  // Ignora altre richieste non-GET (eccetto la POST gestita sopra)
-  if (event.request.method !== 'GET') {
     return;
   }
 
-  // Strategy: Network falling back to cache for navigation (HTML)
-  if (event.request.mode === 'navigate') {
-    event.respondWith(
-      fetch(event.request)
-        .then(response => {
-          const responseToCache = response.clone();
-          caches.open(CACHE_NAME).then(cache => {
-            cache.put(event.request, responseToCache);
-          });
-          return response;
-        })
-        .catch(() => caches.match(event.request))
-    );
-    return;
-  }
+  // 2. Gestione normale Cache
+  if (event.request.method !== 'GET') return;
 
-  // Strategy: Cache first for all other assets (CSS, JS, Images)
   event.respondWith(
-    caches.match(event.request)
-      .then(cachedResponse => {
-        return cachedResponse || fetch(event.request).then(
-          networkResponse => {
-            // Check for valid response
-            if (!networkResponse || networkResponse.status !== 200 || networkResponse.type === 'opaque') {
-              return networkResponse;
-            }
-            const responseToCache = networkResponse.clone();
-            caches.open(CACHE_NAME).then(cache => {
-              cache.put(event.request, responseToCache);
+    caches.match(event.request).then(cachedResponse => {
+        return cachedResponse || fetch(event.request).then(networkResponse => {
+            return caches.open(CACHE_NAME).then(cache => {
+                // Cache solo richieste valide http/https (no chrome-extension)
+                if(url.protocol.startsWith('http')) {
+                    cache.put(event.request, networkResponse.clone());
+                }
+                return networkResponse;
             });
-            return networkResponse;
-          }
-        );
-      })
+        });
+    })
   );
 });
