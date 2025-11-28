@@ -1,7 +1,7 @@
 import { Expense } from '../types';
 
-// 🔴 METTI QUI l'URL del tuo Apps Script "AI"
-const AI_ENDPOINT = 'https://script.google.com/macros/s/AKfycbyZpH2rET4JNs35Ye_tewdpszsHLLRfLr6C-7qFKH_Xe1zg_vhHB8kaRyWQjAqG7-frVg/exec';
+// L'URL viene iniettato da Vite al momento della build
+const AI_ENDPOINT = process.env.APPS_SCRIPT_URL || '';
 
 type ImageResponse = {
   ok: boolean;
@@ -16,9 +16,13 @@ type VoiceResponse = {
 };
 
 async function callAiEndpoint<T>(payload: any): Promise<T> {
+  if (!AI_ENDPOINT) {
+    throw new Error("URL AI mancante. Controlla la configurazione VITE_APPS_SCRIPT_URL.");
+  }
+
   const res = await fetch(AI_ENDPOINT, {
     method: 'POST',
-    // ⚠️ niente application/json, usiamo text/plain per evitare il preflight
+    // ⚠️ text/plain è fondamentale per evitare errori CORS (preflight) con Google Apps Script
     headers: {
       'Content-Type': 'text/plain;charset=utf-8',
     },
@@ -29,30 +33,25 @@ async function callAiEndpoint<T>(payload: any): Promise<T> {
     throw new Error(`AI endpoint HTTP ${res.status}`);
   }
 
-  // Apps Script restituisce JSON puro → ok leggerlo così
+  // Google Apps Script restituisce JSON puro
   return (await res.json()) as T;
 }
 
-// Helper per convertire Blob → base64 (senza prefisso data:)
+// Helper: converte Blob in stringa base64 pura (senza "data:image/...")
 async function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onloadend = () => {
       const result = reader.result as string;
       const commaIndex = result.indexOf(',');
-      if (commaIndex === -1) {
-        resolve(result);
-      } else {
-        resolve(result.slice(commaIndex + 1));
-      }
+      resolve(commaIndex === -1 ? result : result.slice(commaIndex + 1));
     };
     reader.onerror = reject;
     reader.readAsDataURL(blob);
   });
 }
 
-// ====== IMMAGINE → SPESE ======
-
+// ====== FUNZIONE 1: IMMAGINE → SPESE ======
 export async function parseExpensesFromImage(
   base64Image: string,
   mimeType: string
@@ -71,13 +70,12 @@ export async function parseExpensesFromImage(
   return result.expenses || [];
 }
 
-// ====== AUDIO → 1 SPESA ======
-
+// ====== FUNZIONE 2: AUDIO → 1 SPESA ======
 export async function parseExpenseFromAudio(
   audioBlob: Blob
 ): Promise<Partial<Expense> | null> {
+  // Default a webm se il tipo non è specificato
   const mimeType = audioBlob.type || 'audio/webm';
-
   const audioBase64 = await blobToBase64(audioBlob);
 
   const result = await callAiEndpoint<VoiceResponse>({
