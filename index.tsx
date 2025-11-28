@@ -8,34 +8,36 @@ if (!rootElement) {
 }
 
 const root = ReactDOM.createRoot(rootElement);
+
 root.render(
-  <AuthGate />
+  <React.StrictMode>
+    <AuthGate />
+  </React.StrictMode>
 );
 
-// --- AGGIUNGI QUESTA PARTE PER ATTIVARE IL SERVICE WORKER ---
+// --- REGISTRAZIONE SERVICE WORKER ---
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    // Registra il SW che si trova nella root
-    navigator.serviceWorker.register('/service-worker.js')
+    // Usiamo './service-worker.js'.
+    // Poiché hai spostato il file in 'public/', Vite lo copierà nella stessa cartella dell'index.html finale.
+    // Il browser lo troverà a: https://jerbamichol-del.github.io/gestore/service-worker.js
+    navigator.serviceWorker.register('./service-worker.js')
       .then((registration) => {
-        console.log('Service Worker registrato con successo con scope:', registration.scope);
+        console.log('✅ SW Registrato con successo:', registration.scope);
         
-        // Se c'è un aggiornamento in attesa, forzalo
+        // Se c'è un aggiornamento in attesa (nuova versione), forza l'aggiornamento
         if (registration.waiting) {
             registration.waiting.postMessage({ type: 'SKIP_WAITING' });
         }
       })
       .catch((error) => {
-        console.error('Registrazione Service Worker fallita:', error);
+        console.error('❌ Registrazione SW fallita:', error);
       });
-      
-    // Gestione aggiornamenti controller (per ricaricare la pagina se il SW cambia)
-    let refreshing = false;
+
+    // Ricarica la pagina automaticamente quando il nuovo SW prende il controllo
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (!refreshing) {
-        refreshing = true;
-        window.location.reload();
-      }
+       console.log("🔄 Nuova versione rilevata, ricarico l'app...");
+       window.location.reload();
     });
   });
 }
