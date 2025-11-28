@@ -14,7 +14,6 @@ import { TrashIcon } from '../components/icons/TrashIcon';
 import { HistoryFilterCard } from '../components/HistoryFilterCard';
 import { ArrowLeftIcon } from '../components/icons/ArrowLeftIcon';
 import { CheckIcon } from '../components/icons/CheckIcon';
-// FIX: Ensure casing matches the exported component name (ArrowsUpDownIcon)
 import { ArrowsUpDownIcon } from '../components/icons/ArrowsUpDownIcon';
 import { CalendarIcon } from '../components/icons/CalendarIcon';
 import { CurrencyEuroIcon } from '../components/icons/CurrencyEuroIcon';
@@ -490,7 +489,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
   }, [isSortMenuOpen]);
 
   const filteredExpenses = useMemo(() => {
-    let result = expenses;
+    let result = expenses || [];
 
     // 1. Date Filter
     if (activeFilterMode === 'period') {
@@ -592,7 +591,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
   }, [expenses, activeFilterMode, dateFilter, customRange, periodType, periodDate, filterAccount, filterCategories, filterDescription, filterAmountRange]);
 
   const groupedExpenses = useMemo(() => {
-    const sorted = [...filteredExpenses].sort((a, b) => {
+    const sorted = [...(filteredExpenses || [])].sort((a, b) => {
         if (sortOption === 'amount-desc') {
             return b.amount - a.amount;
         } else if (sortOption === 'amount-asc') {
