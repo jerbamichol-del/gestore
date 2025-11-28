@@ -172,7 +172,9 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
   }, [activeViewIndex]);
 
   const { totalExpenses, dailyTotal, categoryData, recurringCountInPeriod, periodLabel, dateRangeLabel } = useMemo(() => {
-    const validExpenses = expenses.filter(e => e.amount != null && !isNaN(Number(e.amount)));
+    // Safety check for expenses array
+    const safeExpenses = expenses || [];
+    const validExpenses = safeExpenses.filter(e => e.amount != null && !isNaN(Number(e.amount)));
     const now = new Date();
     
     // Daily total (always relative to today for the small text)
@@ -267,7 +269,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
     if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
         recurringExpenses.forEach(template => {
             if (!template.date) return;
-            const totalGenerated = expenses.filter(e => e.recurringExpenseId === template.id).length;
+            const totalGenerated = safeExpenses.filter(e => e.recurringExpenseId === template.id).length;
             if (template.recurrenceEndType === 'count' && template.recurrenceCount && totalGenerated >= template.recurrenceCount) return;
             if (template.recurrenceEndType === 'date' && template.recurrenceEndDate && template.lastGeneratedDate && template.lastGeneratedDate >= template.recurrenceEndDate) return;
 
