@@ -1,5 +1,5 @@
 // Importa la libreria idb per gestire il database
-importScripts('https://cdn.jsdelivr.net/npm/idb@8/build/iife/index-min.js');
+importScripts('https://unpkg.com/idb@7.1.1/build/iife/index-min.js');
 
 // Aggiorna questo nome quando fai modifiche per forzare l'aggiornamento sui telefoni
 const CACHE_NAME = 'expense-manager-public-v42';
