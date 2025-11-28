@@ -1,14 +1,15 @@
 importScripts('https://cdn.jsdelivr.net/npm/idb@8/build/iife/index-min.js');
 
-const CACHE_NAME = 'expense-manager-cache-v35'; // Ho alzato la versione
+// Aumenta questo numero ogni volta che modifichi il SW per forzare l'aggiornamento
+const CACHE_NAME = 'expense-manager-v36-github-fix';
+
 const urlsToCache = [
-  '/',
-  '/index.html',
-  // '/index.tsx', // RIMOSSO: I browser non leggono TSX, leggono il JS compilato (es. main.js o assets/...)
-  '/manifest.json',
-  '/icon-192.svg',
-  '/icon-512.svg',
-  // RIMOSSO '/share-target/' -> CAUSAVA L'ERRORE DI INSTALLAZIONE!
+  './',                // Usa ./ invece di / per compatibilità con sottocartelle GitHub
+  './index.html',
+  './manifest.json',
+  './icon-192.svg',
+  './icon-512.svg',
+  // RIMOSSO '/share-target/' -> Non esiste su GitHub Pages!
   'https://cdn.tailwindcss.com',
   'https://esm.sh/react@18.3.1',
   'https://esm.sh/react-dom@18.3.1',
@@ -19,9 +20,7 @@ const urlsToCache = [
   'https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs'
 ];
 
-// ... (Il resto del codice DB_NAME, getDb, fileToBase64 rimane identico a prima) ...
-// Copia qui le funzioni helper DB_NAME, STORE_NAME, getDb, fileToBase64 che ti ho dato prima
-
+// --- Configurazione DB ---
 const DB_NAME = 'expense-manager-db';
 const STORE_NAME = 'offline-images';
 const DB_VERSION = 1;
@@ -50,11 +49,11 @@ self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
-        console.log('Opened cache');
-        // Usiamo Promise.allSettled o catch per evitare che un solo file mancante rompa tutto il SW
-        return cache.addAll(urlsToCache).catch(err => {
-            console.error("Errore caching file:", err);
-        });
+        console.log('Service Worker: Caching files');
+        // Usiamo map per cachare i file singolarmente. Se uno fallisce, gli altri continuano.
+        return Promise.allSettled(
+            urlsToCache.map(url => cache.add(url).catch(err => console.warn(`Failed to cache ${url}:`, err)))
+        );
       })
       .then(() => self.skipWaiting())
   );
@@ -67,6 +66,7 @@ self.addEventListener('activate', event => {
       return Promise.all(
         cacheNames.map(cacheName => {
           if (cacheName !== CACHE_NAME) {
+            console.log('Service Worker: Clearing old cache');
             return caches.delete(cacheName);
           }
         })
@@ -75,17 +75,19 @@ self.addEventListener('activate', event => {
   );
 });
 
-// --- Fetch ---
+// --- Fetch (Il cuore del problema) ---
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // 1. Intercettiamo la POST di condivisione
-  if (event.request.method === 'POST' && url.pathname.includes('/share-target/')) {
+  // 1. GESTIONE CONDIVISIONE (POST)
+  // Intercetta QUALSIASI richiesta POST che contiene "share-target"
+  if (event.request.method === 'POST' && url.href.includes('share-target')) {
+    
     event.respondWith(
       (async () => {
         try {
           const formData = await event.request.formData();
-          const file = formData.get('screenshot'); // Deve combaciare col name nel manifest
+          const file = formData.get('screenshot');
 
           if (file) {
              const base64Image = await fileToBase64(file);
@@ -96,32 +98,43 @@ self.addEventListener('fetch', event => {
                 mimeType: file.type || 'image/png',
                 timestamp: Date.now()
              });
+             console.log('Immagine salvata dal SW!');
           }
-          // Redirect 303 fondamentale
-          return Response.redirect('/?shared=true', 303);
+          
+          // IMPORTANTE: Rispondi con un Redirect 303 alla Home
+          // Questo blocca la richiesta verso GitHub Pages
+          return Response.redirect('./?shared=true', 303);
+          
         } catch (e) {
-          console.error(e);
-          return Response.redirect('/', 303);
+          console.error('Errore nel salvataggio screenshot:', e);
+          // Anche in caso di errore, redirigi alla home per non mostrare errori all'utente
+          return Response.redirect('./', 303);
         }
       })()
     );
-    return;
+    return; // Stop qui, non andare in rete
   }
 
-  // 2. Gestione normale Cache
-  if (event.request.method !== 'GET') return;
-
-  event.respondWith(
-    caches.match(event.request).then(cachedResponse => {
-        return cachedResponse || fetch(event.request).then(networkResponse => {
-            return caches.open(CACHE_NAME).then(cache => {
-                // Cache solo richieste valide http/https (no chrome-extension)
-                if(url.protocol.startsWith('http')) {
-                    cache.put(event.request, networkResponse.clone());
+  // 2. GESTIONE CACHE NORMALE (GET)
+  if (event.request.method === 'GET') {
+      event.respondWith(
+        caches.match(event.request).then(cachedResponse => {
+            return cachedResponse || fetch(event.request).then(networkResponse => {
+                // Cache dinamica solo per richieste http valide
+                if(networkResponse && networkResponse.status === 200 && url.protocol.startsWith('http')) {
+                    const responseToCache = networkResponse.clone();
+                    caches.open(CACHE_NAME).then(cache => {
+                        cache.put(event.request, responseToCache);
+                    });
                 }
                 return networkResponse;
+            }).catch(() => {
+                // Fallback offline (opzionale, se vuoi mostrare index.html quando sei offline su altre pagine)
+                if (event.request.mode === 'navigate') {
+                    return caches.match('./index.html');
+                }
             });
-        });
-    })
-  );
+        })
+      );
+  }
 });
