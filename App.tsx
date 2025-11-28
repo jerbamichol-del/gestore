@@ -162,7 +162,7 @@ const calculateNextDueDate = (template: Expense, fromDate: Date): Date | null =>
   return nextDate;
 };
 
-// CORRECT: Use local time components to avoid timezone issues (e.g. UTC-1 resulting in previous day)
+// CORRECT: Use local time components to avoid timezone issues
 const toISODate = (date: Date) => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -181,7 +181,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     DEFAULT_ACCOUNTS,
   );
 
-  // ================== Migrazione dati localStorage (vecchie chiavi) ==================
+  // ================== Migrazione dati localStorage ==================
   const hasRunMigrationRef = useRef(false);
 
   useEffect(() => {
@@ -299,20 +299,14 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     recurringExpenses.forEach((template) => {
       if (!template.date) return;
 
-      // Se esiste una data di ultima generazione, partiamo da lì, altrimenti dalla data di inizio
       const cursorDateString = template.lastGeneratedDate || template.date;
-      
-      // Use local parsing for YYYY-MM-DD to ensure 00:00 local time
       const p = cursorDateString.split('-').map(Number);
       let cursor = new Date(p[0], p[1] - 1, p[2]);
       
       if (Number.isNaN(cursor.getTime())) return;
 
-      // Se non è mai stata generata (lastGeneratedDate è undefined), il primo check è la data stessa.
-      // Se è già stata generata, calcoliamo la prossima scadenza.
       let nextDue: Date | null = null;
       if (!template.lastGeneratedDate) {
-          // Start date parsed as local
           const pStart = template.date.split('-').map(Number);
           nextDue = new Date(pStart[0], pStart[1] - 1, pStart[2]);
       } else {
@@ -321,7 +315,6 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
       let updatedTemplate = { ...template };
 
-      // Cicla finché la prossima scadenza è oggi o nel passato
       while (nextDue && nextDue <= today) {
         const totalGenerated =
           expenses.filter((e) => e.recurringExpenseId === template.id).length +
@@ -346,7 +339,6 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
         const nextDueDateString = toISODate(nextDue);
         
-        // Controllo duplicati (importante per non rigenerare se già presente)
         const instanceExists =
           expenses.some(
             (exp) =>
@@ -366,11 +358,10 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
             date: nextDueDateString,
             frequency: 'single',
             recurringExpenseId: template.id,
-            lastGeneratedDate: undefined, // Le istanze generate non hanno lastGeneratedDate
+            lastGeneratedDate: undefined,
           });
         }
 
-        // Aggiorniamo il cursore e il template per la prossima iterazione
         cursor = nextDue;
         updatedTemplate.lastGeneratedDate = toISODate(cursor);
         nextDue = calculateNextDueDate(template, cursor);
@@ -599,7 +590,6 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       data.id === editingRecurringExpense.id &&
       data.frequency !== 'recurring'
     ) {
-      // convertita da programmata a singola
       setRecurringExpenses((prev) =>
         prev.filter((e) => e.id !== editingRecurringExpense.id),
       );
@@ -702,7 +692,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
   // ================== Immagini / AI ==================
   
-  // --- NUOVO: Handler per file condivisi (Share Target) ---
+  // Handler per file condivisi (Share Target)
   const handleSharedFile = async (file: File) => {
     try {
         showToast({ message: 'Elaborazione immagine condivisa...', type: 'info' });
@@ -715,10 +705,8 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         };
 
         if (isOnline) {
-            // Se online, imposta come immagine corrente per analisi (apre il modale di conferma)
             setImageForAnalysis(newImage);
         } else {
-            // Se offline, salva direttamente in coda
             await addImageToQueue(newImage);
             refreshPendingImages();
             showToast({ message: 'Immagine salvata in coda (offline).', type: 'info' });
@@ -731,7 +719,6 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         });
     }
   };
-  // --------------------------------------------------------
 
   const handleImagePick = async (source: 'camera' | 'gallery') => {
     setIsImageSourceModalOpen(false);
@@ -785,18 +772,34 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         image.base64Image,
         image.mimeType,
       );
+      
       if (parsedData.length === 0) {
         showToast({
           message: "Nessuna spesa trovata nell'immagine.",
           type: 'info',
         });
       } else if (parsedData.length === 1) {
-        setPrefilledData(parsedData[0]);
+        // --- FIX CRASH: Sanitizzazione dati ---
+        const aiData = parsedData[0];
+        setPrefilledData({
+            ...aiData,
+            // Se mancano gli array, li mettiamo vuoti per evitare il crash .length
+            tags: aiData.tags || [],
+            // Alleghiamo l'immagine originale come ricevuta!
+            receipts: aiData.receipts || [image.base64Image] 
+        });
         setIsFormOpen(true);
       } else {
-        setMultipleExpensesData(parsedData);
+        // --- FIX CRASH: Sanitizzazione dati multipli ---
+        const sanitizedMultiple = parsedData.map(item => ({
+            ...item,
+            tags: item.tags || [],
+            receipts: item.receipts || [image.base64Image] 
+        }));
+        setMultipleExpensesData(sanitizedMultiple);
         setIsMultipleExpensesModalOpen(true);
       }
+
       if (fromQueue) {
         await deleteImageFromQueue(image.id);
         refreshPendingImages();
@@ -815,7 +818,14 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
   const handleVoiceParsed = (data: Partial<Omit<Expense, 'id'>>) => {
     setIsVoiceModalOpen(false);
-    setPrefilledData(data);
+    
+    // --- FIX CRASH: Sanitizzazione dati vocali ---
+    setPrefilledData({
+        ...data,
+        receipts: data.receipts || [], // Default array vuoto
+        tags: data.tags || []          // Default array vuoto
+    });
+    
     setIsFormOpen(true);
   };
 
@@ -886,7 +896,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
             recurringExpenses={recurringExpenses}
             onNavigateToRecurring={() => setIsRecurringScreenOpen(true)}
             onNavigateToHistory={() => setIsHistoryScreenOpen(true)}
-            onReceiveSharedFile={handleSharedFile} // <--- Passiamo il gestore qui
+            onReceiveSharedFile={handleSharedFile}
           />
           <PendingImages
             images={pendingImages}
