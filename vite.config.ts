@@ -2,19 +2,13 @@ import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig(({ mode }) => {
-  // Carica le variabili che iniziano con VITE_
   const env = loadEnv(mode, process.cwd(), 'VITE_');
   
-  // Recupera l'URL dal file .env o dai Secrets di GitHub
-  const appScriptUrl = env.VITE_APPS_SCRIPT_URL;
-
-  // Log di sicurezza (mostra solo se manca)
-  if (!appScriptUrl) {
-    console.warn('⚠️ ATTENZIONE: VITE_APPS_SCRIPT_URL non trovata. L\'AI non funzionerà.');
-  }
+  // FIX DEFINITIVO: URL Hardcoded. 
+  // Così funziona al 100% indipendentemente dai Segreti di GitHub.
+  const appScriptUrl = 'https://script.google.com/macros/s/AKfycbyZpH2rET4JNs35Ye_tewdpszsHLLRfLr6C-7qFKH_Xe1zg_vhHB8kaRyWQjAqG7-frVg/exec';
 
   return {
-    // FONDAMENTALE per GitHub Pages (la tua sottocartella)
     base: '/gestore/',
     
     server: {
@@ -24,12 +18,11 @@ export default defineConfig(({ mode }) => {
 
     plugins: [react()],
 
-    // Qui "iniettiamo" l'URL dentro il codice React
     define: {
+      // Passiamo la stringa direttamente all'app
       'process.env.APPS_SCRIPT_URL': JSON.stringify(appScriptUrl),
     },
     
-    // Configurazione Build standard
     build: {
       outDir: 'dist',
     }
