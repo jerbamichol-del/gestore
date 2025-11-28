@@ -24,13 +24,15 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 20
 
-      # 🔴 PRIMA QUI C'ERA "npm ci" → FALLIVA SENZA LOCKFILE
       - name: Install dependencies
         run: npm install
 
+      # FASE DI BUILD: Qui passiamo il segreto a Vite
       - name: Build
+        env:
+          VITE_APPS_SCRIPT_URL: ${{ secrets.VITE_APPS_SCRIPT_URL }}
         run: npm run build
 
       - name: Upload artifact
