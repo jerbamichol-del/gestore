@@ -59,7 +59,8 @@ async function withRetry<T>(operation: (db: IDBPDatabase<unknown>) => Promise<T>
 
 export const addImageToQueue = async (image: OfflineImage): Promise<void> => {
   await withRetry(async (db) => {
-      await db.add(STORE_NAME, image);
+      // Use put instead of add to upsert and prevent "Key already exists" errors
+      await db.put(STORE_NAME, image);
   });
 };
 
