@@ -14,6 +14,8 @@ export interface Expense {
   category: string;
   subcategory?: string;
   accountId: string;
+  tags?: string[];
+  receipts?: string[];
   frequency?: 'single' | 'recurring';
   recurrence?: 'daily' | 'weekly' | 'monthly' | 'yearly';
   monthlyRecurrenceType?: 'dayOfMonth' | 'dayOfWeek';
