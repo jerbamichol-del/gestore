@@ -17,7 +17,7 @@ const PendingImages: React.FC<PendingImagesProps> = ({ images, onAnalyze, onDele
   const [isOpen, setIsOpen] = useState(false);
   const tapBridge = useTapBridge();
 
-  if (images.length === 0) {
+  if (!images || images.length === 0) {
     return null;
   }
   
