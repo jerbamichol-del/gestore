@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Expense, Account } from './types';
+import { Expense, Account, CATEGORIES } from './types';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { getQueuedImages, deleteImageFromQueue, OfflineImage, addImageToQueue } from './utils/db';
@@ -237,10 +237,17 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
   const sanitizeExpenseData = (data: any, imageBase64?: string): Partial<Omit<Expense, 'id'>> => {
     if (!data) return {}; 
+    
+    // Validate category to ensure it exists in our list, fallback to 'Altro' if invalid/missing
+    let category = data.category || 'Altro';
+    if (!CATEGORIES[category]) {
+        category = 'Altro';
+    }
+
     return {
         description: data.description || '',
         amount: typeof data.amount === 'number' ? data.amount : 0,
-        category: data.category || 'Altro',
+        category: category,
         date: data.date || toISODate(new Date()),
         tags: Array.isArray(data.tags) ? data.tags : [],
         receipts: Array.isArray(data.receipts) ? data.receipts : (imageBase64 ? [imageBase64] : []),
