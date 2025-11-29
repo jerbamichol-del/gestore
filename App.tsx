@@ -262,6 +262,12 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       showToast({ message: 'Connettiti a internet per analizzare.', type: 'error' });
       return;
     }
+
+    // OPTIMISTIC UPDATE: Remove from pending list UI immediately to prevent "queued" state during analysis
+    if (fromQueue) {
+      setPendingImages(prev => prev.filter(img => img.id !== image.id));
+    }
+
     setSyncingImageId(image.id);
     setIsParsingImage(true);
     
@@ -283,12 +289,16 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
       if (fromQueue) {
         await deleteImageFromQueue(image.id);
-        refreshPendingImages();
+        refreshPendingImages(); // Final sync with DB
       }
 
     } catch (error) {
       console.error('AI Error:', error);
       showToast({ message: "Errore analisi immagine. Riprova.", type: 'error' });
+      // If error, refresh from DB to restore the image in the UI if it's still there
+      if (fromQueue) {
+        refreshPendingImages();
+      }
     } finally {
       setIsParsingImage(false);
       setSyncingImageId(null);
