@@ -27,10 +27,8 @@ import { PEEK_PX } from './components/HistoryFilterCard';
 
 type ToastMessage = { message: string; type: 'success' | 'info' | 'error' };
 
-// ... Helper functions (processImageFile, pickImage, calculateNextDueDate, toISODate) rimangono uguali ...
-// PER BREVITÀ LE OMETTO QUI MA TU NON CANCELLARLE DAL TUO FILE!
-// Assicurati di includere le funzioni helper che c'erano prima (processImageFile, etc.)
-
+// ... Helper functions (processImageFile, pickImage, etc.) devono essere presenti qui ...
+// MANTENGO LE TUE FUNZIONI HELPER CHE ERANO GIÀ PRESENTI
 const processImageFile = (file: File): Promise<{ base64: string; mimeType: string }> => {
     return new Promise((resolve, reject) => {
         const img = new Image();
@@ -88,7 +86,6 @@ const toISODate = (date: Date) => {
   return `${year}-${month}-${day}`;
 };
 
-
 const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const [expenses, setExpenses] = useLocalStorage<Expense[]>('expenses_v2', []);
   const [recurringExpenses, setRecurringExpenses] = useLocalStorage<Expense[]>('recurring_expenses_v1', []);
@@ -120,7 +117,6 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const [pendingImages, setPendingImages] = useState<OfflineImage[]>([]);
   const [syncingImageId, setSyncingImageId] = useState<string | null>(null);
   
-  // --- Toast ---
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const showToast = useCallback((msg: ToastMessage) => setToast(msg), []);
   const [showSuccessIndicator, setShowSuccessIndicator] = useState(false);
@@ -128,12 +124,12 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const [installPromptEvent, setInstallPromptEvent] = useState<any>(null);
   const pendingImagesCountRef = useRef(0);
 
-  // ... (Logica migrazione e ricorrenza omesse per brevità, ma lasciale nel tuo codice se ci sono) ...
-  // Assumiamo che la logica di migrazione sia già stata eseguita o non necessaria qui per il fix.
-  
+  // Protezione contro accounts undefined
+  const safeAccounts = accounts || [];
+
   // ================== HELPER DATI AI (FIX) ==================
-  // Questa funzione prepara i dati per evitare crash (es. undefined arrays)
   const sanitizeExpenseData = (data: any, imageBase64?: string): Partial<Omit<Expense, 'id'>> => {
+    if (!data) return {}; // Protezione se data è null
     return {
         description: data.description || '',
         amount: typeof data.amount === 'number' ? data.amount : 0,
@@ -141,13 +137,11 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         date: data.date || toISODate(new Date()),
         tags: Array.isArray(data.tags) ? data.tags : [],
         receipts: Array.isArray(data.receipts) ? data.receipts : (imageBase64 ? [imageBase64] : []),
-        // Assicura che accountId non sia undefined se possibile, altrimenti ExpenseForm userà il default
-        accountId: data.accountId || (accounts && accounts.length > 0 ? accounts[0].id : '')
+        accountId: data.accountId || (safeAccounts.length > 0 ? safeAccounts[0].id : '')
     };
   };
 
   // ================== HANDLERS AI ==================
-
   const handleAnalyzeImage = async (image: OfflineImage, fromQueue: boolean = true) => {
     if (!isOnline) {
       showToast({ message: 'Connettiti a internet per analizzare.', type: 'error' });
@@ -163,12 +157,10 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       if (!parsedData || parsedData.length === 0) {
         showToast({ message: "Nessuna spesa trovata.", type: 'info' });
       } else if (parsedData.length === 1) {
-        // Caso Singolo: Sanitizza e apri form
         const safeData = sanitizeExpenseData(parsedData[0], image.base64Image);
         setPrefilledData(safeData);
         setIsFormOpen(true);
       } else {
-        // Caso Multiplo: Sanitizza TUTTI gli elementi dell'array
         const safeMultipleData = parsedData.map(item => sanitizeExpenseData(item, image.base64Image));
         setMultipleExpensesData(safeMultipleData);
         setIsMultipleExpensesModalOpen(true);
@@ -190,13 +182,13 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
   const handleVoiceParsed = (data: Partial<Omit<Expense, 'id'>>) => {
     setIsVoiceModalOpen(false);
-    // Sanitizza anche i dati vocali
+    // Usiamo sanitize anche qui per evitare oggetti parziali
     const safeData = sanitizeExpenseData(data);
     setPrefilledData(safeData);
     setIsFormOpen(true);
   };
 
-  // ================== SHARE TARGET HANDLER ==================
+  // ================== SHARE TARGET ==================
   const handleSharedFile = async (file: File) => {
       try {
           showToast({ message: 'Elaborazione immagine condivisa...', type: 'info' });
@@ -204,7 +196,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
           const newImage: OfflineImage = { id: crypto.randomUUID(), base64Image, mimeType };
 
           if (isOnline) {
-              setImageForAnalysis(newImage); // Apre il modale "Analizza ora?"
+              setImageForAnalysis(newImage);
           } else {
               await addImageToQueue(newImage);
               refreshPendingImages();
@@ -216,17 +208,27 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       }
   };
 
-  // ... (Il resto delle funzioni CRUD: addExpense, updateExpense, delete... rimangono uguali) ...
-
+  // ... Funzioni CRUD ...
   const addExpense = (newExpense: Omit<Expense, 'id'>) => {
       setExpenses(prev => [{ ...newExpense, id: crypto.randomUUID() }, ...prev]);
       setShowSuccessIndicator(true); setTimeout(() => setShowSuccessIndicator(false), 2000);
   };
-  // (Aggiungi qui le altre funzioni CRUD se mancano nel copia/incolla, ho semplificato per leggibilità ma tu mantienile)
-  // ...
+  const updateExpense = (updated: Expense) => {
+      setExpenses(prev => prev.map(e => e.id === updated.id ? updated : e));
+      setShowSuccessIndicator(true); setTimeout(() => setShowSuccessIndicator(false), 2000);
+  };
+  const handleDeleteRequest = (id: string) => { setExpenseToDeleteId(id); setIsConfirmDeleteModalOpen(true); };
+  const confirmDelete = () => {
+    if (expenseToDeleteId) {
+      setExpenses(prev => prev.filter(e => e.id !== expenseToDeleteId));
+      setExpenseToDeleteId(null); setIsConfirmDeleteModalOpen(false);
+      showToast({ message: 'Spesa eliminata.', type: 'info' });
+    }
+  };
 
-  // ================== RENDER ==================
-  // Layout essenziale per capire dove posizionare i componenti
+  // ... Gestione ricorrenze (semplificata per il fix) ...
+  const openRecurringEditForm = (expense: Expense) => { setEditingRecurringExpense(expense); setIsFormOpen(true); };
+
   return (
     <div className="h-full w-full bg-slate-100 flex flex-col font-sans" style={{ touchAction: 'pan-y' }}>
       <div className="flex-shrink-0 z-20">
@@ -241,7 +243,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
               onNavigateToRecurring={() => setIsRecurringScreenOpen(true)}
               onNavigateToHistory={() => setIsHistoryScreenOpen(true)}
               onReceiveSharedFile={handleSharedFile} 
-              // onImportFile={} <-- Aggiungi se serve
+              onImportFile={(file) => { /* Logica import opzionale */ }}
            />
            
            <PendingImages 
@@ -254,7 +256,6 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         </div>
       </main>
 
-      {/* FAB e Modali */}
       {!isCalculatorContainerOpen && (
          <FloatingActionButton 
             onAddManually={() => setIsCalculatorContainerOpen(true)}
@@ -268,24 +269,49 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       <CalculatorContainer 
          isOpen={isCalculatorContainerOpen}
          onClose={() => setIsCalculatorContainerOpen(false)}
-         onSubmit={(data) => { /* Tua logica submit */ setIsCalculatorContainerOpen(false); }}
-         accounts={accounts || []} // PROTEZIONE QUI
+         onSubmit={(data) => { if('id' in data) updateExpense(data as Expense); else addExpense(data); setIsCalculatorContainerOpen(false); }}
+         accounts={safeAccounts} // PROTEZIONE: Mai undefined
          expenses={expenses}
-         onEditExpense={() => {}}
-         onDeleteExpense={() => {}}
+         onEditExpense={(e) => { setEditingExpense(e); setIsFormOpen(true); }}
+         onDeleteExpense={handleDeleteRequest}
          onMenuStateChange={() => {}}
       />
 
       <ExpenseForm
         isOpen={isFormOpen}
-        onClose={() => { setIsFormOpen(false); setEditingExpense(undefined); setPrefilledData(undefined); }}
-        onSubmit={(data) => { /* Tua logica submit */ if('id' in data) { /* update */ } else { addExpense(data); } setIsFormOpen(false); }}
-        initialData={editingExpense}
+        onClose={() => { setIsFormOpen(false); setEditingExpense(undefined); setEditingRecurringExpense(undefined); setPrefilledData(undefined); }}
+        onSubmit={(data) => { if('id' in data) { /* update logica specifica se serve */ updateExpense(data as Expense); } else { addExpense(data); } setIsFormOpen(false); }}
+        initialData={editingExpense || editingRecurringExpense}
         prefilledData={prefilledData}
-        accounts={accounts || []} // PROTEZIONE QUI
+        accounts={safeAccounts} // PROTEZIONE: Mai undefined
+        isForRecurringTemplate={!!editingRecurringExpense}
       />
 
-      {/* ... Altri modali (Voice, ImageSource, ConfirmDelete) ... */}
+      {isImageSourceModalOpen && (
+        <div className="fixed inset-0 z-50 flex justify-center items-end p-4 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsImageSourceModalOpen(false)}>
+          <div className="bg-slate-50 rounded-lg shadow-xl w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
+            <header className="flex justify-between items-center p-6 border-b border-slate-200">
+              <h2 className="text-xl font-bold text-slate-800">Aggiungi da Immagine</h2>
+              <button onClick={() => setIsImageSourceModalOpen(false)} className="p-1 rounded-full hover:bg-slate-200"><XMarkIcon className="w-6 h-6"/></button>
+            </header>
+            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <ImageSourceCard icon={<CameraIcon className="w-8 h-8"/>} title="Scatta Foto" description="Usa la fotocamera." onClick={() => handleImagePick('camera')} />
+              <ImageSourceCard icon={<ComputerDesktopIcon className="w-8 h-8"/>} title="Galleria" description="Carica da file." onClick={() => handleImagePick('gallery')} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      <VoiceInputModal isOpen={isVoiceModalOpen} onClose={() => setIsVoiceModalOpen(false)} onParsed={handleVoiceParsed} />
+
+      <ConfirmationModal
+        isOpen={isConfirmDeleteModalOpen}
+        onClose={() => { setIsConfirmDeleteModalOpen(false); setExpenseToDeleteId(null); }}
+        onConfirm={confirmDelete}
+        title="Conferma Eliminazione"
+        message="Azione irreversibile."
+        variant="danger"
+      />
       
       <ConfirmationModal
         isOpen={!!imageForAnalysis}
@@ -300,13 +326,34 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       <MultipleExpensesModal
         isOpen={isMultipleExpensesModalOpen}
         onClose={() => setIsMultipleExpensesModalOpen(false)}
-        expenses={multipleExpensesData} // Ora sono sanitizzati!
-        accounts={accounts || []}       // PROTEZIONE QUI
+        expenses={multipleExpensesData}
+        accounts={safeAccounts} // PROTEZIONE QUI
         onConfirm={(data) => { data.forEach(d => addExpense(d)); setIsMultipleExpensesModalOpen(false); }}
       />
 
-      {/* ... Schermate (History, Recurring) ... */}
+      {isHistoryScreenOpen && (
+        <HistoryScreen 
+          expenses={expenses} accounts={safeAccounts} 
+          onClose={() => setIsHistoryScreenOpen(false)} 
+          onEditExpense={(e) => { setEditingExpense(e); setIsFormOpen(true); }} 
+          onDeleteExpense={handleDeleteRequest}
+          onDeleteExpenses={(ids) => { setExpenses(prev => prev.filter(e => !ids.includes(e.id))); }}
+          isEditingOrDeleting={isFormOpen || isConfirmDeleteModalOpen}
+          isOverlayed={false}
+          onDateModalStateChange={() => {}} onFilterPanelOpenStateChange={() => {}}
+        />
+      )}
       
+      {isRecurringScreenOpen && (
+        <RecurringExpensesScreen 
+          recurringExpenses={recurringExpenses} expenses={expenses} accounts={safeAccounts}
+          onClose={() => setIsRecurringScreenOpen(false)}
+          onEdit={(e) => { setEditingRecurringExpense(e); setIsFormOpen(true); }}
+          onDelete={(id) => setRecurringExpenses(prev => prev.filter(e => e.id !== id))}
+          onDeleteRecurringExpenses={(ids) => setRecurringExpenses(prev => prev.filter(e => !ids.includes(e.id)))}
+        />
+      )}
+
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       
       {isParsingImage && (
@@ -319,8 +366,4 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   );
 };
 
-// Helper per aggiornare la lista immagini (da rimettere nel corpo se serve)
-// const refreshPendingImages = ... 
-
 export default App;
-
