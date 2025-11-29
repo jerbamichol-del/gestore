@@ -4,7 +4,13 @@ export function useLocalStorage<T>(key: string, initialValue: T): [T, Dispatch<S
   const [storedValue, setStoredValue] = useState<T>(() => {
     try {
       const item = window.localStorage.getItem(key);
-      return item ? JSON.parse(item) : initialValue;
+      if (item === null || item === undefined) {
+        return initialValue;
+      }
+      const parsed = JSON.parse(item);
+      // Ensure we don't return null if parsing resulted in null, unless initialValue is null
+      // This protects against cases where localStorage has "null" string but we expect an array
+      return (parsed === null || parsed === undefined) && initialValue !== null ? initialValue : parsed;
     } catch (error) {
       console.error(error);
       return initialValue;
@@ -13,7 +19,11 @@ export function useLocalStorage<T>(key: string, initialValue: T): [T, Dispatch<S
 
   useEffect(() => {
     try {
-      window.localStorage.setItem(key, JSON.stringify(storedValue));
+      if (storedValue === undefined) {
+        window.localStorage.removeItem(key);
+      } else {
+        window.localStorage.setItem(key, JSON.stringify(storedValue));
+      }
     } catch (error) {
       console.error(error);
     }
