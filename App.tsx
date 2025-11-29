@@ -58,7 +58,7 @@ const pickImage = (source: 'camera' | 'gallery'): Promise<File> => {
         input.accept = 'image/*';
         if(source === 'camera') input.capture = 'environment';
         input.onchange = (e: any) => {
-            if(e.target.files[0]) resolve(e.target.files[0]);
+            if(e.target.files && e.target.files[0]) resolve(e.target.files[0]);
             else reject(new Error('Nessun file'));
         };
         input.click();
@@ -125,6 +125,32 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const [installPromptEvent, setInstallPromptEvent] = useState<any>(null);
   const pendingImagesCountRef = useRef(0);
 
+  // --- Refresh Images ---
+  const refreshPendingImages = useCallback(async () => {
+    try {
+      const images = await getQueuedImages();
+      // Ensure images is always an array to prevent "cannot read properties of undefined (reading 'length')"
+      const safeImages = Array.isArray(images) ? images : [];
+      setPendingImages(safeImages);
+      pendingImagesCountRef.current = safeImages.length;
+      
+      if ('setAppBadge' in navigator && typeof (navigator as any).setAppBadge === 'function') {
+        if (safeImages.length > 0) {
+          (navigator as any).setAppBadge(safeImages.length);
+        } else {
+          (navigator as any).clearAppBadge();
+        }
+      }
+    } catch (e) {
+      console.error("Failed to refresh pending images", e);
+      setPendingImages([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshPendingImages();
+  }, [refreshPendingImages]);
+
   // ================== MIGRAZIONE E GENERAZIONE RICORRENZE ==================
   // (Logica semplificata per brevità, ma essenziale per il funzionamento corretto)
   const hasRunMigrationRef = useRef(false);
@@ -136,12 +162,13 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
   useEffect(() => {
       // ... logica generazione spese ricorrenti ...
-      // Copia la tua logica originale qui se serve, oppure lascia vuoto se gestito altrove
       const today = new Date(); today.setHours(0, 0, 0, 0);
       const newExpenses: Expense[] = [];
       const templatesToUpdate: Expense[] = [];
       
-      recurringExpenses.forEach(template => {
+      const safeRecurringExpenses = Array.isArray(recurringExpenses) ? recurringExpenses : [];
+      
+      safeRecurringExpenses.forEach(template => {
          if (!template.date) return;
          const cursorDateString = template.lastGeneratedDate || template.date;
          const p = cursorDateString.split('-').map(Number);
@@ -154,10 +181,13 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
          
          let updatedTemplate = { ...template };
          
-         while (nextDue && nextDue <= today) {
-             // Logica semplificata generazione...
+         // Safety limit for while loop
+         let safetyCounter = 0;
+         while (nextDue && nextDue <= today && safetyCounter < 1000) {
+             safetyCounter++;
              const nextDueDateString = toISODate(nextDue);
-             const instanceExists = expenses.some(e => e.recurringExpenseId === template.id && e.date === nextDueDateString) || newExpenses.some(e => e.recurringExpenseId === template.id && e.date === nextDueDateString);
+             
+             const instanceExists = (expenses || []).some(e => e.recurringExpenseId === template.id && e.date === nextDueDateString) || newExpenses.some(e => e.recurringExpenseId === template.id && e.date === nextDueDateString);
              
              if (!instanceExists) {
                  newExpenses.push({
@@ -171,8 +201,8 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
          if (updatedTemplate.lastGeneratedDate !== template.lastGeneratedDate) templatesToUpdate.push(updatedTemplate);
       });
       
-      if (newExpenses.length > 0) setExpenses(prev => [...newExpenses, ...prev]);
-      if (templatesToUpdate.length > 0) setRecurringExpenses(prev => prev.map(t => templatesToUpdate.find(ut => ut.id === t.id) || t));
+      if (newExpenses.length > 0) setExpenses(prev => [...newExpenses, ...(prev || [])]);
+      if (templatesToUpdate.length > 0) setRecurringExpenses(prev => (prev || []).map(t => templatesToUpdate.find(ut => ut.id === t.id) || t));
 
   }, [recurringExpenses, expenses, setExpenses, setRecurringExpenses]);
 
@@ -282,17 +312,17 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
   // ... Funzioni CRUD ...
   const addExpense = (newExpense: Omit<Expense, 'id'>) => {
-      setExpenses(prev => [{ ...newExpense, id: crypto.randomUUID() }, ...prev]);
+      setExpenses(prev => [{ ...newExpense, id: crypto.randomUUID() }, ...(prev || [])]);
       setShowSuccessIndicator(true); setTimeout(() => setShowSuccessIndicator(false), 2000);
   };
   const updateExpense = (updated: Expense) => {
-      setExpenses(prev => prev.map(e => e.id === updated.id ? updated : e));
+      setExpenses(prev => (prev || []).map(e => e.id === updated.id ? updated : e));
       setShowSuccessIndicator(true); setTimeout(() => setShowSuccessIndicator(false), 2000);
   };
   const handleDeleteRequest = (id: string) => { setExpenseToDeleteId(id); setIsConfirmDeleteModalOpen(true); };
   const confirmDelete = () => {
     if (expenseToDeleteId) {
-      setExpenses(prev => prev.filter(e => e.id !== expenseToDeleteId));
+      setExpenses(prev => (prev || []).filter(e => e.id !== expenseToDeleteId));
       setExpenseToDeleteId(null); setIsConfirmDeleteModalOpen(false);
       showToast({ message: 'Spesa eliminata.', type: 'info' });
     }
@@ -311,8 +341,8 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       <main className="flex-grow bg-slate-100">
         <div className="w-full h-full overflow-y-auto space-y-6" style={{ touchAction: 'pan-y' }}>
            <Dashboard 
-              expenses={expenses} 
-              recurringExpenses={recurringExpenses} 
+              expenses={expenses || []} 
+              recurringExpenses={recurringExpenses || []} 
               onNavigateToRecurring={() => setIsRecurringScreenOpen(true)}
               onNavigateToHistory={() => setIsHistoryScreenOpen(true)}
               onReceiveSharedFile={handleSharedFile} 
@@ -344,7 +374,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
          onClose={() => setIsCalculatorContainerOpen(false)}
          onSubmit={(data) => { if('id' in data) updateExpense(data as Expense); else addExpense(data); setIsCalculatorContainerOpen(false); }}
          accounts={safeAccounts} 
-         expenses={expenses}
+         expenses={expenses || []}
          onEditExpense={(e) => { setEditingExpense(e); setIsFormOpen(true); }}
          onDeleteExpense={handleDeleteRequest}
          onMenuStateChange={() => {}}
@@ -406,11 +436,11 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
       {isHistoryScreenOpen && (
         <HistoryScreen 
-          expenses={expenses} accounts={safeAccounts} 
+          expenses={expenses || []} accounts={safeAccounts} 
           onClose={() => setIsHistoryScreenOpen(false)} 
           onEditExpense={(e) => { setEditingExpense(e); setIsFormOpen(true); }} 
           onDeleteExpense={handleDeleteRequest}
-          onDeleteExpenses={(ids) => { setExpenses(prev => prev.filter(e => !ids.includes(e.id))); }}
+          onDeleteExpenses={(ids) => { setExpenses(prev => (prev || []).filter(e => !ids.includes(e.id))); }}
           isEditingOrDeleting={isFormOpen || isConfirmDeleteModalOpen}
           isOverlayed={false}
           onDateModalStateChange={() => {}} onFilterPanelOpenStateChange={() => {}}
@@ -419,11 +449,11 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       
       {isRecurringScreenOpen && (
         <RecurringExpensesScreen 
-          recurringExpenses={recurringExpenses} expenses={expenses} accounts={safeAccounts}
+          recurringExpenses={recurringExpenses || []} expenses={expenses || []} accounts={safeAccounts}
           onClose={() => setIsRecurringScreenOpen(false)}
           onEdit={(e) => { setEditingRecurringExpense(e); setIsFormOpen(true); }}
-          onDelete={(id) => setRecurringExpenses(prev => prev.filter(e => e.id !== id))}
-          onDeleteRecurringExpenses={(ids) => setRecurringExpenses(prev => prev.filter(e => !ids.includes(e.id)))}
+          onDelete={(id) => setRecurringExpenses(prev => (prev || []).filter(e => e.id !== id))}
+          onDeleteRecurringExpenses={(ids) => setRecurringExpenses(prev => (prev || []).filter(e => !ids.includes(e.id)))}
         />
       )}
 
