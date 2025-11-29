@@ -148,7 +148,11 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   }, []);
 
   useEffect(() => {
-    refreshPendingImages();
+    const urlParams = new URLSearchParams(window.location.search);
+    // Refresh only if not in shared mode, to avoid overwriting state managed by checkForSharedFile
+    if (urlParams.get('shared') !== 'true') {
+        refreshPendingImages();
+    }
   }, [refreshPendingImages]);
 
   // --- Check for Shared Content (PWA Share Target) ---
@@ -160,13 +164,16 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         try {
             const images = await getQueuedImages();
             const safeImages = Array.isArray(images) ? images : [];
-            // Update state so we know these images are already in queue
-            setPendingImages(safeImages);
             
             if (safeImages.length > 0) {
                // The service worker appends new images, so the latest one is last
                const latestImage = safeImages[safeImages.length - 1];
                setImageForAnalysis(latestImage);
+               // IMPORTANT: Visually hide the image from the pending queue while we decide what to do with it.
+               // It remains in DB until analyzed or dismissed.
+               setPendingImages(safeImages.filter(img => img.id !== latestImage.id));
+            } else {
+                setPendingImages([]);
             }
         } catch (e) {
             console.error("Error checking shared file", e);
@@ -262,12 +269,6 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       showToast({ message: 'Connettiti a internet per analizzare.', type: 'error' });
       return;
     }
-
-    // OPTIMISTIC UPDATE: Remove from pending list UI immediately to prevent "queued" state during analysis
-    if (fromQueue) {
-      setPendingImages(prev => prev.filter(img => img.id !== image.id));
-    }
-
     setSyncingImageId(image.id);
     setIsParsingImage(true);
     
@@ -289,18 +290,12 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
       if (fromQueue) {
         await deleteImageFromQueue(image.id);
-        // FIX: Non chiamare refreshPendingImages() qui. 
-        // L'abbiamo già rimossa ottimisticamente e chiamare refresh potrebbe ricaricare 
-        // l'immagine se il DB non ha ancora committato la cancellazione (race condition).
+        refreshPendingImages();
       }
 
     } catch (error) {
       console.error('AI Error:', error);
       showToast({ message: "Errore analisi immagine. Riprova.", type: 'error' });
-      // If error, refresh from DB to restore the image in the UI if it's still there
-      if (fromQueue) {
-        refreshPendingImages();
-      }
     } finally {
       setIsParsingImage(false);
       setSyncingImageId(null);
@@ -374,6 +369,35 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
   // ... Gestione ricorrenze (semplificata per il fix) ...
   const openRecurringEditForm = (expense: Expense) => { setEditingRecurringExpense(expense); setIsFormOpen(true); };
+
+  // ================== ANALYZE MODAL HANDLERS ==================
+  const handleModalConfirm = async () => {
+      if (!imageForAnalysis) return;
+      
+      // Check if image exists in DB (true for Share Target, false for manual upload unless added manually)
+      const dbImages = await getQueuedImages();
+      const existsInDb = dbImages.some(img => img.id === imageForAnalysis.id);
+      
+      // If it exists in DB (Share Target), we pass true so handleAnalyzeImage deletes it upon success.
+      handleAnalyzeImage(imageForAnalysis, existsInDb); 
+      setImageForAnalysis(null);
+  };
+
+  const handleModalClose = async () => {
+      if (!imageForAnalysis) return;
+      
+      const dbImages = await getQueuedImages();
+      const existsInDb = dbImages.some(img => img.id === imageForAnalysis.id);
+
+      if (!existsInDb) {
+          // If it wasn't in DB (manual upload), user chose "Queue", so add it.
+          await addImageToQueue(imageForAnalysis);
+      }
+      
+      // Always refresh to show the item in the list (whether it was hidden via filter or just added)
+      refreshPendingImages();
+      setImageForAnalysis(null);
+  };
 
   // ================== RENDER ==================
   return (
@@ -462,27 +486,8 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       
       <ConfirmationModal
         isOpen={!!imageForAnalysis}
-        onClose={() => { 
-            if(imageForAnalysis) { 
-                const isInQueue = pendingImages.some(img => img.id === imageForAnalysis.id);
-                if (!isInQueue) {
-                    addImageToQueue(imageForAnalysis).then(() => { 
-                        refreshPendingImages(); 
-                        setImageForAnalysis(null); 
-                    }); 
-                } else {
-                    // Already in queue, just close
-                    setImageForAnalysis(null);
-                }
-            } 
-        }}
-        onConfirm={() => { 
-            if(imageForAnalysis) { 
-                const isInQueue = pendingImages.some(img => img.id === imageForAnalysis.id);
-                handleAnalyzeImage(imageForAnalysis, isInQueue); 
-                setImageForAnalysis(null); 
-            } 
-        }}
+        onClose={handleModalClose}
+        onConfirm={handleModalConfirm}
         title="Analizza Immagine"
         message="Vuoi analizzare subito questa immagine?"
         confirmButtonText="Sì, analizza"
