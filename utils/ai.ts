@@ -1,6 +1,6 @@
 import { Expense } from '../types';
 
-// L'URL viene iniettato da Vite al momento della build
+// Recuperiamo l'URL iniettato da Vite
 const AI_ENDPOINT = process.env.APPS_SCRIPT_URL || '';
 
 type ImageResponse = {
@@ -20,24 +20,29 @@ async function callAiEndpoint<T>(payload: any): Promise<T> {
     throw new Error("URL AI mancante. Controlla la configurazione VITE_APPS_SCRIPT_URL.");
   }
 
-  const res = await fetch(AI_ENDPOINT, {
-    method: 'POST',
-    // ⚠️ text/plain è fondamentale per evitare errori CORS (preflight) con Google Apps Script
-    headers: {
-      'Content-Type': 'text/plain;charset=utf-8',
-    },
-    body: JSON.stringify(payload),
-  });
+  try {
+      const res = await fetch(AI_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          // Text/plain evita il preflight CORS che Apps Script non gestisce bene
+          'Content-Type': 'text/plain;charset=utf-8',
+        },
+        body: JSON.stringify(payload),
+      });
 
-  if (!res.ok) {
-    throw new Error(`AI endpoint HTTP ${res.status}`);
+      if (!res.ok) {
+        throw new Error(`AI endpoint HTTP ${res.status}`);
+      }
+
+      const json = await res.json();
+      return json as T;
+  } catch (e) {
+      console.error("AI Fetch Error:", e);
+      throw e;
   }
-
-  // Google Apps Script restituisce JSON puro
-  return (await res.json()) as T;
 }
 
-// Helper: converte Blob in stringa base64 pura (senza "data:image/...")
+// Helper per base64
 async function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -51,11 +56,12 @@ async function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
-// ====== FUNZIONE 1: IMMAGINE → SPESE ======
+// ====== IMMAGINE → SPESE ======
 export async function parseExpensesFromImage(
   base64Image: string,
   mimeType: string
 ): Promise<Partial<Expense>[]> {
+  
   const result = await callAiEndpoint<ImageResponse>({
     action: 'parseImage',
     imageBase64: base64Image,
@@ -64,17 +70,17 @@ export async function parseExpensesFromImage(
 
   if (!result.ok) {
     console.error('[AI] Errore parseImage:', result.error);
-    throw new Error(result.error || "Errore durante l'analisi dell'immagine.");
+    throw new Error(result.error || "Errore generico durante l'analisi immagine.");
   }
 
+  // Protezione: Se expenses è null/undefined, restituisci array vuoto
   return result.expenses || [];
 }
 
-// ====== FUNZIONE 2: AUDIO → 1 SPESA ======
+// ====== AUDIO → 1 SPESA ======
 export async function parseExpenseFromAudio(
   audioBlob: Blob
 ): Promise<Partial<Expense> | null> {
-  // Default a webm se il tipo non è specificato
   const mimeType = audioBlob.type || 'audio/webm';
   const audioBase64 = await blobToBase64(audioBlob);
 
@@ -86,7 +92,7 @@ export async function parseExpenseFromAudio(
 
   if (!result.ok) {
     console.error('[AI] Errore parseVoice:', result.error);
-    throw new Error(result.error || "Errore durante l'analisi vocale.");
+    throw new Error(result.error || "Errore generico durante l'analisi vocale.");
   }
 
   return result.expense || null;
