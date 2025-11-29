@@ -151,6 +151,31 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     refreshPendingImages();
   }, [refreshPendingImages]);
 
+  // --- Check for Shared Content (PWA Share Target) ---
+  useEffect(() => {
+    const checkForSharedFile = async () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('shared') === 'true') {
+        window.history.replaceState({}, '', window.location.pathname);
+        try {
+            const images = await getQueuedImages();
+            const safeImages = Array.isArray(images) ? images : [];
+            // Update state so we know these images are already in queue
+            setPendingImages(safeImages);
+            
+            if (safeImages.length > 0) {
+               // The service worker appends new images, so the latest one is last
+               const latestImage = safeImages[safeImages.length - 1];
+               setImageForAnalysis(latestImage);
+            }
+        } catch (e) {
+            console.error("Error checking shared file", e);
+        }
+      }
+    };
+    checkForSharedFile();
+  }, []);
+
   // ================== MIGRAZIONE E GENERAZIONE RICORRENZE ==================
   // (Logica semplificata per brevità, ma essenziale per il funzionamento corretto)
   const hasRunMigrationRef = useRef(false);
@@ -418,8 +443,27 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       
       <ConfirmationModal
         isOpen={!!imageForAnalysis}
-        onClose={() => { if(imageForAnalysis) addImageToQueue(imageForAnalysis).then(() => { refreshPendingImages(); setImageForAnalysis(null); }); }}
-        onConfirm={() => { if(imageForAnalysis) { handleAnalyzeImage(imageForAnalysis, false); setImageForAnalysis(null); } }}
+        onClose={() => { 
+            if(imageForAnalysis) { 
+                const isInQueue = pendingImages.some(img => img.id === imageForAnalysis.id);
+                if (!isInQueue) {
+                    addImageToQueue(imageForAnalysis).then(() => { 
+                        refreshPendingImages(); 
+                        setImageForAnalysis(null); 
+                    }); 
+                } else {
+                    // Already in queue, just close
+                    setImageForAnalysis(null);
+                }
+            } 
+        }}
+        onConfirm={() => { 
+            if(imageForAnalysis) { 
+                const isInQueue = pendingImages.some(img => img.id === imageForAnalysis.id);
+                handleAnalyzeImage(imageForAnalysis, isInQueue); 
+                setImageForAnalysis(null); 
+            } 
+        }}
         title="Analizza Immagine"
         message="Vuoi analizzare subito questa immagine?"
         confirmButtonText="Sì, analizza"
