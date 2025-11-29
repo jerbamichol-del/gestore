@@ -4,6 +4,7 @@ export interface OfflineImage {
   id: string;
   base64Image: string;
   mimeType: string;
+  timestamp?: number;
 }
 
 const DB_NAME = 'expense-manager-db';
