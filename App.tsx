@@ -111,6 +111,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const [expenseToDeleteId, setExpenseToDeleteId] = useState<string | null>(null);
   const [multipleExpensesData, setMultipleExpensesData] = useState<Partial<Omit<Expense, 'id'>>[]>([]);
   const [imageForAnalysis, setImageForAnalysis] = useState<OfflineImage | null>(null);
+  const [isSharedMode, setIsSharedMode] = useState(false);
 
   // --- Sync ---
   const isOnline = useOnlineStatus();
@@ -160,6 +161,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     const checkForSharedFile = async () => {
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.get('shared') === 'true') {
+        setIsSharedMode(true);
         window.history.replaceState({}, '', window.location.pathname);
         try {
             const images = await getQueuedImages();
@@ -374,29 +376,43 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const handleModalConfirm = async () => {
       if (!imageForAnalysis) return;
       
-      // Check if image exists in DB (true for Share Target, false for manual upload unless added manually)
-      const dbImages = await getQueuedImages();
-      const existsInDb = dbImages.some(img => img.id === imageForAnalysis.id);
+      // If we are in shared mode, we MUST treat it as in-DB (because SW put it there).
+      // We prioritize the flag because reading DB might be race-condition prone.
+      let existsInDb = isSharedMode;
+
+      // Fallback double-check in DB if not shared mode
+      if (!existsInDb) {
+          const dbImages = await getQueuedImages();
+          existsInDb = dbImages.some(img => img.id === imageForAnalysis.id);
+      }
       
       // If it exists in DB (Share Target), we pass true so handleAnalyzeImage deletes it upon success.
       handleAnalyzeImage(imageForAnalysis, existsInDb); 
       setImageForAnalysis(null);
+      
+      // Reset shared mode after handling
+      setIsSharedMode(false);
   };
 
   const handleModalClose = async () => {
       if (!imageForAnalysis) return;
       
-      const dbImages = await getQueuedImages();
-      const existsInDb = dbImages.some(img => img.id === imageForAnalysis.id);
+      let existsInDb = isSharedMode;
+      
+      if (!existsInDb) {
+          const dbImages = await getQueuedImages();
+          existsInDb = dbImages.some(img => img.id === imageForAnalysis.id);
+      }
 
       if (!existsInDb) {
           // If it wasn't in DB (manual upload), user chose "Queue", so add it.
           await addImageToQueue(imageForAnalysis);
       }
       
-      // Always refresh to show the item in the list (whether it was hidden via filter or just added)
+      // Always refresh to show the item in the list
       refreshPendingImages();
       setImageForAnalysis(null);
+      setIsSharedMode(false);
   };
 
   // ================== RENDER ==================
