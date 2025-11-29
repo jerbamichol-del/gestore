@@ -138,10 +138,15 @@ const getIntervalLabel = (recurrence?: 'daily' | 'weekly' | 'monthly' | 'yearly'
 const daysOfWeekForPicker = [ { label: 'Lun', value: 1 }, { label: 'Mar', value: 2 }, { label: 'Mer', value: 3 }, { label: 'Gio', value: 4 }, { label: 'Ven', value: 5 }, { label: 'Sab', value: 6 }, { label: 'Dom', value: 0 }];
 
 const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, initialData, prefilledData, accounts, isForRecurringTemplate = false }) => {
+  // --- PROTEZIONE CRASH: Assicuriamoci che accounts sia sempre un array ---
+  // Questo è il fix cruciale per l'errore "reading 'length'"
+  const safeAccounts = accounts || [];
+  // ---------------------------------------------------------------------
+
   const [isAnimating, setIsAnimating] = useState(false);
   const [isClosableByBackdrop, setIsClosableByBackdrop] = useState(false);
   
-  // FIX: Include tags and receipts in formData type and state to prevent data loss
+  // FIX: Inizializza con i tipi corretti per evitare perdita dati
   const [formData, setFormData] = useState<Partial<Omit<Expense, 'id' | 'amount'>> & { amount?: number | string }>({});
   
   const [error, setError] = useState<string | null>(null);
@@ -180,7 +185,8 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
   }, [formData.date]);
 
   const resetForm = useCallback(() => {
-    const defaultAccountId = accounts.length > 0 ? accounts[0].id : '';
+    // Usa safeAccounts per evitare errori se accounts è undefined
+    const defaultAccountId = safeAccounts.length > 0 ? safeAccounts[0].id : '';
     setFormData({
       description: '',
       amount: '',
@@ -190,12 +196,12 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
       subcategory: '',
       accountId: defaultAccountId,
       frequency: 'single',
-      tags: [],     // Reset tags
-      receipts: [], // Reset receipts
+      tags: [],     // Inizializza array vuoto
+      receipts: [], // Inizializza array vuoto
     });
     setError(null);
     setOriginalExpenseState(null);
-  }, [accounts]);
+  }, [safeAccounts]);
   
   const forceClose = () => {
     setIsAnimating(false);
@@ -227,8 +233,8 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
         setFormData(dataWithTime);
         setOriginalExpenseState(dataWithTime);
       } else if (prefilledData) {
-        const defaultAccountId = accounts.length > 0 ? accounts[0].id : '';
-        // FIX: Ensure tags and receipts are carried over from AI data
+        // Usa safeAccounts anche qui
+        const defaultAccountId = safeAccounts.length > 0 ? safeAccounts[0].id : '';
         setFormData({
           description: prefilledData.description || '',
           amount: prefilledData.amount || '',
@@ -238,8 +244,8 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
           subcategory: prefilledData.subcategory || '',
           accountId: prefilledData.accountId || defaultAccountId,
           frequency: 'single',
-          tags: prefilledData.tags || [],         // Carry over tags
-          receipts: prefilledData.receipts || [], // Carry over receipts (image)
+          tags: prefilledData.tags || [],         // Assicura che non sia undefined
+          receipts: prefilledData.receipts || [], // Assicura che non sia undefined
         });
         setOriginalExpenseState(null);
       } else {
@@ -265,7 +271,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
       setIsAnimating(false);
       setIsClosableByBackdrop(false);
     }
-  }, [isOpen, initialData, prefilledData, resetForm, accounts, isForRecurringTemplate]);
+  }, [isOpen, initialData, prefilledData, resetForm, safeAccounts, isForRecurringTemplate]);
   
     useEffect(() => {
     if (isRecurrenceModalOpen) {
@@ -437,8 +443,9 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
       description: formData.description || '',
       category: formData.category || '',
       subcategory: formData.subcategory || undefined,
-      tags: formData.tags || [],         // Ensure tags are submitted
-      receipts: formData.receipts || [], // Ensure receipts are submitted
+      // FIX: Salva array vuoti se undefined per sicurezza
+      tags: formData.tags || [],
+      receipts: formData.receipts || [],
     };
     
     if (dataToSubmit.frequency === 'recurring') {
@@ -476,7 +483,8 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
     ? CATEGORIES[formData.category].map(sub => ({ value: sub, label: sub }))
     : [];
     
-  const accountOptions = accounts.map(acc => ({
+  // FIX: Usa safeAccounts anche qui per il map
+  const accountOptions = safeAccounts.map(acc => ({
       value: acc.id,
       label: acc.name,
   }));
@@ -524,7 +532,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
     return 'Per sempre';
   };
 
-  const selectedAccountLabel = accounts.find(a => a.id === formData.accountId)?.name;
+  const selectedAccountLabel = safeAccounts.find(a => a.id === formData.accountId)?.name;
   const selectedCategoryLabel = formData.category ? getCategoryStyle(formData.category).label : undefined;
   
   return (
@@ -719,7 +727,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
         title="Seleziona un Conto"
         options={accountOptions}
         selectedValue={formData.accountId || ''}
-        onSelect={(value) => handleSelectChange('accountId', value)}
+        onSelect={(value: string) => handleSelectChange('accountId', value)}
       />
 
       <SelectionMenu 
@@ -728,7 +736,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
         title="Seleziona una Categoria"
         options={categoryOptions}
         selectedValue={formData.category || ''}
-        onSelect={(value) => handleSelectChange('category', value)}
+        onSelect={(value: string) => handleSelectChange('category', value)}
       />
 
       <SelectionMenu 
@@ -737,7 +745,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
         title="Seleziona Sottocategoria"
         options={subcategoryOptions}
         selectedValue={formData.subcategory || ''}
-        onSelect={(value) => handleSelectChange('subcategory', value)}
+        onSelect={(value: string) => handleSelectChange('subcategory', value)}
       />
 
       <SelectionMenu
