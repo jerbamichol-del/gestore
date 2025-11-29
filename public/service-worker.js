@@ -52,7 +52,8 @@ function saveToIndexedDB(data) {
     request.onsuccess = (e) => {
       const db = e.target.result;
       const tx = db.transaction(STORE_NAME, 'readwrite');
-      tx.objectStore(STORE_NAME).add(data);
+      // Changed to put to prevent key collision errors
+      tx.objectStore(STORE_NAME).put(data);
       tx.oncomplete = () => { db.close(); resolve(); };
       tx.onerror = () => reject(tx.error);
     };
