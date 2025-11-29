@@ -27,7 +27,10 @@ import { PEEK_PX } from './components/HistoryFilterCard';
 
 type ToastMessage = { message: string; type: 'success' | 'info' | 'error' };
 
-// --- FUNZIONI HELPER ---
+// Extended type for internal use to track shared origin
+type ExtendedOfflineImage = OfflineImage & { _isShared?: boolean };
+
+// --- FUNZIONI HELPER (REINSERITE) ---
 const processImageFile = (file: File): Promise<{ base64: string; mimeType: string }> => {
     return new Promise((resolve, reject) => {
         const img = new Image();
@@ -99,11 +102,9 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const [isConfirmDeleteModalOpen, setIsConfirmDeleteModalOpen] = useState(false);
   const [isMultipleExpensesModalOpen, setIsMultipleExpensesModalOpen] = useState(false);
   const [isParsingImage, setIsParsingImage] = useState(false);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [isDateModalOpen, setIsDateModalOpen] = useState(false);
   const [isRecurringScreenOpen, setIsRecurringScreenOpen] = useState(false);
   const [isHistoryScreenOpen, setIsHistoryScreenOpen] = useState(false);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [isHistoryFilterPanelOpen, setIsHistoryFilterPanelOpen] = useState(false);
 
   // --- Dati ---
@@ -112,8 +113,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const [prefilledData, setPrefilledData] = useState<Partial<Omit<Expense, 'id'>> | undefined>(undefined);
   const [expenseToDeleteId, setExpenseToDeleteId] = useState<string | null>(null);
   const [multipleExpensesData, setMultipleExpensesData] = useState<Partial<Omit<Expense, 'id'>>[]>([]);
-  const [imageForAnalysis, setImageForAnalysis] = useState<OfflineImage | null>(null);
-  const [isSharedMode, setIsSharedMode] = useState(false);
+  const [imageForAnalysis, setImageForAnalysis] = useState<ExtendedOfflineImage | null>(null);
 
   // --- Sync ---
   const isOnline = useOnlineStatus();
@@ -125,7 +125,6 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const showToast = useCallback((msg: ToastMessage) => setToast(msg), []);
   const [showSuccessIndicator, setShowSuccessIndicator] = useState(false);
   
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [installPromptEvent, setInstallPromptEvent] = useState<any>(null);
   const pendingImagesCountRef = useRef(0);
 
@@ -133,6 +132,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const refreshPendingImages = useCallback(async () => {
     try {
       const images = await getQueuedImages();
+      // Ensure images is always an array to prevent "cannot read properties of undefined (reading 'length')"
       const safeImages = Array.isArray(images) ? images : [];
       setPendingImages(safeImages);
       pendingImagesCountRef.current = safeImages.length;
@@ -152,6 +152,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
+    // Refresh only if not in shared mode, to avoid overwriting state managed by checkForSharedFile
     if (urlParams.get('shared') !== 'true') {
         refreshPendingImages();
     }
@@ -162,8 +163,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     const checkForSharedFile = async () => {
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.get('shared') === 'true') {
-        setIsSharedMode(true);
-        // Puliamo l'URL immediatamente per evitare loop
+        // Clean URL immediately
         window.history.replaceState({}, '', window.location.pathname);
         
         try {
@@ -171,10 +171,15 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
             const safeImages = Array.isArray(images) ? images : [];
             
             if (safeImages.length > 0) {
-               const latestImage = safeImages[safeImages.length - 1];
-               setImageForAnalysis(latestImage);
-               // Nascondiamo l'immagine dalla UI lista principale per evitare duplicati visivi
-               // ma NON cancelliamo dallo stato reale finché non è gestita
+               // Sort by timestamp if available to get the actual latest one
+               safeImages.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+               const latestImage = safeImages[0];
+               
+               // Mark this image object specifically as "from shared target"
+               const flaggedImage: ExtendedOfflineImage = { ...latestImage, _isShared: true };
+               setImageForAnalysis(flaggedImage);
+               
+               // Visually hide this specific image from the pending queue list so it looks like it's "opened"
                setPendingImages(safeImages.filter(img => img.id !== latestImage.id));
             } else {
                 setPendingImages([]);
@@ -188,13 +193,16 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   }, []);
 
   // ================== MIGRAZIONE E GENERAZIONE RICORRENZE ==================
+  // (Logica semplificata per brevità, ma essenziale per il funzionamento corretto)
   const hasRunMigrationRef = useRef(false);
   useEffect(() => {
       if (hasRunMigrationRef.current) return;
       hasRunMigrationRef.current = true;
+      // ... logica migrazione se presente ...
   }, []);
 
   useEffect(() => {
+      // ... logica generazione spese ricorrenti ...
       const today = new Date(); today.setHours(0, 0, 0, 0);
       const newExpenses: Expense[] = [];
       const templatesToUpdate: Expense[] = [];
@@ -214,6 +222,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
          
          let updatedTemplate = { ...template };
          
+         // Safety limit for while loop
          let safetyCounter = 0;
          while (nextDue && nextDue <= today && safetyCounter < 1000) {
              safetyCounter++;
@@ -238,12 +247,14 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
   }, [recurringExpenses, expenses, setExpenses, setRecurringExpenses]);
 
-  // ================== HELPER DATI AI ==================
+  // ================== HELPER DATI AI (FIX) ==================
+  // Assicurati che accounts sia sempre un array valido
   const safeAccounts = accounts || [];
 
   const sanitizeExpenseData = (data: any, imageBase64?: string): Partial<Omit<Expense, 'id'>> => {
     if (!data) return {}; 
     
+    // Validate category to ensure it exists in our list, fallback to 'Altro' if invalid/missing
     let category = data.category || 'Altro';
     if (!CATEGORIES[category]) {
         category = 'Altro';
@@ -267,17 +278,10 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       showToast({ message: 'Connettiti a internet per analizzare.', type: 'error' });
       return;
     }
-    
-    // 1. Aggiornamento UI Immediato (Ottimistico)
-    // Rimuoviamo l'immagine dalla lista visuale PRIMA di fare qualsiasi operazione asincrona.
-    // Questo previene che l'immagine rimanga visibile mentre il DB lavora.
-    setPendingImages(prev => prev.filter(img => img.id !== image.id));
-    
     setSyncingImageId(image.id);
     setIsParsingImage(true);
     
     try {
-      // Import dinamico
       const { parseExpensesFromImage } = await import('./utils/ai');
       const parsedData = await parseExpensesFromImage(image.base64Image, image.mimeType);
       
@@ -293,21 +297,14 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         setIsMultipleExpensesModalOpen(true);
       }
 
-      // 2. Pulizia DB
-      // Se era in coda (o shared), la cancelliamo dal DB.
-      // La UI è già stata aggiornata sopra, quindi non c'è "flicker".
       if (fromQueue) {
         await deleteImageFromQueue(image.id);
-        // Chiamiamo refresh per sicurezza, ma con un leggero delay per assicurarci che
-        // IndexedDB abbia committato la cancellazione.
-        setTimeout(refreshPendingImages, 200);
+        refreshPendingImages();
       }
 
     } catch (error) {
       console.error('AI Error:', error);
       showToast({ message: "Errore analisi immagine. Riprova.", type: 'error' });
-      // Se fallisce, ricarichiamo le immagini dal DB perché potremmo averla nascosta erroneamente
-      refreshPendingImages();
     } finally {
       setIsParsingImage(false);
       setSyncingImageId(null);
@@ -326,13 +323,10 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       try {
           showToast({ message: 'Elaborazione immagine condivisa...', type: 'info' });
           const { base64: base64Image, mimeType } = await processImageFile(file);
-          const newImage: OfflineImage = { id: crypto.randomUUID(), base64Image, mimeType };
+          const newImage: OfflineImage = { id: crypto.randomUUID(), base64Image, mimeType, timestamp: Date.now() };
 
           if (isOnline) {
-              // Se siamo online e arriva un file diretto, analizziamo subito.
-              // Nota: qui non è nel DB, quindi fromQueue=false
               setImageForAnalysis(newImage); 
-              setIsSharedMode(false); // Reset shared mode per sicurezza
           } else {
               await addImageToQueue(newImage);
               refreshPendingImages();
@@ -350,10 +344,9 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     try {
       const file = await pickImage(source);
       const { base64: base64Image, mimeType } = await processImageFile(file);
-      const newImage: OfflineImage = { id: crypto.randomUUID(), base64Image, mimeType };
+      const newImage: OfflineImage = { id: crypto.randomUUID(), base64Image, mimeType, timestamp: Date.now() };
       if (isOnline) {
         setImageForAnalysis(newImage);
-        setIsSharedMode(false);
       } else {
         await addImageToQueue(newImage);
         refreshPendingImages();
@@ -383,52 +376,44 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     }
   };
 
+  // ... Gestione ricorrenze (semplificata per il fix) ...
   const openRecurringEditForm = (expense: Expense) => { setEditingRecurringExpense(expense); setIsFormOpen(true); };
 
   // ================== ANALYZE MODAL HANDLERS ==================
   const handleModalConfirm = async () => {
       if (!imageForAnalysis) return;
       
-      // FIX CRITICO: 
-      // Se isSharedMode è attivo, FORZIAMO existsInDb a true.
-      // Questo perché le immagini condivise via Intent/ServiceWorker sono SEMPRE nel DB.
-      // Non ci fidiamo di getQueuedImages() qui perché potrebbe essere lenta o non aggiornata.
-      let existsInDb = isSharedMode;
+      // Directly check the flag on the object to decide if it's from DB/ShareTarget
+      let existsInDb = !!(imageForAnalysis._isShared);
 
+      // Fallback: check DB if flag is missing
       if (!existsInDb) {
-          // Fallback solo se non siamo in shared mode
-          try {
-             const dbImages = await getQueuedImages();
-             existsInDb = dbImages.some(img => img.id === imageForAnalysis.id);
-          } catch (e) {
-             existsInDb = false;
-          }
+          const dbImages = await getQueuedImages();
+          existsInDb = dbImages.some(img => img.id === imageForAnalysis.id);
       }
       
-      // Analizziamo. handleAnalyzeImage si occuperà di pulire la UI subito e il DB dopo.
       handleAnalyzeImage(imageForAnalysis, existsInDb); 
-      
       setImageForAnalysis(null);
-      setIsSharedMode(false);
   };
 
   const handleModalClose = async () => {
       if (!imageForAnalysis) return;
       
-      // Logica inversa: se annullo, devo assicurarmi che sia nel DB
-      let existsInDb = isSharedMode;
+      let existsInDb = !!(imageForAnalysis._isShared);
+      
       if (!existsInDb) {
-           const dbImages = await getQueuedImages();
-           existsInDb = dbImages.some(img => img.id === imageForAnalysis.id);
+          const dbImages = await getQueuedImages();
+          existsInDb = dbImages.some(img => img.id === imageForAnalysis.id);
       }
 
       if (!existsInDb) {
+          // If it wasn't in DB (manual upload), user chose "Queue", so add it.
           await addImageToQueue(imageForAnalysis);
       }
       
+      // Always refresh to show the item in the list
       refreshPendingImages();
       setImageForAnalysis(null);
-      setIsSharedMode(false);
   };
 
   // ================== RENDER ==================
@@ -452,12 +437,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
            <PendingImages 
               images={pendingImages} 
               onAnalyze={(img) => handleAnalyzeImage(img, true)}
-              onDelete={async (id) => { 
-                  // Ottimistic UI delete per il pulsante manuale
-                  setPendingImages(prev => prev.filter(img => img.id !== id));
-                  await deleteImageFromQueue(id); 
-                  refreshPendingImages(); 
-              }} 
+              onDelete={async (id) => { await deleteImageFromQueue(id); refreshPendingImages(); }} 
               isOnline={isOnline}
               syncingImageId={syncingImageId}
            />
@@ -475,14 +455,14 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       <SuccessIndicator show={showSuccessIndicator} />
 
       <CalculatorContainer 
-          isOpen={isCalculatorContainerOpen}
-          onClose={() => setIsCalculatorContainerOpen(false)}
-          onSubmit={(data) => { if('id' in data) updateExpense(data as Expense); else addExpense(data); setIsCalculatorContainerOpen(false); }}
-          accounts={safeAccounts} 
-          expenses={expenses || []}
-          onEditExpense={(e) => { setEditingExpense(e); setIsFormOpen(true); }}
-          onDeleteExpense={handleDeleteRequest}
-          onMenuStateChange={() => {}}
+         isOpen={isCalculatorContainerOpen}
+         onClose={() => setIsCalculatorContainerOpen(false)}
+         onSubmit={(data) => { if('id' in data) updateExpense(data as Expense); else addExpense(data); setIsCalculatorContainerOpen(false); }}
+         accounts={safeAccounts} 
+         expenses={expenses || []}
+         onEditExpense={(e) => { setEditingExpense(e); setIsFormOpen(true); }}
+         onDeleteExpense={handleDeleteRequest}
+         onMenuStateChange={() => {}}
       />
 
       <ExpenseForm
