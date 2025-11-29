@@ -127,6 +127,9 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   
   const [installPromptEvent, setInstallPromptEvent] = useState<any>(null);
   const pendingImagesCountRef = useRef(0);
+  
+  // Use a ref to track the shared image ID to ensure robustness across renders
+  const sharedImageIdRef = useRef<string | null>(null);
 
   // --- Refresh Images ---
   const refreshPendingImages = useCallback(async () => {
@@ -174,6 +177,9 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
                // Sort by timestamp if available to get the actual latest one
                safeImages.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
                const latestImage = safeImages[0];
+               
+               // Store ID in ref for robust checking later
+               sharedImageIdRef.current = latestImage.id;
                
                // Mark this image object specifically as "from shared target"
                const flaggedImage: ExtendedOfflineImage = { ...latestImage, _isShared: true };
@@ -383,13 +389,18 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const handleModalConfirm = async () => {
       if (!imageForAnalysis) return;
       
-      // Directly check the flag on the object to decide if it's from DB/ShareTarget
-      let existsInDb = !!(imageForAnalysis._isShared);
+      // Directly check the flag OR the ref to decide if it's from DB/ShareTarget
+      let existsInDb = !!(imageForAnalysis._isShared) || (sharedImageIdRef.current === imageForAnalysis.id);
 
       // Fallback: check DB if flag is missing
       if (!existsInDb) {
           const dbImages = await getQueuedImages();
           existsInDb = dbImages.some(img => img.id === imageForAnalysis.id);
+      }
+      
+      // Cleanup ref if it matched
+      if (imageForAnalysis.id === sharedImageIdRef.current) {
+          sharedImageIdRef.current = null;
       }
       
       handleAnalyzeImage(imageForAnalysis, existsInDb); 
@@ -399,7 +410,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const handleModalClose = async () => {
       if (!imageForAnalysis) return;
       
-      let existsInDb = !!(imageForAnalysis._isShared);
+      let existsInDb = !!(imageForAnalysis._isShared) || (sharedImageIdRef.current === imageForAnalysis.id);
       
       if (!existsInDb) {
           const dbImages = await getQueuedImages();
@@ -409,6 +420,11 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       if (!existsInDb) {
           // If it wasn't in DB (manual upload), user chose "Queue", so add it.
           await addImageToQueue(imageForAnalysis);
+      }
+      
+      // Cleanup ref if it matched
+      if (imageForAnalysis.id === sharedImageIdRef.current) {
+          sharedImageIdRef.current = null;
       }
       
       // Always refresh to show the item in the list
