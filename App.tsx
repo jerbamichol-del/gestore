@@ -290,6 +290,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         setIsMultipleExpensesModalOpen(true);
       }
 
+      // FIX: Ensure cleanup happens if flagged as fromQueue
       if (fromQueue) {
         await deleteImageFromQueue(image.id);
         refreshPendingImages();
@@ -376,21 +377,32 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const handleModalConfirm = async () => {
       if (!imageForAnalysis) return;
       
-      // If we are in shared mode, we MUST treat it as in-DB (because SW put it there).
-      // We prioritize the flag because reading DB might be race-condition prone.
+      // FIX: Determina in modo robusto se l'immagine è nel DB.
+      // Se siamo in sharedMode, dovrebbe esserlo, ma verifichiamo il DB per certezza
+      // così da passare il flag corretto (true) a handleAnalyzeImage, che la cancellerà dopo l'analisi.
       let existsInDb = isSharedMode;
 
-      // Fallback double-check in DB if not shared mode
       if (!existsInDb) {
-          const dbImages = await getQueuedImages();
-          existsInDb = dbImages.some(img => img.id === imageForAnalysis.id);
+          try {
+             const dbImages = await getQueuedImages();
+             existsInDb = dbImages.some(img => img.id === imageForAnalysis.id);
+          } catch (e) {
+             // In caso di errore DB, assumiamo false se non eravamo in shared mode
+             existsInDb = false;
+          }
+      } else {
+          // Se siamo in shared mode, verifichiamo comunque per sicurezza
+           try {
+             const dbImages = await getQueuedImages();
+             const actuallyInDb = dbImages.some(img => img.id === imageForAnalysis.id);
+             if (actuallyInDb) existsInDb = true;
+          } catch (e) {}
       }
       
-      // If it exists in DB (Share Target), we pass true so handleAnalyzeImage deletes it upon success.
+      // Avvia analisi. Se existsInDb è true, l'immagine verrà rimossa dalla coda al termine.
       handleAnalyzeImage(imageForAnalysis, existsInDb); 
-      setImageForAnalysis(null);
       
-      // Reset shared mode after handling
+      setImageForAnalysis(null);
       setIsSharedMode(false);
   };
 
@@ -399,17 +411,18 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       
       let existsInDb = isSharedMode;
       
+      // Check DB if not sure
       if (!existsInDb) {
           const dbImages = await getQueuedImages();
           existsInDb = dbImages.some(img => img.id === imageForAnalysis.id);
       }
 
+      // Se non esiste nel DB (upload manuale), e l'utente annulla/mette in coda, la salviamo.
       if (!existsInDb) {
-          // If it wasn't in DB (manual upload), user chose "Queue", so add it.
           await addImageToQueue(imageForAnalysis);
       }
+      // Se esiste già (Share Target), la lasciamo lì.
       
-      // Always refresh to show the item in the list
       refreshPendingImages();
       setImageForAnalysis(null);
       setIsSharedMode(false);
@@ -454,14 +467,14 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       <SuccessIndicator show={showSuccessIndicator} />
 
       <CalculatorContainer 
-         isOpen={isCalculatorContainerOpen}
-         onClose={() => setIsCalculatorContainerOpen(false)}
-         onSubmit={(data) => { if('id' in data) updateExpense(data as Expense); else addExpense(data); setIsCalculatorContainerOpen(false); }}
-         accounts={safeAccounts} 
-         expenses={expenses || []}
-         onEditExpense={(e) => { setEditingExpense(e); setIsFormOpen(true); }}
-         onDeleteExpense={handleDeleteRequest}
-         onMenuStateChange={() => {}}
+          isOpen={isCalculatorContainerOpen}
+          onClose={() => setIsCalculatorContainerOpen(false)}
+          onSubmit={(data) => { if('id' in data) updateExpense(data as Expense); else addExpense(data); setIsCalculatorContainerOpen(false); }}
+          accounts={safeAccounts} 
+          expenses={expenses || []}
+          onEditExpense={(e) => { setEditingExpense(e); setIsFormOpen(true); }}
+          onDeleteExpense={handleDeleteRequest}
+          onMenuStateChange={() => {}}
       />
 
       <ExpenseForm
