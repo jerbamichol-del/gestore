@@ -236,7 +236,9 @@ const MultipleExpensesModal: React.FC<MultipleExpensesModalProps> = ({ isOpen, o
                     const isSelected = selectedIndices.has(index);
                     const isExpanded = expandedIndex === index;
                     
-                    const subcategoriesForCategory = expense.category ? CATEGORIES[expense.category as keyof typeof CATEGORIES] : [];
+                    // Safe access to subcategories
+                    const subcategoriesForCategory = (expense.category && CATEGORIES[expense.category as keyof typeof CATEGORIES]) || [];
+                    
                     const selectedAccountLabel = accounts.find(a => a.id === expense.accountId)?.name;
                     const selectedCategoryLabel = expense.category ? getCategoryStyle(expense.category).label : undefined;
 
