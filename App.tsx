@@ -289,7 +289,9 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
       if (fromQueue) {
         await deleteImageFromQueue(image.id);
-        refreshPendingImages(); // Final sync with DB
+        // FIX: Non chiamare refreshPendingImages() qui. 
+        // L'abbiamo già rimossa ottimisticamente e chiamare refresh potrebbe ricaricare 
+        // l'immagine se il DB non ha ancora committato la cancellazione (race condition).
       }
 
     } catch (error) {
