@@ -1,7 +1,7 @@
 import { Expense } from '../types';
 
-// Recuperiamo l'URL iniettato da Vite
-const AI_ENDPOINT = process.env.APPS_SCRIPT_URL || '';
+// --- URL HARDCODED: Per evitare problemi di configurazione env/vite ---
+const AI_ENDPOINT = 'https://script.google.com/macros/s/AKfycbyZpH2rET4JNs35Ye_tewdpszsHLLRfLr6C-7qFKH_Xe1zg_vhHB8kaRyWQjAqG7-frVg/exec';
 
 type ImageResponse = {
   ok: boolean;
@@ -16,33 +16,29 @@ type VoiceResponse = {
 };
 
 async function callAiEndpoint<T>(payload: any): Promise<T> {
-  if (!AI_ENDPOINT) {
-    throw new Error("URL AI mancante. Controlla la configurazione VITE_APPS_SCRIPT_URL.");
-  }
-
   try {
-      const res = await fetch(AI_ENDPOINT, {
-        method: 'POST',
-        headers: {
-          // Text/plain evita il preflight CORS che Apps Script non gestisce bene
-          'Content-Type': 'text/plain;charset=utf-8',
-        },
-        body: JSON.stringify(payload),
-      });
+    const res = await fetch(AI_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        // text/plain evita il preflight CORS (opzione OPTIONS) di Google Apps Script
+        'Content-Type': 'text/plain;charset=utf-8',
+      },
+      body: JSON.stringify(payload),
+    });
 
-      if (!res.ok) {
-        throw new Error(`AI endpoint HTTP ${res.status}`);
-      }
+    if (!res.ok) {
+      throw new Error(`AI endpoint HTTP ${res.status}`);
+    }
 
-      const json = await res.json();
-      return json as T;
+    const json = await res.json();
+    return json as T;
   } catch (e) {
-      console.error("AI Fetch Error:", e);
-      throw e;
+    console.error("AI Call Error:", e);
+    throw e;
   }
 }
 
-// Helper per base64
+// Helper base64
 async function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -61,7 +57,6 @@ export async function parseExpensesFromImage(
   base64Image: string,
   mimeType: string
 ): Promise<Partial<Expense>[]> {
-  
   const result = await callAiEndpoint<ImageResponse>({
     action: 'parseImage',
     imageBase64: base64Image,
@@ -69,11 +64,9 @@ export async function parseExpensesFromImage(
   });
 
   if (!result.ok) {
-    console.error('[AI] Errore parseImage:', result.error);
-    throw new Error(result.error || "Errore generico durante l'analisi immagine.");
+    throw new Error(result.error || "Errore analisi immagine.");
   }
 
-  // Protezione: Se expenses è null/undefined, restituisci array vuoto
   return result.expenses || [];
 }
 
@@ -91,8 +84,7 @@ export async function parseExpenseFromAudio(
   });
 
   if (!result.ok) {
-    console.error('[AI] Errore parseVoice:', result.error);
-    throw new Error(result.error || "Errore generico durante l'analisi vocale.");
+    throw new Error(result.error || "Errore analisi vocale.");
   }
 
   return result.expense || null;
