@@ -106,6 +106,9 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const [isRecurringScreenOpen, setIsRecurringScreenOpen] = useState(false);
   const [isHistoryScreenOpen, setIsHistoryScreenOpen] = useState(false);
   const [isHistoryClosing, setIsHistoryClosing] = useState(false);
+  
+  // Track History Filter Panel state to hide FAB
+  const [isHistoryFilterOpen, setIsHistoryFilterOpen] = useState(false);
 
   // --- Dati ---
   const [editingExpense, setEditingExpense] = useState<Expense | undefined>(undefined);
@@ -540,7 +543,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         </div>
       </main>
 
-      {!isCalculatorContainerOpen && (
+      {!isCalculatorContainerOpen && !isHistoryFilterOpen && (
          <FloatingActionButton 
             onAddManually={() => openModalWithHistory('calculator', () => setIsCalculatorContainerOpen(true))}
             onAddFromImage={() => openModalWithHistory('source', () => setIsImageSourceModalOpen(true))}
@@ -626,7 +629,8 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
           onDeleteExpenses={(ids) => { setExpenses(prev => (prev || []).filter(e => !ids.includes(e.id))); }}
           isEditingOrDeleting={isFormOpen || isConfirmDeleteModalOpen}
           isOverlayed={false}
-          onDateModalStateChange={() => {}} onFilterPanelOpenStateChange={() => {}}
+          onDateModalStateChange={() => {}} 
+          onFilterPanelOpenStateChange={setIsHistoryFilterOpen}
         />
       )}
       
