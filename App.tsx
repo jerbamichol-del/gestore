@@ -106,6 +106,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const [isDateModalOpen, setIsDateModalOpen] = useState(false);
   const [isRecurringScreenOpen, setIsRecurringScreenOpen] = useState(false);
   const [isHistoryScreenOpen, setIsHistoryScreenOpen] = useState(false);
+  const [isHistoryClosing, setIsHistoryClosing] = useState(false);
   const [isHistoryFilterPanelOpen, setIsHistoryFilterPanelOpen] = useState(false);
 
   // --- Dati ---
@@ -464,7 +465,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
             onAddManually={() => setIsCalculatorContainerOpen(true)}
             onAddFromImage={() => setIsImageSourceModalOpen(true)}
             onAddFromVoice={() => setIsVoiceModalOpen(true)}
-            style={isHistoryScreenOpen ? { bottom: `calc(${PEEK_PX}px + 10px + env(safe-area-inset-bottom, 0px))` } : undefined}
+            style={(isHistoryScreenOpen && !isHistoryClosing) ? { bottom: `calc(90px + env(safe-area-inset-bottom, 0px))` } : undefined}
          />
       )}
       
@@ -538,7 +539,8 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       {isHistoryScreenOpen && (
         <HistoryScreen 
           expenses={expenses || []} accounts={safeAccounts} 
-          onClose={() => setIsHistoryScreenOpen(false)} 
+          onClose={() => { setIsHistoryScreenOpen(false); setIsHistoryClosing(false); }} // Reset closing state on finish
+          onCloseStart={() => setIsHistoryClosing(true)} // Set closing state on start
           onEditExpense={(e) => { setEditingExpense(e); setIsFormOpen(true); }} 
           onDeleteExpense={handleDeleteRequest}
           onDeleteExpenses={(ids) => { setExpenses(prev => (prev || []).filter(e => !ids.includes(e.id))); }}
