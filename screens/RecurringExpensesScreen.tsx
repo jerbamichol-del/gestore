@@ -8,7 +8,6 @@ import { TrashIcon } from '../components/icons/TrashIcon';
 import { CalendarDaysIcon } from '../components/icons/CalendarDaysIcon';
 import { CheckIcon } from '../components/icons/CheckIcon';
 import ConfirmationModal from '../components/ConfirmationModal';
-import { useTapBridge } from '../hooks/useTapBridge';
 
 const ACTION_WIDTH = 72;
 
@@ -71,18 +70,19 @@ const RecurringExpenseItem: React.FC<{
   isSelected: boolean;
   onToggleSelection: (id: string) => void;
   onLongPress: (id: string) => void;
-}> = ({ expense, accounts, onEdit, onDeleteRequest, isOpen, onOpen, isSelectionMode, isSelected, onToggleSelection, onLongPress }) => {
+  isFinished: boolean; // NEW prop
+}> = ({ expense, accounts, onEdit, onDeleteRequest, isOpen, onOpen, isSelectionMode, isSelected, onToggleSelection, onLongPress, isFinished }) => {
     const style = getCategoryStyle(expense.category);
     const accountName = accounts.find(a => a.id === expense.accountId)?.name || 'Sconosciuto';
     const itemRef = useRef<HTMLDivElement>(null);
-    const tapBridge = useTapBridge();
 
     const nextDueDate = useMemo(() => {
+        if (isFinished) return null;
         const baseDate = parseLocalYYYYMMDD(expense.lastGeneratedDate || expense.date);
         if (!baseDate) return null;
         if (!expense.lastGeneratedDate) return baseDate;
         return calculateNextDueDate(expense, baseDate);
-    }, [expense]);
+    }, [expense, isFinished]);
 
     // Long press logic
     const longPressTimer = useRef<number | null>(null);
@@ -240,13 +240,12 @@ const RecurringExpenseItem: React.FC<{
     };
 
     return (
-        <div className={`relative overflow-hidden transition-colors duration-200 ${isSelected ? 'bg-indigo-50 ring-1 ring-inset ring-indigo-200' : 'bg-amber-50'}`}>
+        <div className={`relative overflow-hidden transition-colors duration-200 ${isSelected ? 'bg-indigo-50 ring-1 ring-inset ring-indigo-200' : isFinished ? 'bg-slate-50 opacity-75' : 'bg-amber-50'}`}>
             <div className="absolute top-0 right-0 h-full flex items-center z-0">
                 <button
                     onClick={() => onDeleteRequest(expense.id)}
                     className="w-[72px] h-full flex flex-col items-center justify-center bg-red-500 text-white hover:bg-red-600 transition-colors focus:outline-none focus:visible:ring-2 focus-visible:ring-inset focus-visible:ring-white"
                     aria-label="Elimina spesa programmata"
-                    {...tapBridge}
                 >
                     <TrashIcon className="w-6 h-6" />
                     <span className="text-xs mt-1">Elimina</span>
@@ -259,7 +258,7 @@ const RecurringExpenseItem: React.FC<{
                 onPointerUp={handlePointerUp}
                 onPointerCancel={handlePointerCancel}
                 onClick={handleClick}
-                className={`relative flex items-center gap-4 py-3 px-4 ${isSelected ? 'bg-indigo-50' : 'bg-amber-50'} z-10 cursor-pointer transition-colors duration-200`}
+                className={`relative flex items-center gap-4 py-3 px-4 ${isSelected ? 'bg-indigo-50' : isFinished ? 'bg-slate-50' : 'bg-amber-50'} z-10 cursor-pointer transition-colors duration-200`}
                 style={{ touchAction: 'pan-y' }}
             >
                 {isSelected ? (
@@ -267,19 +266,21 @@ const RecurringExpenseItem: React.FC<{
                         <CheckIcon className="w-6 h-6" strokeWidth={3} />
                      </span>
                 ) : (
-                    <span className={`w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center ${style.bgColor} transition-transform duration-200`}>
+                    <span className={`w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center ${style.bgColor} transition-transform duration-200 ${isFinished ? 'grayscale' : ''}`}>
                         <style.Icon className={`w-6 h-6 ${style.color}`} />
                     </span>
                 )}
 
                 <div className="flex-grow min-w-0">
-                    <p className={`font-semibold truncate ${isSelected ? 'text-indigo-900' : 'text-slate-800'}`}>{expense.description || 'Senza descrizione'}</p>
+                    <p className={`font-semibold truncate ${isSelected ? 'text-indigo-900' : isFinished ? 'text-slate-500 line-through' : 'text-slate-800'}`}>{expense.description || 'Senza descrizione'}</p>
                     <p className={`text-sm truncate ${isSelected ? 'text-indigo-700' : 'text-slate-500'}`}>{getRecurrenceSummary(expense)} • {accountName}</p>
                 </div>
                 
                 <div className="flex flex-col items-end shrink-0 min-w-[90px]">
-                    <p className={`font-bold text-lg text-right whitespace-nowrap ${isSelected ? 'text-indigo-900' : 'text-slate-900'}`}>{formatCurrency(Number(expense.amount) || 0)}</p>
-                    {nextDueDate && (
+                    <p className={`font-bold text-lg text-right whitespace-nowrap ${isSelected ? 'text-indigo-900' : isFinished ? 'text-slate-400' : 'text-slate-900'}`}>{formatCurrency(Number(expense.amount) || 0)}</p>
+                    {isFinished ? (
+                        <div className="text-xs font-bold text-slate-400 mt-1 uppercase tracking-wider bg-slate-200 px-2 py-0.5 rounded-full">Completata</div>
+                    ) : nextDueDate && (
                          <div className={`text-sm font-medium mt-1 whitespace-nowrap ${isSelected ? 'text-indigo-600' : 'text-slate-500'}`}>
                             {formatDate(nextDueDate)}
                          </div>
@@ -313,43 +314,45 @@ const RecurringExpensesScreen: React.FC<RecurringExpensesScreenProps> = ({ recur
   
   const isSelectionMode = selectedIds.size > 0;
 
+  // Logic is now restrictive: Show only ACTIVE recurring templates.
   const activeRecurringExpenses = useMemo(() => {
-    // Check if expenses is defined before using it
     const safeExpenses = expenses || [];
     
-    return recurringExpenses.filter(template => {
+    return recurringExpenses.map(template => {
         if (template.frequency !== 'recurring') {
-            return false;
+            return null; // Filter out non-recurring immediately
         }
 
-        if (!template.recurrenceEndType || template.recurrenceEndType === 'forever') {
-            return true;
-        }
+        let isFinished = false;
 
         if (template.recurrenceEndType === 'count') {
-            if (!template.recurrenceCount || template.recurrenceCount <= 0) return true; 
-            const generatedCount = safeExpenses.filter(e => e.recurringExpenseId === template.id).length;
-            return generatedCount < template.recurrenceCount;
-        }
-
-        if (template.recurrenceEndType === 'date') {
+            if (template.recurrenceCount && template.recurrenceCount > 0) {
+                const generatedCount = safeExpenses.filter(e => e.recurringExpenseId === template.id).length;
+                if (generatedCount >= template.recurrenceCount) {
+                    isFinished = true;
+                }
+            }
+        } else if (template.recurrenceEndType === 'date') {
             const endDate = parseLocalYYYYMMDD(template.recurrenceEndDate);
-            if (!endDate) return true;
-
-            const lastDate = parseLocalYYYYMMDD(template.lastGeneratedDate || template.date);
-            if (!lastDate) return true;
-            
-            if (lastDate.getTime() > endDate.getTime()) return false;
-
-            const nextDueDate = calculateNextDueDate(template, lastDate);
-
-            if (!nextDueDate) return false;
-            
-            return nextDueDate.getTime() <= endDate.getTime();
+            if (endDate) {
+                const lastDate = parseLocalYYYYMMDD(template.lastGeneratedDate || template.date);
+                if (lastDate) {
+                    if (lastDate.getTime() > endDate.getTime()) {
+                        isFinished = true;
+                    } else {
+                        // Check if next possible date is past end date
+                        const nextDueDate = calculateNextDueDate(template, lastDate);
+                        if (!nextDueDate || nextDueDate.getTime() > endDate.getTime()) {
+                            isFinished = true;
+                        }
+                    }
+                }
+            }
         }
 
-        return true;
-    });
+        return { ...template, isFinished };
+    })
+    .filter((e): e is (Expense & { isFinished: boolean }) => e !== null && !e.isFinished); // Exclude finished expenses
   }, [recurringExpenses, expenses]);
 
   useEffect(() => {
@@ -432,7 +435,10 @@ const RecurringExpensesScreen: React.FC<RecurringExpensesScreenProps> = ({ recur
       setSelectedIds(new Set());
   };
   
-  const sortedExpenses = [...activeRecurringExpenses].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  // Sort by date
+  const sortedExpenses = [...activeRecurringExpenses].sort((a, b) => {
+      return new Date(b.date).getTime() - new Date(a.date).getTime();
+  });
 
   return (
     <div 
@@ -484,6 +490,7 @@ const RecurringExpensesScreen: React.FC<RecurringExpensesScreenProps> = ({ recur
                             isSelected={selectedIds.has(expense.id)}
                             onToggleSelection={handleToggleSelection}
                             onLongPress={handleLongPress}
+                            isFinished={expense.isFinished}
                         />
                     </React.Fragment>
                 ))}
@@ -492,7 +499,7 @@ const RecurringExpensesScreen: React.FC<RecurringExpensesScreenProps> = ({ recur
           <div className="text-center text-slate-500 pt-20 px-6">
             <CalendarDaysIcon className="w-16 h-16 mx-auto text-slate-400" />
             <p className="text-lg font-semibold mt-4">Nessuna spesa programmata attiva</p>
-            <p className="mt-2">Le spese programmate concluse vengono rimosse automaticamente. Puoi crearne di nuove quando aggiungi una spesa.</p>
+            <p className="mt-2">Puoi creare una spesa ricorrente quando aggiungi una nuova spesa.</p>
           </div>
         )}
       </main>
