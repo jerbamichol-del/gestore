@@ -1,3 +1,4 @@
+
 // CalculatorInputScreen.tsx
 import React, { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { Expense, Account, CATEGORIES } from '../types';
@@ -133,7 +134,6 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
   }, []);
 
   // Sync bidirezionale con debounce
-  // FIX: Changed type from global.NodeJS.Timeout to number for browser compatibility.
   const syncTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -352,11 +352,11 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
       <div className="flex-1 flex flex-col">
         <header className="flex items-center justify-between p-4 flex-shrink-0">
           <button
-            // FIX: This onClick handler was implicitly passing a MouseEvent to a prop expecting no arguments.
-            // Wrapping it in a lambda function prevents the type mismatch.
             onClick={() => onClose()}
+            onPointerDown={(e) => e.stopPropagation()} // FIX: Stop propagation to prevent TapBridge from interfering
+            data-no-synthetic-click // FIX: Tell TapBridge to ignore this element
             aria-label="Chiudi calcolatrice"
-            className="w-11 h-11 flex items-center justify-center border border-red-300 text-red-600 bg-red-50 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 rounded-full transition-colors"
+            className="w-11 h-11 flex items-center justify-center border border-red-300 text-red-600 bg-red-50 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 rounded-full transition-colors cursor-pointer"
           >
             <XMarkIcon className="w-6 h-6" />
           </button>
