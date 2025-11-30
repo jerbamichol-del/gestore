@@ -1,5 +1,5 @@
-
 import * as XLSX from 'xlsx';
+import { Expense } from '../types';
 
 /**
  * Converte una stringa di testo in un'immagine base64 (PNG).
@@ -95,4 +95,30 @@ export const processFileToImage = async (file: File): Promise<{ base64: string; 
     base64: base64Image,
     mimeType: 'image/png',
   };
+};
+
+export const exportExpenses = (expenses: Expense[]) => {
+    try {
+        const rows = expenses.map(e => ({
+            Data: e.date,
+            Ora: e.time || '',
+            Importo: e.amount,
+            Descrizione: e.description,
+            Categoria: e.category,
+            Sottocategoria: e.subcategory || '',
+            Conto: e.accountId,
+            Tags: e.tags ? e.tags.join(', ') : '',
+            Frequenza: e.frequency === 'recurring' ? 'Ricorrente' : 'Singola'
+        }));
+
+        const worksheet = XLSX.utils.json_to_sheet(rows);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Spese");
+        
+        const dateStr = new Date().toISOString().slice(0, 10);
+        XLSX.writeFile(workbook, `Spese_Export_${dateStr}.xlsx`);
+    } catch (e) {
+        console.error("Export failed", e);
+        alert("Si è verificato un errore durante l'esportazione.");
+    }
 };
