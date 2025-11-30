@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Expense, Account, CATEGORIES } from './types';
 import { useLocalStorage } from './hooks/useLocalStorage';
@@ -130,6 +131,8 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   
   // Use a ref to track the shared image ID to ensure robustness across renders
   const sharedImageIdRef = useRef<string | null>(null);
+  // Track initial shared state to prevent race conditions with refreshing pending images
+  const isSharedStart = useRef(new URLSearchParams(window.location.search).get('shared') === 'true');
 
   // --- Refresh Images ---
   const refreshPendingImages = useCallback(async () => {
@@ -154,9 +157,8 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   }, []);
 
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    // Refresh only if not in shared mode, to avoid overwriting state managed by checkForSharedFile
-    if (urlParams.get('shared') !== 'true') {
+    // Refresh only if not in shared mode initially, to avoid overwriting state managed by checkForSharedFile
+    if (!isSharedStart.current) {
         refreshPendingImages();
     }
   }, [refreshPendingImages]);
@@ -164,8 +166,9 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   // --- Check for Shared Content (PWA Share Target) ---
   useEffect(() => {
     const checkForSharedFile = async () => {
+      // Use the ref to check logic, but still check URL param for safety/redundancy
       const urlParams = new URLSearchParams(window.location.search);
-      if (urlParams.get('shared') === 'true') {
+      if (urlParams.get('shared') === 'true' || isSharedStart.current) {
         // Clean URL immediately
         window.history.replaceState({}, '', window.location.pathname);
         
@@ -303,10 +306,14 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         setIsMultipleExpensesModalOpen(true);
       }
 
+      // Optimistic update: Remove from UI immediately so it doesn't flicker or persist visually
+      setPendingImages(prev => prev.filter(img => img.id !== image.id));
+
       // Always try to delete the image from queue after analysis.
-      // If it was a shared image or from queue, this cleans it up.
-      // If it was a manual upload (not in DB), this is a harmless no-op.
+      // If it was a shared image or from queue, this cleans it up from DB.
       await deleteImageFromQueue(image.id);
+      
+      // Finally refresh from DB to be sure (though the optimistic update handles the UI)
       refreshPendingImages();
 
     } catch (error) {
