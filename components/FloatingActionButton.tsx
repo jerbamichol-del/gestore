@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { PlusIcon } from './icons/PlusIcon';
 import { MicrophoneIcon } from './icons/MicrophoneIcon';
@@ -73,13 +74,14 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({ onAddManual
     const baseStyle: React.CSSProperties = {
         bottom: `calc(1.5rem + env(safe-area-inset-bottom, 0px))`,
         right: `calc(1.5rem + env(safe-area-inset-right, 0px))`,
+        transition: 'bottom 300ms cubic-bezier(0.22, 0.61, 0.36, 1)',
     };
     
     const finalStyle: React.CSSProperties = { ...baseStyle, ...style };
 
     return (
         <div 
-            className="fixed z-40 flex flex-col items-center"
+            className="fixed z-[1050] flex flex-col items-center"
             style={finalStyle}
         >
             {/* Action buttons are only in the DOM when they should be visible or animating out */}
