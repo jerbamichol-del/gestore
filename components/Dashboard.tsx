@@ -1,10 +1,10 @@
+
+
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Sector } from 'recharts';
 import { Expense } from '../types';
 import { formatCurrency } from './icons/formatters';
 import { getCategoryStyle } from '../utils/categoryStyles';
-import { useTapBridge } from '../hooks/useTapBridge';
-import { useSharedIntent } from '../hooks/useSharedIntent'; // <--- NUOVO IMPORT
 import { CloudArrowUpIcon } from './icons/CloudArrowUpIcon';
 // Import components from HistoryFilterCard
 import { 
@@ -66,7 +66,7 @@ interface DashboardProps {
   onNavigateToRecurring: () => void;
   onNavigateToHistory: () => void;
   onImportFile: (file: File) => void;
-  onReceiveSharedFile: (file: File) => void; // <--- NUOVA PROP per gestire lo screenshot
+  onReceiveSharedFile?: (file: File) => void | Promise<void>;
 }
 
 const parseLocalYYYYMMDD = (s: string): Date => {
@@ -105,21 +105,7 @@ const calculateNextDueDate = (template: Expense, fromDate: Date): Date | null =>
   return nextDate;
 };
 
-const Dashboard: React.FC<DashboardProps> = ({ 
-    expenses, 
-    recurringExpenses, 
-    onNavigateToRecurring, 
-    onNavigateToHistory, 
-    onImportFile,
-    onReceiveSharedFile // <--- Destructuring della nuova prop
-}) => {
-  
-  // --- INTEGRAZIONE SCREENSHOT CONDIVISI ---
-  // Questo hook ascolta automaticamente ?shared=true, recupera il file dal DB
-  // e chiama la funzione passata (onReceiveSharedFile)
-  useSharedIntent(onReceiveSharedFile);
-  // -----------------------------------------
-
+const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNavigateToRecurring, onNavigateToHistory, onImportFile }) => {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   
   // View State for Filter Swiper (0: Quick, 1: Period, 2: Custom)
@@ -135,7 +121,6 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [isSwipeAnimating, setIsSwipeAnimating] = useState(false);
   const [swipeOffset, setSwipeOffset] = useState(0);
 
-  const tapBridge = useTapBridge();
   const activeIndex = selectedIndex;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const headerContainerRef = useRef<HTMLDivElement>(null);
@@ -374,7 +359,6 @@ const Dashboard: React.FC<DashboardProps> = ({
                                         currentValue={quickFilter}
                                         onSelect={(v) => { setQuickFilter(v); setActiveViewIndex(0); }}
                                         compact={true}
-                                        tapBridge={tapBridge}
                                     />
                                 </div>
                                 {/* Page 1: Period Navigator - Sempre visibile (è quello col menu) */}
@@ -390,7 +374,6 @@ const Dashboard: React.FC<DashboardProps> = ({
                                         onMenuToggle={setIsPeriodMenuOpen}
                                         isPanelOpen={true} // Always drop down in dashboard
                                         compact={true}
-                                        tapBridge={tapBridge}
                                     />
                                 </div>
                                 {/* Page 2: Custom Range - Nascondi se menu aperto */}
@@ -400,7 +383,6 @@ const Dashboard: React.FC<DashboardProps> = ({
                                         range={customRange}
                                         onChange={(r) => { setCustomRange(r); setActiveViewIndex(2); }}
                                         compact={true}
-                                        tapBridge={tapBridge}
                                     />
                                 </div>
                             </div>
@@ -429,7 +411,6 @@ const Dashboard: React.FC<DashboardProps> = ({
                                 onClick={onNavigateToRecurring}
                                 style={{ touchAction: 'manipulation' }}
                                 className="flex items-center justify-center py-2 px-3 text-center font-semibold text-slate-900 bg-amber-100 rounded-xl hover:bg-amber-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition-all border border-amber-400"
-                                {...tapBridge}
                             >
                                 <span className="text-sm">S. Programmate</span>
                             </button>
@@ -438,7 +419,6 @@ const Dashboard: React.FC<DashboardProps> = ({
                                 onClick={onNavigateToHistory}
                                 style={{ touchAction: 'manipulation' }}
                                 className="flex items-center justify-center py-2 px-3 text-center font-semibold text-slate-900 bg-amber-100 rounded-xl hover:bg-amber-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition-all border border-amber-400"
-                                {...tapBridge}
                             >
                                 <span className="text-sm">Storico Spese</span>
                             </button>
@@ -456,8 +436,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                 />
                 <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-indigo-5 text-indigo-700 font-bold rounded-2xl border border-indigo-100 shadow-sm hover:bg-indigo-100 transition-colors"
-                    {...tapBridge}
+                    className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-indigo-50 text-indigo-700 font-bold rounded-2xl border border-indigo-100 shadow-sm hover:bg-indigo-100 transition-colors"
                 >
                     <CloudArrowUpIcon className="w-6 h-6" />
                     Importa Estratto Conto (CSV/Excel)
