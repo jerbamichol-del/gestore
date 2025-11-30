@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { ExclamationTriangleIcon } from './icons/ExclamationTriangleIcon';
 import { InformationCircleIcon } from './icons/InformationCircleIcon';
@@ -54,7 +55,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
 
   return (
     <div
-      className={`fixed inset-0 z-[2100] flex justify-center items-center p-4 transition-opacity duration-75 ease-in-out ${isAnimating ? 'opacity-100' : 'opacity-0'} bg-slate-900/60 backdrop-blur-sm`}
+      className={`fixed inset-0 z-[5100] flex justify-center items-center p-4 transition-opacity duration-75 ease-in-out ${isAnimating ? 'opacity-100' : 'opacity-0'} bg-slate-900/60 backdrop-blur-sm`}
       onClick={onClose}
       aria-modal="true"
       role="dialog"
