@@ -493,7 +493,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       />
 
       {isImageSourceModalOpen && (
-        <div className="fixed inset-0 z-50 flex justify-center items-end p-4 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsImageSourceModalOpen(false)}>
+        <div className="fixed inset-0 z-[5200] flex justify-center items-center p-4 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsImageSourceModalOpen(false)}>
           <div className="bg-slate-50 rounded-lg shadow-xl w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
             <header className="flex justify-between items-center p-6 border-b border-slate-200">
               <h2 className="text-xl font-bold text-slate-800">Aggiungi da Immagine</h2>
