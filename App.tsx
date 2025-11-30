@@ -138,21 +138,30 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
       const state = event.state;
+      const modal = state?.modal;
       
-      // Se lo stato è nullo o non ha una modale specifica, chiudiamo tutto
-      if (!state || !state.modal) {
-        setIsCalculatorContainerOpen(false);
+      // Close leaf modals if they are not the current target
+      if (modal !== 'form') setIsFormOpen(false);
+      if (modal !== 'voice') setIsVoiceModalOpen(false);
+      if (modal !== 'source') setIsImageSourceModalOpen(false);
+      if (modal !== 'multiple') setIsMultipleExpensesModalOpen(false);
+      
+      // Calculator has internal navigation (details), preserve it if active
+      if (modal !== 'calculator' && modal !== 'calculator_details') {
+          setIsCalculatorContainerOpen(false);
+      }
+
+      // Handle main screens / root state
+      if (!modal) {
         setIsHistoryScreenOpen(false);
         setIsRecurringScreenOpen(false);
-        setIsImageSourceModalOpen(false);
-        setIsVoiceModalOpen(false);
-        setIsFormOpen(false);
-        setIsMultipleExpensesModalOpen(false);
         setImageForAnalysis(null);
-      } else {
-        // Se c'è uno stato modale, assicuriamoci che la modale corretta sia aperta
-        // Nota: questo gestisce solo il "Back" che rimuove lo stato.
-        // Se l'utente va avanti (redo), potremmo dover riaprire, ma è raro in mobile app.
+      } else if (modal === 'history') {
+        setIsHistoryScreenOpen(true);
+        setIsRecurringScreenOpen(false);
+      } else if (modal === 'recurring') {
+        setIsRecurringScreenOpen(true);
+        setIsHistoryScreenOpen(false);
       }
     };
 
