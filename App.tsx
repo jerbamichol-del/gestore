@@ -464,6 +464,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
             onAddManually={() => setIsCalculatorContainerOpen(true)}
             onAddFromImage={() => setIsImageSourceModalOpen(true)}
             onAddFromVoice={() => setIsVoiceModalOpen(true)}
+            style={isHistoryScreenOpen ? { bottom: `calc(${PEEK_PX}px + 10px + env(safe-area-inset-bottom, 0px))` } : undefined}
          />
       )}
       
