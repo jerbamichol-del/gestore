@@ -1,3 +1,4 @@
+
 import React, {
   useState,
   useRef,
@@ -409,6 +410,7 @@ export const PeriodNavigator: React.FC<{
 /* -------------------- HistoryFilterCard (bottom sheet) -------------------- */
 
 export const PEEK_PX = 78;
+const LOWER_OFFSET_PX = 16; // approx 4mm
 
 export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
   const [isPeriodMenuOpen, setIsPeriodMenuOpen] = useState(false);
@@ -534,6 +536,9 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
           // But ensure it doesn't cover too much if screen is tiny
           oh = Math.min(oh, visualHeight * 0.85); 
       }
+
+      // Apply Vertical Offset to lower the panel when open
+      oh = Math.max(oh - LOWER_OFFSET_PX, PEEK_PX + 10);
 
       const closed = Math.max(oh - PEEK_PX, 0);
 
