@@ -54,6 +54,11 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [dateError, setDateError] = useState(false);
+  
+  // Lock state for UI feedback
+  const [isSubmitting, setIsSubmitting] = useState(false); 
+  // Lock ref for synchronous blocking of duplicate events
+  const submittingRef = useRef(false);
 
   // NEW: gate per riattivare lo swipe a ogni apertura
   const [swipeReady, setSwipeReady] = useState(false);
@@ -114,6 +119,11 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
     if (isOpen) {
       setFormData(resetFormData());
       setDateError(false);
+      
+      // Reset submission locks
+      setIsSubmitting(false); 
+      submittingRef.current = false;
+
       setView('calculator');
       // gate: disabilita e riabilita swipe dopo breve delay per forzare rebind
       setSwipeReady(false);
@@ -135,6 +145,8 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
       const t = addTimeout(window.setTimeout(() => {
         setFormData(resetFormData());
         setDateError(false);
+        setIsSubmitting(false);
+        submittingRef.current = false;
       }, 300));
       return () => clearTimeout(t);
     }
@@ -213,17 +225,26 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   }, []);
 
   const handleAttemptSubmit = useCallback((data: Omit<Expense, 'id'>) => {
+    // Synchronous check to prevent double submission
+    if (submittingRef.current) return;
+
     if (!data.date) {
       navigateTo('details');
       setDateError(true);
       const t = addTimeout(window.setTimeout(() => document.getElementById('date')?.focus(), 150));
       return;
     }
+    
+    // Lock immediately
+    submittingRef.current = true;
+    setIsSubmitting(true);
     setDateError(false);
     
     // IF we are in details view, pop that state first so parent close works as expected
     if (view === 'details') {
          window.history.back(); // Pop 'details' state
+         // onSubmit typically closes the modal, which will eventually unmount this component
+         // or reset state via the isOpen prop change.
          onSubmit(data); 
     } else {
          onSubmit(data);
