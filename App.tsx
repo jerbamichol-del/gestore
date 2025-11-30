@@ -103,11 +103,9 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const [isConfirmDeleteModalOpen, setIsConfirmDeleteModalOpen] = useState(false);
   const [isMultipleExpensesModalOpen, setIsMultipleExpensesModalOpen] = useState(false);
   const [isParsingImage, setIsParsingImage] = useState(false);
-  const [isDateModalOpen, setIsDateModalOpen] = useState(false);
   const [isRecurringScreenOpen, setIsRecurringScreenOpen] = useState(false);
   const [isHistoryScreenOpen, setIsHistoryScreenOpen] = useState(false);
   const [isHistoryClosing, setIsHistoryClosing] = useState(false);
-  const [isHistoryFilterPanelOpen, setIsHistoryFilterPanelOpen] = useState(false);
 
   // --- Dati ---
   const [editingExpense, setEditingExpense] = useState<Expense | undefined>(undefined);
@@ -134,6 +132,52 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const sharedImageIdRef = useRef<string | null>(null);
   // Track initial shared state to prevent race conditions with refreshing pending images
   const isSharedStart = useRef(new URLSearchParams(window.location.search).get('shared') === 'true');
+
+  // --- HISTORY MANAGEMENT ---
+  // Gestisce la navigazione con il tasto "Indietro" del telefono
+  useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+      const state = event.state;
+      
+      // Se lo stato è nullo o non ha una modale specifica, chiudiamo tutto
+      if (!state || !state.modal) {
+        setIsCalculatorContainerOpen(false);
+        setIsHistoryScreenOpen(false);
+        setIsRecurringScreenOpen(false);
+        setIsImageSourceModalOpen(false);
+        setIsVoiceModalOpen(false);
+        setIsFormOpen(false);
+        setIsMultipleExpensesModalOpen(false);
+        setImageForAnalysis(null);
+      } else {
+        // Se c'è uno stato modale, assicuriamoci che la modale corretta sia aperta
+        // Nota: questo gestisce solo il "Back" che rimuove lo stato.
+        // Se l'utente va avanti (redo), potremmo dover riaprire, ma è raro in mobile app.
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const openModalWithHistory = (modalName: string, opener: () => void) => {
+      // Use null for URL to avoid SecurityError in blob/iframe contexts while keeping history state behavior
+      window.history.pushState({ modal: modalName }, '');
+      opener();
+  };
+
+  const closeModalWithHistory = () => {
+      // Se c'è uno stato nello stack, torniamo indietro.
+      // Altrimenti (es. aperto direttamente via URL - raro), chiudiamo solo lo stato.
+      if (window.history.state && window.history.state.modal) {
+          window.history.back();
+      } else {
+          // Fallback se non c'è history (es. hot reload)
+          window.history.replaceState(null, '', window.location.pathname);
+          // Trigger manual cleanup
+          window.dispatchEvent(new PopStateEvent('popstate', { state: null }));
+      }
+  };
 
   // --- Refresh Images ---
   const refreshPendingImages = useCallback(async () => {
@@ -300,11 +344,11 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       } else if (parsedData.length === 1) {
         const safeData = sanitizeExpenseData(parsedData[0], image.base64Image);
         setPrefilledData(safeData);
-        setIsFormOpen(true);
+        openModalWithHistory('form', () => setIsFormOpen(true));
       } else {
         const safeMultipleData = parsedData.map(item => sanitizeExpenseData(item, image.base64Image));
         setMultipleExpensesData(safeMultipleData);
-        setIsMultipleExpensesModalOpen(true);
+        openModalWithHistory('multiple', () => setIsMultipleExpensesModalOpen(true));
       }
 
       // Optimistic update: Remove from UI immediately so it doesn't flicker or persist visually
@@ -327,10 +371,10 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   };
 
   const handleVoiceParsed = (data: Partial<Omit<Expense, 'id'>>) => {
-    setIsVoiceModalOpen(false);
+    closeModalWithHistory(); // Chiude la modale voce
     const safeData = sanitizeExpenseData(data);
     setPrefilledData(safeData);
-    setIsFormOpen(true);
+    openModalWithHistory('form', () => setIsFormOpen(true));
   };
 
   // ================== SHARE TARGET HANDLER ==================
@@ -354,7 +398,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   };
 
   const handleImagePick = async (source: 'camera' | 'gallery') => {
-    setIsImageSourceModalOpen(false);
+    closeModalWithHistory(); // Chiude il menu sorgente
     sessionStorage.setItem('preventAutoLock', 'true');
     try {
       const file = await pickImage(source);
@@ -375,13 +419,40 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
   // ... Funzioni CRUD ...
   const addExpense = (newExpense: Omit<Expense, 'id'>) => {
-      setExpenses(prev => [{ ...newExpense, id: crypto.randomUUID() }, ...(prev || [])]);
+      if (newExpense.frequency === 'recurring') {
+          setRecurringExpenses(prev => [{ ...newExpense, id: crypto.randomUUID() } as Expense, ...(prev || [])]);
+      } else {
+          setExpenses(prev => [{ ...newExpense, id: crypto.randomUUID() } as Expense, ...(prev || [])]);
+      }
       setShowSuccessIndicator(true); setTimeout(() => setShowSuccessIndicator(false), 2000);
   };
+  
   const updateExpense = (updated: Expense) => {
-      setExpenses(prev => (prev || []).map(e => e.id === updated.id ? updated : e));
+      // Check if it exists in expenses
+      let updatedInExpenses = false;
+      setExpenses(prev => {
+          const exists = (prev || []).some(e => e.id === updated.id);
+          if (exists) {
+              updatedInExpenses = true;
+              return prev.map(e => e.id === updated.id ? updated : e);
+          }
+          return prev;
+      });
+
+      // If not updated in expenses, try recurring (or if it was recurring, update it there)
+      // Note: Changing from one list to another via ID check is tricky without more info,
+      // but typically we are editing an item from a specific context.
+      setRecurringExpenses(prev => {
+          const exists = (prev || []).some(e => e.id === updated.id);
+          if (exists) {
+              return prev.map(e => e.id === updated.id ? updated : e);
+          }
+          return prev;
+      });
+
       setShowSuccessIndicator(true); setTimeout(() => setShowSuccessIndicator(false), 2000);
   };
+  
   const handleDeleteRequest = (id: string) => { setExpenseToDeleteId(id); setIsConfirmDeleteModalOpen(true); };
   const confirmDelete = () => {
     if (expenseToDeleteId) {
@@ -391,8 +462,8 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     }
   };
 
-  // ... Gestione ricorrenze (semplificata per il fix) ...
-  const openRecurringEditForm = (expense: Expense) => { setEditingRecurringExpense(expense); setIsFormOpen(true); };
+  // ... Gestione ricorrenze ...
+  const openRecurringEditForm = (expense: Expense) => { setEditingRecurringExpense(expense); openModalWithHistory('form', () => setIsFormOpen(true)); };
 
   // ================== ANALYZE MODAL HANDLERS ==================
   const handleModalConfirm = async () => {
@@ -444,8 +515,8 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
            <Dashboard 
               expenses={expenses || []} 
               recurringExpenses={recurringExpenses || []} 
-              onNavigateToRecurring={() => setIsRecurringScreenOpen(true)}
-              onNavigateToHistory={() => setIsHistoryScreenOpen(true)}
+              onNavigateToRecurring={() => openModalWithHistory('recurring', () => setIsRecurringScreenOpen(true))}
+              onNavigateToHistory={() => openModalWithHistory('history', () => setIsHistoryScreenOpen(true))}
               onReceiveSharedFile={handleSharedFile} 
               onImportFile={(file) => { /* Logica import */ }}
            />
@@ -462,9 +533,9 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
       {!isCalculatorContainerOpen && (
          <FloatingActionButton 
-            onAddManually={() => setIsCalculatorContainerOpen(true)}
-            onAddFromImage={() => setIsImageSourceModalOpen(true)}
-            onAddFromVoice={() => setIsVoiceModalOpen(true)}
+            onAddManually={() => openModalWithHistory('calculator', () => setIsCalculatorContainerOpen(true))}
+            onAddFromImage={() => openModalWithHistory('source', () => setIsImageSourceModalOpen(true))}
+            onAddFromVoice={() => openModalWithHistory('voice', () => setIsVoiceModalOpen(true))}
             style={(isHistoryScreenOpen && !isHistoryClosing) ? { bottom: `calc(90px + env(safe-area-inset-bottom, 0px))` } : undefined}
          />
       )}
@@ -473,19 +544,19 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
       <CalculatorContainer 
          isOpen={isCalculatorContainerOpen}
-         onClose={() => setIsCalculatorContainerOpen(false)}
-         onSubmit={(data) => { if('id' in data) updateExpense(data as Expense); else addExpense(data); setIsCalculatorContainerOpen(false); }}
+         onClose={closeModalWithHistory}
+         onSubmit={(data) => { if('id' in data) updateExpense(data as Expense); else addExpense(data); closeModalWithHistory(); }}
          accounts={safeAccounts} 
          expenses={expenses || []}
-         onEditExpense={(e) => { setEditingExpense(e); setIsFormOpen(true); }}
+         onEditExpense={(e) => { setEditingExpense(e); openModalWithHistory('form', () => setIsFormOpen(true)); }}
          onDeleteExpense={handleDeleteRequest}
          onMenuStateChange={() => {}}
       />
 
       <ExpenseForm
         isOpen={isFormOpen}
-        onClose={() => { setIsFormOpen(false); setEditingExpense(undefined); setEditingRecurringExpense(undefined); setPrefilledData(undefined); }}
-        onSubmit={(data) => { if('id' in data) { updateExpense(data as Expense); } else { addExpense(data); } setIsFormOpen(false); }}
+        onClose={() => { closeModalWithHistory(); setEditingExpense(undefined); setEditingRecurringExpense(undefined); setPrefilledData(undefined); }}
+        onSubmit={(data) => { if('id' in data) { updateExpense(data as Expense); } else { addExpense(data); } closeModalWithHistory(); }}
         initialData={editingExpense || editingRecurringExpense}
         prefilledData={prefilledData}
         accounts={safeAccounts} 
@@ -493,11 +564,11 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       />
 
       {isImageSourceModalOpen && (
-        <div className="fixed inset-0 z-[5200] flex justify-center items-center p-4 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsImageSourceModalOpen(false)}>
+        <div className="fixed inset-0 z-[5200] flex justify-center items-center p-4 bg-slate-900/60 backdrop-blur-sm" onClick={closeModalWithHistory}>
           <div className="bg-slate-50 rounded-lg shadow-xl w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
             <header className="flex justify-between items-center p-6 border-b border-slate-200">
               <h2 className="text-xl font-bold text-slate-800">Aggiungi da Immagine</h2>
-              <button onClick={() => setIsImageSourceModalOpen(false)} className="p-1 rounded-full hover:bg-slate-200"><XMarkIcon className="w-6 h-6"/></button>
+              <button onClick={closeModalWithHistory} className="p-1 rounded-full hover:bg-slate-200"><XMarkIcon className="w-6 h-6"/></button>
             </header>
             <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
               <ImageSourceCard icon={<CameraIcon className="w-8 h-8"/>} title="Scatta Foto" description="Usa la fotocamera." onClick={() => handleImagePick('camera')} />
@@ -507,7 +578,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         </div>
       )}
 
-      <VoiceInputModal isOpen={isVoiceModalOpen} onClose={() => setIsVoiceModalOpen(false)} onParsed={handleVoiceParsed} />
+      <VoiceInputModal isOpen={isVoiceModalOpen} onClose={closeModalWithHistory} onParsed={handleVoiceParsed} />
 
       <ConfirmationModal
         isOpen={isConfirmDeleteModalOpen}
@@ -530,18 +601,18 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
       <MultipleExpensesModal
         isOpen={isMultipleExpensesModalOpen}
-        onClose={() => setIsMultipleExpensesModalOpen(false)}
+        onClose={closeModalWithHistory}
         expenses={multipleExpensesData}
         accounts={safeAccounts} 
-        onConfirm={(data) => { data.forEach(d => addExpense(d)); setIsMultipleExpensesModalOpen(false); }}
+        onConfirm={(data) => { data.forEach(d => addExpense(d)); closeModalWithHistory(); }}
       />
 
       {isHistoryScreenOpen && (
         <HistoryScreen 
           expenses={expenses || []} accounts={safeAccounts} 
-          onClose={() => { setIsHistoryScreenOpen(false); setIsHistoryClosing(false); }} // Reset closing state on finish
-          onCloseStart={() => setIsHistoryClosing(true)} // Set closing state on start
-          onEditExpense={(e) => { setEditingExpense(e); setIsFormOpen(true); }} 
+          onClose={() => { closeModalWithHistory(); setIsHistoryClosing(false); }} 
+          onCloseStart={() => setIsHistoryClosing(true)} 
+          onEditExpense={(e) => { setEditingExpense(e); openModalWithHistory('form', () => setIsFormOpen(true)); }} 
           onDeleteExpense={handleDeleteRequest}
           onDeleteExpenses={(ids) => { setExpenses(prev => (prev || []).filter(e => !ids.includes(e.id))); }}
           isEditingOrDeleting={isFormOpen || isConfirmDeleteModalOpen}
@@ -553,8 +624,8 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       {isRecurringScreenOpen && (
         <RecurringExpensesScreen 
           recurringExpenses={recurringExpenses || []} expenses={expenses || []} accounts={safeAccounts}
-          onClose={() => setIsRecurringScreenOpen(false)}
-          onEdit={(e) => { setEditingRecurringExpense(e); setIsFormOpen(true); }}
+          onClose={closeModalWithHistory}
+          onEdit={(e) => { setEditingRecurringExpense(e); openModalWithHistory('form', () => setIsFormOpen(true)); }}
           onDelete={(id) => setRecurringExpenses(prev => (prev || []).filter(e => e.id !== id))}
           onDeleteRecurringExpenses={(ids) => setRecurringExpenses(prev => (prev || []).filter(e => !ids.includes(e.id)))}
         />
