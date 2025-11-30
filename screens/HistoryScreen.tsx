@@ -1,3 +1,4 @@
+
 // screens/HistoryScreen.tsx
 import React, {
   useMemo,
@@ -246,7 +247,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
   };
 
   return (
-    <div className={`relative ${itemBgClass} overflow-hidden transition-colors duration-200`}>
+    <div className={`relative ${itemBgClass} overflow-hidden transition-colors duration-200 select-none`}>
       <div className="absolute top-0 right-0 h-full flex items-center z-0">
         <button
           onClick={() => onDelete(expense.id)}
@@ -266,7 +267,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}
         onClick={handleClick}
-        className={`relative flex items-center gap-4 py-3 px-4 ${itemBgClass} z-10 cursor-pointer transition-colors duration-200`}
+        className={`relative flex items-center gap-4 py-3 px-4 ${itemBgClass} z-10 cursor-pointer transition-colors duration-200 select-none`}
         style={{ touchAction: 'pan-y' }}
       >
         {isRecurringInstance && !isSelectionMode && (
