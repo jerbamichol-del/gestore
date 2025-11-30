@@ -279,7 +279,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
   // ================== HANDLERS AI ==================
 
-  const handleAnalyzeImage = async (image: OfflineImage, fromQueue: boolean = true) => {
+  const handleAnalyzeImage = async (image: OfflineImage) => {
     if (!isOnline) {
       showToast({ message: 'Connettiti a internet per analizzare.', type: 'error' });
       return;
@@ -303,10 +303,11 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         setIsMultipleExpensesModalOpen(true);
       }
 
-      if (fromQueue) {
-        await deleteImageFromQueue(image.id);
-        refreshPendingImages();
-      }
+      // Always try to delete the image from queue after analysis.
+      // If it was a shared image or from queue, this cleans it up.
+      // If it was a manual upload (not in DB), this is a harmless no-op.
+      await deleteImageFromQueue(image.id);
+      refreshPendingImages();
 
     } catch (error) {
       console.error('AI Error:', error);
@@ -389,21 +390,12 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const handleModalConfirm = async () => {
       if (!imageForAnalysis) return;
       
-      // Directly check the flag OR the ref to decide if it's from DB/ShareTarget
-      let existsInDb = !!(imageForAnalysis._isShared) || (sharedImageIdRef.current === imageForAnalysis.id);
-
-      // Fallback: check DB if flag is missing
-      if (!existsInDb) {
-          const dbImages = await getQueuedImages();
-          existsInDb = dbImages.some(img => img.id === imageForAnalysis.id);
-      }
-      
       // Cleanup ref if it matched
       if (imageForAnalysis.id === sharedImageIdRef.current) {
           sharedImageIdRef.current = null;
       }
       
-      handleAnalyzeImage(imageForAnalysis, existsInDb); 
+      handleAnalyzeImage(imageForAnalysis); 
       setImageForAnalysis(null);
   };
 
@@ -452,7 +444,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
            
            <PendingImages 
               images={pendingImages} 
-              onAnalyze={(img) => handleAnalyzeImage(img, true)}
+              onAnalyze={(img) => handleAnalyzeImage(img)}
               onDelete={async (id) => { await deleteImageFromQueue(id); refreshPendingImages(); }} 
               isOnline={isOnline}
               syncingImageId={syncingImageId}
