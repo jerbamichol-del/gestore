@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Expense, Account, CATEGORIES } from '../types';
 import { XMarkIcon } from './icons/XMarkIcon';
@@ -138,15 +139,16 @@ const getIntervalLabel = (recurrence?: 'daily' | 'weekly' | 'monthly' | 'yearly'
 const daysOfWeekForPicker = [ { label: 'Lun', value: 1 }, { label: 'Mar', value: 2 }, { label: 'Mer', value: 3 }, { label: 'Gio', value: 4 }, { label: 'Ven', value: 5 }, { label: 'Sab', value: 6 }, { label: 'Dom', value: 0 }];
 
 const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, initialData, prefilledData, accounts, isForRecurringTemplate = false }) => {
-  // --- PROTEZIONE CRASH: Assicuriamoci che accounts sia sempre un array ---
-  // Questo è il fix cruciale per l'errore "reading 'length'"
+  // --- PROTEZIONE CRASH: array sicuro ---
+  // Se 'accounts' è undefined (può capitare al caricamento), usiamo un array vuoto
+  // Questo risolve l'errore "Cannot read properties of undefined (reading 'length')"
   const safeAccounts = accounts || [];
-  // ---------------------------------------------------------------------
+  // -------------------------------------
 
   const [isAnimating, setIsAnimating] = useState(false);
   const [isClosableByBackdrop, setIsClosableByBackdrop] = useState(false);
   
-  // FIX: Inizializza con i tipi corretti per evitare perdita dati
+  // FIX 2: Inizializza con i tipi corretti per evitare perdita dati
   const [formData, setFormData] = useState<Partial<Omit<Expense, 'id' | 'amount'>> & { amount?: number | string }>({});
   
   const [error, setError] = useState<string | null>(null);
@@ -185,7 +187,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
   }, [formData.date]);
 
   const resetForm = useCallback(() => {
-    // Usa safeAccounts per evitare errori se accounts è undefined
+    // FIX: Usa safeAccounts invece di accounts per evitare crash su .length
     const defaultAccountId = safeAccounts.length > 0 ? safeAccounts[0].id : '';
     setFormData({
       description: '',
@@ -233,7 +235,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
         setFormData(dataWithTime);
         setOriginalExpenseState(dataWithTime);
       } else if (prefilledData) {
-        // Usa safeAccounts anche qui
+        // FIX: Usa safeAccounts anche qui
         const defaultAccountId = safeAccounts.length > 0 ? safeAccounts[0].id : '';
         setFormData({
           description: prefilledData.description || '',
@@ -537,7 +539,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
   
   return (
     <div
-      className={`fixed inset-0 z-[51] transition-opacity duration-300 ease-in-out ${isAnimating ? 'opacity-100' : 'opacity-0'} bg-slate-900/60 backdrop-blur-sm`}
+      className={`fixed inset-0 z-[5000] transition-opacity duration-300 ease-in-out ${isAnimating ? 'opacity-100' : 'opacity-0'} bg-slate-900/60 backdrop-blur-sm`}
       onClick={handleBackdropClick}
       aria-modal="true"
       role="dialog"
