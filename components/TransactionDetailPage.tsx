@@ -1,3 +1,4 @@
+
 // TransactionDetailPage.tsx
 import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
 import { Expense, Account } from '../types';
@@ -10,6 +11,7 @@ import { ChevronDownIcon } from './icons/ChevronDownIcon';
 import { XMarkIcon } from './icons/XMarkIcon';
 import { formatCurrency } from './icons/formatters';
 import SelectionMenu from './SelectionMenu';
+import { useTapBridge } from '../hooks/useTapBridge';
 
 interface TransactionDetailPageProps {
   formData: Partial<Omit<Expense, 'id'>>;
@@ -180,6 +182,9 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
 }) => {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const descriptionInputRef = useRef<HTMLInputElement>(null);
+  
+  // Use tap bridge locally for this screen to ensure responsiveness
+  const tapBridgeHandlers = useTapBridge();
 
   const [activeMenu, setActiveMenu] = useState<'account' | null>(null);
 
@@ -367,6 +372,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
         ref={rootRef}
         tabIndex={-1}
         className="flex flex-col h-full bg-slate-100 items-center justify-center p-4"
+        {...tapBridgeHandlers}
       >
         <header className="p-4 flex items-center gap-4 text-slate-800 bg-white shadow-sm absolute top-0 left-0 right-0 z-10">
           {!isDesktop && (
@@ -443,6 +449,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
       tabIndex={-1}
       className="flex flex-col h-full bg-slate-100 focus:outline-none"
       style={{ touchAction: 'pan-y' }}
+      {...tapBridgeHandlers}
     >
       <header className="p-4 flex items-center justify-between gap-4 text-slate-800 bg-white shadow-sm sticky top-0 z-10">
         <div className="flex items-center gap-4">
