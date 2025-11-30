@@ -1,4 +1,3 @@
-
 // screens/HistoryScreen.tsx
 import React, {
   useMemo,
@@ -319,6 +318,7 @@ interface HistoryScreenProps {
   isEditingOrDeleting: boolean;
   onDateModalStateChange: (isOpen: boolean) => void;
   onClose: () => void;
+  onCloseStart?: () => void; // Added property
   onFilterPanelOpenStateChange: (isOpen: boolean) => void;
   isOverlayed: boolean;
 }
@@ -387,6 +387,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
   isEditingOrDeleting,
   onDateModalStateChange,
   onClose,
+  onCloseStart,
   onFilterPanelOpenStateChange,
   isOverlayed,
 }) => {
@@ -434,6 +435,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
 
   const handleClose = () => {
     setOpenItemId(null);
+    if (onCloseStart) onCloseStart();
     setIsAnimatingIn(false);
     setTimeout(onClose, 300);
   };
