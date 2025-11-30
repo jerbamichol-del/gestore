@@ -1,18 +1,20 @@
-
-
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Sector } from 'recharts';
 import { Expense } from '../types';
 import { formatCurrency } from './icons/formatters';
 import { getCategoryStyle } from '../utils/categoryStyles';
-import { CloudArrowUpIcon } from './icons/CloudArrowUpIcon';
+import { ArrowsUpDownIcon } from './icons/ArrowsUpDownIcon';
+import { ArrowDownTrayIcon } from './icons/ArrowDownTrayIcon';
+import { ArrowUpTrayIcon } from './icons/ArrowUpTrayIcon';
+import SelectionMenu from './SelectionMenu';
+import { exportExpenses } from '../utils/fileHelper';
 // Import components from HistoryFilterCard
 import { 
     QuickFilterControl, 
     PeriodNavigator, 
-    CustomDateRangeInputs,
-    DateFilter,
-    PeriodType
+    CustomDateRangeInputs, 
+    DateFilter, 
+    PeriodType 
 } from './HistoryFilterCard';
 import { useSwipe } from '../hooks/useSwipe';
 
@@ -119,7 +121,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
   
   const [isPeriodMenuOpen, setIsPeriodMenuOpen] = useState(false);
   const [isSwipeAnimating, setIsSwipeAnimating] = useState(false);
-  const [swipeOffset, setSwipeOffset] = useState(0);
+  const [isImportExportMenuOpen, setIsImportExportMenuOpen] = useState(false);
 
   const activeIndex = selectedIndex;
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -140,6 +142,15 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
       }
       if (fileInputRef.current) {
           fileInputRef.current.value = '';
+      }
+  };
+
+  const handleImportExportSelect = (value: string) => {
+      setIsImportExportMenuOpen(false);
+      if (value === 'import') {
+          fileInputRef.current?.click();
+      } else if (value === 'export') {
+          exportExpenses(expenses);
       }
   };
 
@@ -426,7 +437,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
                     </div>
                 </div>
 
-                {/* Pulsante Importa File */}
+                {/* Pulsante Importa/Esporta File */}
                 <input
                     type="file"
                     ref={fileInputRef}
@@ -435,11 +446,11 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
                     onChange={handleFileChange}
                 />
                 <button
-                    onClick={() => fileInputRef.current?.click()}
+                    onClick={() => setIsImportExportMenuOpen(true)}
                     className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-indigo-50 text-indigo-700 font-bold rounded-2xl border border-indigo-100 shadow-sm hover:bg-indigo-100 transition-colors"
                 >
-                    <CloudArrowUpIcon className="w-6 h-6" />
-                    Importa Estratto Conto (CSV/Excel)
+                    <ArrowsUpDownIcon className="w-6 h-6" />
+                    Importa/Esporta Estratto (CSV/Excel)
                 </button>
             </div>
 
@@ -542,6 +553,18 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
                 </div>
             )}
         </div>
+
+        <SelectionMenu
+            isOpen={isImportExportMenuOpen}
+            onClose={() => setIsImportExportMenuOpen(false)}
+            title="Gestione Dati"
+            options={[
+                { value: 'import', label: 'Importa (CSV/Excel)', Icon: ArrowDownTrayIcon, bgColor: 'bg-green-100', color: 'text-green-600' },
+                { value: 'export', label: 'Esporta (Excel)', Icon: ArrowUpTrayIcon, bgColor: 'bg-blue-100', color: 'text-blue-600' }
+            ]}
+            selectedValue=""
+            onSelect={handleImportExportSelect}
+        />
     </div>
   );
 };
