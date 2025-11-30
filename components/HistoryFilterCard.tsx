@@ -1,4 +1,3 @@
-
 import React, {
   useState,
   useRef,
@@ -418,6 +417,9 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
   // --- Internal Navigation State ---
   const [currentView, setCurrentView] = useState<PanelView>('main');
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
+  
+  // Track if input is focused to maximize panel height
+  const [isInputFocused, setIsInputFocused] = useState(false);
 
   const tapBridge = useTapBridge();
 
@@ -458,6 +460,18 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
     }
   }, [currentView, props.selectedCategoryFilters, expandedCategory]);
 
+  // Focus Handlers
+  const handlePanelFocus = () => {
+      setIsInputFocused(true);
+  };
+
+  const handlePanelBlur = (e: React.FocusEvent) => {
+      // Check if the new focus is still within the panel
+      if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+          setIsInputFocused(false);
+      }
+  };
+
   // drag stato unificato (verticale e orizzontale)
   const dragRef = useRef<{
     active: boolean;
@@ -487,20 +501,23 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
     }
 
     const update = () => {
-      const vh = typeof window !== 'undefined' ? window.innerHeight : 0;
+      // Use visualViewport if available for accuracy on mobile (keyboard)
+      const vv = window.visualViewport;
+      const vh = vv ? vv.height : window.innerHeight;
       
       // Heuristic: if height is significantly smaller than typical mobile height, keyboard is likely open.
-      // This allows the panel to take up more space so inputs are visible.
-      const isCompactHeight = vh < 600;
+      // Or if we know input is focused.
+      const isKeyboardOpenMode = isInputFocused || vh < 600;
       
       // Calculate target VH percentage
-      const targetVh = currentView === 'category_selection' ? 92 : (isCompactHeight ? 85 : 40);
+      // If keyboard is open, take almost full space (96%)
+      const targetVh = currentView === 'category_selection' ? 92 : (isKeyboardOpenMode ? 96 : 40);
       
-      // Enforce a minimum pixel height for the open state to fit headers + inputs (~320px)
-      // unless the screen is super tiny.
+      // Enforce a minimum pixel height for the open state
       let oh = (targetVh / 100) * vh;
       if (currentView === 'main' && oh < 320) {
-          oh = Math.min(320, vh - 10); // Try 320, but ensure at least 10px margin
+          // If really compact (landscape w/ keyboard), take max available
+          oh = Math.max(oh, vh - 5); 
       }
 
       const closed = Math.max(oh - PEEK_PX, 0);
@@ -513,6 +530,9 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
             return closed; 
         }
         
+        // Force open if input focused
+        if (isInputFocused) return 0;
+
         // Robust check: if it was open before resize, keep it open (0).
         if (isPanelOpenRef.current) {
             return 0;
@@ -526,11 +546,13 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
 
     update();
     window.addEventListener('resize', update);
+    window.visualViewport?.addEventListener('resize', update);
     return () => {
       window.removeEventListener('resize', update);
+      window.visualViewport?.removeEventListener('resize', update);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.isActive, currentView]);
+  }, [props.isActive, currentView, isInputFocused]); // Dependency on isInputFocused triggers layout update
 
   const SPEED = 0.05;
   const MIN_TOGGLE_DRAG = 10;
@@ -966,6 +988,8 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerCancel}
       onClickCapture={handleClickCapture}
+      onFocus={handlePanelFocus}
+      onBlur={handlePanelBlur}
       data-no-page-swipe="true"
       className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-[0_-3px_4px_rgba(71,85,105,0.6)] z-[1000] flex flex-col"
       style={{
