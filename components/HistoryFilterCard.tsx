@@ -503,21 +503,38 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
     const update = () => {
       // Use visualViewport if available for accuracy on mobile (keyboard)
       const vv = window.visualViewport;
-      const vh = vv ? vv.height : window.innerHeight;
+      const visualHeight = vv ? vv.height : window.innerHeight;
+      const windowHeight = window.innerHeight;
       
-      // Heuristic: if height is significantly smaller than typical mobile height, keyboard is likely open.
-      // Or if we know input is focused.
-      const isKeyboardOpenMode = isInputFocused || vh < 600;
+      // Detect if keyboard is open by checking if visual viewport is significantly smaller (e.g., < 80%) than window height.
+      // This is more reliable than checking for fixed pixels (like < 600px).
+      const isKeyboardVisible = visualHeight < windowHeight * 0.8;
+      
+      const shouldMaximize = isInputFocused || isKeyboardVisible;
       
       // Calculate target VH percentage
-      // If keyboard is open, take almost full space (96%)
-      const targetVh = currentView === 'category_selection' ? 92 : (isKeyboardOpenMode ? 96 : 40);
+      // If expanded (keyboard/input), take max space
+      // If category selection, take almost full space (standard behavior for that view)
+      // Otherwise (main view, no keyboard), take standard height (40%)
+      
+      let targetVh;
+      if (currentView === 'category_selection') {
+          targetVh = 92;
+      } else if (shouldMaximize) {
+          targetVh = 96; 
+      } else {
+          targetVh = 40;
+      }
       
       // Enforce a minimum pixel height for the open state
-      let oh = (targetVh / 100) * vh;
-      if (currentView === 'main' && oh < 320) {
-          // If really compact (landscape w/ keyboard), take max available
-          oh = Math.max(oh, vh - 5); 
+      let oh = (targetVh / 100) * visualHeight;
+      
+      // Additional safety for "collapsed" state on small screens without keyboard
+      if (currentView === 'main' && !shouldMaximize) {
+          const minHeight = 320; 
+          oh = Math.max(oh, minHeight);
+          // But ensure it doesn't cover too much if screen is tiny
+          oh = Math.min(oh, visualHeight * 0.85); 
       }
 
       const closed = Math.max(oh - PEEK_PX, 0);
