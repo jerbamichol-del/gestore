@@ -510,13 +510,11 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
       // This is more reliable than checking for fixed pixels (like < 600px).
       const isKeyboardVisible = visualHeight < windowHeight * 0.8;
       
-      const shouldMaximize = isInputFocused || isKeyboardVisible;
+      // rely solely on keyboard visibility for maximization in main view. 
+      // If input is focused but keyboard is closed (e.g. user hid it), we want standard height.
+      const shouldMaximize = isKeyboardVisible;
       
       // Calculate target VH percentage
-      // If expanded (keyboard/input), take max space
-      // If category selection, take almost full space (standard behavior for that view)
-      // Otherwise (main view, no keyboard), take standard height (40%)
-      
       let targetVh;
       if (currentView === 'category_selection') {
           targetVh = 92;
