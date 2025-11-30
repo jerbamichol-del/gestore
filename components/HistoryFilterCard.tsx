@@ -421,9 +421,6 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
 
   const tapBridge = useTapBridge();
 
-  // Altezza pannello dinamica in base alla view
-  const OPEN_HEIGHT_VH = currentView === 'category_selection' ? 92 : 40; 
-  
   const [openHeight, setOpenHeight] = useState(0);
   const [closedY, setClosedY] = useState(0);
   const [translateY, setTranslateY] = useState(0);
@@ -491,7 +488,21 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
 
     const update = () => {
       const vh = typeof window !== 'undefined' ? window.innerHeight : 0;
-      const oh = (OPEN_HEIGHT_VH / 100) * vh;
+      
+      // Heuristic: if height is significantly smaller than typical mobile height, keyboard is likely open.
+      // This allows the panel to take up more space so inputs are visible.
+      const isCompactHeight = vh < 600;
+      
+      // Calculate target VH percentage
+      const targetVh = currentView === 'category_selection' ? 92 : (isCompactHeight ? 85 : 40);
+      
+      // Enforce a minimum pixel height for the open state to fit headers + inputs (~320px)
+      // unless the screen is super tiny.
+      let oh = (targetVh / 100) * vh;
+      if (currentView === 'main' && oh < 320) {
+          oh = Math.min(320, vh - 10); // Try 320, but ensure at least 10px margin
+      }
+
       const closed = Math.max(oh - PEEK_PX, 0);
 
       setOpenHeight(oh);
@@ -519,7 +530,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
       window.removeEventListener('resize', update);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.isActive, OPEN_HEIGHT_VH]);
+  }, [props.isActive, currentView]);
 
   const SPEED = 0.05;
   const MIN_TOGGLE_DRAG = 10;
@@ -695,9 +706,16 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
   const handlePeriodTypeChange = useCallback((type: PeriodType) => props.onSelectPeriodType(type), [props]);
   const handleCustomRangeChange = useCallback((range: { start: string | null; end: string | null }) => props.onCustomRangeChange(range), [props]);
 
+  const handleInputFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+      // Ensure the element is visible when keyboard opens
+      setTimeout(() => {
+          e.target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 300);
+  };
+
   const yForStyle = laidOut
     ? clampY(translateY)
-    : openHeight || (typeof window !== 'undefined' ? (window.innerHeight * OPEN_HEIGHT_VH) / 100 : 0);
+    : openHeight || (typeof window !== 'undefined' ? (window.innerHeight * 40) / 100 : 0);
     
   const listTx = -activeViewIndex * (100 / 3);
   const listTransform = `translateX(calc(${listTx}% + ${swipeOffset}px))`;
@@ -750,6 +768,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
                 type="text"
                 value={props.descriptionQuery}
                 onChange={(e) => props.onDescriptionChange(e.target.value)}
+                onFocus={handleInputFocus}
                 placeholder="Descrizione..."
                 className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                 {...tapBridge}
@@ -767,6 +786,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
                     type="number"
                     value={props.amountRange.min}
                     onChange={(e) => props.onAmountRangeChange({...props.amountRange, min: e.target.value})}
+                    onFocus={handleInputFocus}
                     placeholder="Da"
                     className={`w-full rounded-lg border py-2 pl-10 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 ${props.amountRange.min ? 'bg-indigo-50 border-indigo-200 text-indigo-700 font-medium' : 'bg-white border-slate-300'}`}
                     {...tapBridge}
@@ -781,6 +801,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
                     type="number"
                     value={props.amountRange.max}
                     onChange={(e) => props.onAmountRangeChange({...props.amountRange, max: e.target.value})}
+                    onFocus={handleInputFocus}
                     placeholder="A"
                     className={`w-full rounded-lg border py-2 pl-10 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 ${props.amountRange.max ? 'bg-indigo-50 border-indigo-200 text-indigo-700 font-medium' : 'bg-white border-slate-300'}`}
                     {...tapBridge}
@@ -948,7 +969,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
       data-no-page-swipe="true"
       className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-[0_-3px_4px_rgba(71,85,105,0.6)] z-[1000] flex flex-col"
       style={{
-        height: `${OPEN_HEIGHT_VH}vh`,
+        height: `${openHeight}px`,
         transform: `translate3d(0, ${yForStyle}px, 0)`,
         transition: anim ? 'transform 0.08s cubic-bezier(0.22, 0.61, 0.36, 1)' : 'transform 0.3s cubic-bezier(0.22, 0.61, 0.36, 1), height 0.3s cubic-bezier(0.22, 0.61, 0.36, 1)',
         touchAction: 'none', 
