@@ -9,6 +9,7 @@ import { ArrowUpTrayIcon } from './icons/ArrowUpTrayIcon';
 import { XMarkIcon } from './icons/XMarkIcon';
 import SelectionMenu from './SelectionMenu';
 import { exportExpenses } from '../utils/fileHelper';
+import { useTapBridge } from '../hooks/useTapBridge';
 // Import components from HistoryFilterCard
 import { 
     QuickFilterControl, 
@@ -109,6 +110,7 @@ const calculateNextDueDate = (template: Expense, fromDate: Date): Date | null =>
 };
 
 const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNavigateToRecurring, onNavigateToHistory, onImportFile }) => {
+  const tapBridgeHandlers = useTapBridge();
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   
   // View State for Filter Swiper (0: Quick, 1: Period, 2: Custom)
@@ -323,7 +325,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
   const listTx = -activeViewIndex * (100 / 3);
   
   return (
-    <div className="p-4 md:p-6 space-y-6">
+    <div className="p-4 md:p-6 space-y-6" {...tapBridgeHandlers}>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-1 flex flex-col gap-4">
                 {/* Modificato: Rimosso overflow-hidden dalla card principale */}
