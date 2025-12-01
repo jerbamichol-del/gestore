@@ -1,8 +1,8 @@
-
 import React from 'react';
 import { PhotoIcon } from './icons/PhotoIcon';
 import { ArrowDownOnSquareIcon } from './icons/ArrowDownOnSquareIcon';
 import { LockClosedIcon } from './icons/LockClosedIcon';
+import { QrCodeIcon } from './icons/QrCodeIcon';
 
 interface HeaderProps {
     pendingSyncs: number;
@@ -10,15 +10,16 @@ interface HeaderProps {
     onInstallClick: () => void;
     installPromptEvent: any;
     onLogout: () => void;
+    onShowQr: () => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ pendingSyncs, isOnline, onInstallClick, installPromptEvent, onLogout }) => {
+const Header: React.FC<HeaderProps> = ({ pendingSyncs, isOnline, onInstallClick, installPromptEvent, onLogout, onShowQr }) => {
   return (
     <header className="bg-white shadow-md sticky top-0 z-20">
-      <div>
+      <div className="mx-auto">
         <div className="py-2 flex items-center justify-between gap-3 px-4 md:px-8 h-[58px]">
           <h1 className="text-xl font-bold text-slate-800">Gestore Spese</h1>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4">
               {!isOnline && (
                   <div className="flex items-center gap-2 text-sm font-semibold text-amber-600 bg-amber-100 px-3 py-1.5 rounded-full">
                       <span className="relative flex h-2 w-2">
@@ -28,12 +29,14 @@ const Header: React.FC<HeaderProps> = ({ pendingSyncs, isOnline, onInstallClick,
                       <span className="hidden sm:inline">Offline</span>
                   </div>
               )}
-              {pendingSyncs > 0 && (
-                  <div className="flex items-center gap-2 text-sm font-semibold text-indigo-600 bg-indigo-100 px-3 py-1.5 rounded-full" title={`${pendingSyncs} immagini in attesa di analisi`}>
-                      <PhotoIcon className="w-5 h-5" />
-                      <span>{pendingSyncs}</span>
+              {pendingSyncs > 0 && isOnline && (
+                  <div className="flex items-center gap-2 text-sm font-semibold text-indigo-600 bg-indigo-100 px-3 py-1.5 rounded-full">
+                    <PhotoIcon className="w-5 h-5" />
+                    <span>{pendingSyncs}</span>
+                    <span className="hidden sm:inline md:inline">in sync</span>
                   </div>
               )}
+
               {installPromptEvent && (
                   <button
                       onClick={onInstallClick}
@@ -45,6 +48,16 @@ const Header: React.FC<HeaderProps> = ({ pendingSyncs, isOnline, onInstallClick,
                       <span className="hidden sm:inline">Installa</span>
                   </button>
               )}
+
+              <button
+                  onClick={onShowQr}
+                  className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-100 rounded-full transition-colors"
+                  aria-label="Mostra QR Code"
+                  title="Condividi via QR"
+              >
+                  <QrCodeIcon className="w-6 h-6" />
+              </button>
+
               <button
                   onClick={onLogout}
                   className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-100 rounded-full transition-colors"
