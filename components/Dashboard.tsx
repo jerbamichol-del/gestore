@@ -6,6 +6,7 @@ import { getCategoryStyle } from '../utils/categoryStyles';
 import { ArrowsUpDownIcon } from './icons/ArrowsUpDownIcon';
 import { ArrowDownTrayIcon } from './icons/ArrowDownTrayIcon';
 import { ArrowUpTrayIcon } from './icons/ArrowUpTrayIcon';
+import { XMarkIcon } from './icons/XMarkIcon';
 import SelectionMenu from './SelectionMenu';
 import { exportExpenses } from '../utils/fileHelper';
 // Import components from HistoryFilterCard
@@ -450,7 +451,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
                     className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-indigo-50 text-indigo-700 font-bold rounded-2xl border border-indigo-100 shadow-sm hover:bg-indigo-100 transition-colors"
                 >
                     <ArrowsUpDownIcon className="w-6 h-6" />
-                    Importa/Esporta Estratto (CSV/Excel)
+                    Imp./Exp. Estratto (CSV/Excel)
                 </button>
             </div>
 
@@ -554,17 +555,33 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
             )}
         </div>
 
-        <SelectionMenu
-            isOpen={isImportExportMenuOpen}
-            onClose={() => setIsImportExportMenuOpen(false)}
-            title="Gestione Dati"
-            options={[
-                { value: 'import', label: 'Importa (CSV/Excel)', Icon: ArrowDownTrayIcon, bgColor: 'bg-green-100', color: 'text-green-600' },
-                { value: 'export', label: 'Esporta (Excel)', Icon: ArrowUpTrayIcon, bgColor: 'bg-blue-100', color: 'text-blue-600' }
-            ]}
-            selectedValue=""
-            onSelect={handleImportExportSelect}
-        />
+        {/* Modal Centrato per Import/Export */}
+        {isImportExportMenuOpen && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={() => setIsImportExportMenuOpen(false)}>
+                <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-fade-in-up" onClick={e => e.stopPropagation()}>
+                    <div className="flex justify-between items-center p-4 border-b border-slate-100">
+                        <h3 className="text-lg font-bold text-slate-800 flex-1 text-center pl-8">Gestione Dati</h3>
+                        <button onClick={() => setIsImportExportMenuOpen(false)} className="p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors">
+                            <XMarkIcon className="w-6 h-6" />
+                        </button>
+                    </div>
+                    <div className="p-4 space-y-3">
+                        <button onClick={() => handleImportExportSelect('import')} className="w-full flex items-center gap-4 p-4 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors text-left group">
+                            <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center text-green-600 group-hover:scale-110 transition-transform">
+                                <ArrowDownTrayIcon className="w-6 h-6" />
+                            </div>
+                            <span className="font-semibold text-slate-700 text-lg">Importa (CSV/Excel)</span>
+                        </button>
+                        <button onClick={() => handleImportExportSelect('export')} className="w-full flex items-center gap-4 p-4 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors text-left group">
+                            <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
+                                <ArrowUpTrayIcon className="w-6 h-6" />
+                            </div>
+                            <span className="font-semibold text-slate-700 text-lg">Esporta (Excel)</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
     </div>
   );
 };
