@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Expense, Account, CATEGORIES } from './types';
 import { useLocalStorage } from './hooks/useLocalStorage';
@@ -18,13 +17,15 @@ import Toast from './components/Toast';
 import HistoryScreen from './screens/HistoryScreen';
 import RecurringExpensesScreen from './screens/RecurringExpensesScreen';
 import ImageSourceCard from './components/ImageSourceCard';
+import ShareQrModal from './components/ShareQrModal'; // <--- IMPORT AGGIUNTO
 import { CameraIcon } from './components/icons/CameraIcon';
 import { ComputerDesktopIcon } from './components/icons/ComputerDesktopIcon';
 import { XMarkIcon } from './components/icons/XMarkIcon';
 import { SpinnerIcon } from './components/icons/SpinnerIcon';
 import CalculatorContainer from './components/CalculatorContainer';
 import SuccessIndicator from './components/SuccessIndicator';
-import { PEEK_PX } from './components/HistoryFilterCard';
+// Rimossa importazione non utilizzata PEEK_PX se non serve, altrimenti lasciala
+// import { PEEK_PX } from './components/HistoryFilterCard'; 
 
 type ToastMessage = { message: string; type: 'success' | 'info' | 'error' };
 
@@ -106,6 +107,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const [isRecurringScreenOpen, setIsRecurringScreenOpen] = useState(false);
   const [isHistoryScreenOpen, setIsHistoryScreenOpen] = useState(false);
   const [isHistoryClosing, setIsHistoryClosing] = useState(false);
+  const [isQrModalOpen, setIsQrModalOpen] = useState(false); // <--- STATO AGGIUNTO
   
   // Track History Filter Panel state to hide FAB
   const [isHistoryFilterOpen, setIsHistoryFilterOpen] = useState(false);
@@ -148,6 +150,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       if (modal !== 'voice') setIsVoiceModalOpen(false);
       if (modal !== 'source') setIsImageSourceModalOpen(false);
       if (modal !== 'multiple') setIsMultipleExpensesModalOpen(false);
+      if (modal !== 'qr') setIsQrModalOpen(false); // <--- CHIUSURA MODALE QR SU INDIETRO
       
       // Calculator has internal navigation (details), preserve it if active
       if (modal !== 'calculator' && modal !== 'calculator_details') {
@@ -519,7 +522,14 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   return (
     <div className="h-full w-full bg-slate-100 flex flex-col font-sans" style={{ touchAction: 'pan-y' }}>
       <div className="flex-shrink-0 z-20">
-        <Header pendingSyncs={pendingImages.length} isOnline={isOnline} onInstallClick={() => {}} installPromptEvent={null} onLogout={onLogout} />
+        <Header 
+            pendingSyncs={pendingImages.length} 
+            isOnline={isOnline} 
+            onInstallClick={() => {}} 
+            installPromptEvent={null} 
+            onLogout={onLogout} 
+            onShowQr={() => openModalWithHistory('qr', () => setIsQrModalOpen(true))} // <--- PROP AGGIUNTA
+        />
       </div>
 
       <main className="flex-grow bg-slate-100">
@@ -643,6 +653,12 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
           onDeleteRecurringExpenses={(ids) => setRecurringExpenses(prev => (prev || []).filter(e => !ids.includes(e.id)))}
         />
       )}
+
+      {/* MODALE QR AGGIUNTO */}
+      <ShareQrModal 
+        isOpen={isQrModalOpen} 
+        onClose={closeModalWithHistory} 
+      />
 
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       
