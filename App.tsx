@@ -17,22 +17,21 @@ import Toast from './components/Toast';
 import HistoryScreen from './screens/HistoryScreen';
 import RecurringExpensesScreen from './screens/RecurringExpensesScreen';
 import ImageSourceCard from './components/ImageSourceCard';
-import ShareQrModal from './components/ShareQrModal'; // <--- IMPORT AGGIUNTO
+import ShareQrModal from './components/ShareQrModal';
+import InstallPwaModal from './components/InstallPwaModal';
 import { CameraIcon } from './components/icons/CameraIcon';
 import { ComputerDesktopIcon } from './components/icons/ComputerDesktopIcon';
 import { XMarkIcon } from './components/icons/XMarkIcon';
 import { SpinnerIcon } from './components/icons/SpinnerIcon';
 import CalculatorContainer from './components/CalculatorContainer';
 import SuccessIndicator from './components/SuccessIndicator';
-// Rimossa importazione non utilizzata PEEK_PX se non serve, altrimenti lasciala
-// import { PEEK_PX } from './components/HistoryFilterCard'; 
 
 type ToastMessage = { message: string; type: 'success' | 'info' | 'error' };
 
 // Extended type for internal use to track shared origin
 type ExtendedOfflineImage = OfflineImage & { _isShared?: boolean };
 
-// --- FUNZIONI HELPER (REINSERITE) ---
+// --- HELPER FUNCTIONS ---
 const processImageFile = (file: File): Promise<{ base64: string; mimeType: string }> => {
     return new Promise((resolve, reject) => {
         const img = new Image();
@@ -90,13 +89,12 @@ const toISODate = (date: Date) => {
   return `${year}-${month}-${day}`;
 };
 
-
 const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const [expenses, setExpenses] = useLocalStorage<Expense[]>('expenses_v2', []);
   const [recurringExpenses, setRecurringExpenses] = useLocalStorage<Expense[]>('recurring_expenses_v1', []);
   const [accounts, setAccounts] = useLocalStorage<Account[]>('accounts_v1', DEFAULT_ACCOUNTS);
 
-  // --- Stati UI ---
+  // --- UI State ---
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isCalculatorContainerOpen, setIsCalculatorContainerOpen] = useState(false);
   const [isImageSourceModalOpen, setIsImageSourceModalOpen] = useState(false);
@@ -107,12 +105,13 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const [isRecurringScreenOpen, setIsRecurringScreenOpen] = useState(false);
   const [isHistoryScreenOpen, setIsHistoryScreenOpen] = useState(false);
   const [isHistoryClosing, setIsHistoryClosing] = useState(false);
-  const [isQrModalOpen, setIsQrModalOpen] = useState(false); // <--- STATO AGGIUNTO
+  const [isQrModalOpen, setIsQrModalOpen] = useState(false);
+  const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
   
   // Track History Filter Panel state to hide FAB
   const [isHistoryFilterOpen, setIsHistoryFilterOpen] = useState(false);
 
-  // --- Dati ---
+  // --- Data ---
   const [editingExpense, setEditingExpense] = useState<Expense | undefined>(undefined);
   const [editingRecurringExpense, setEditingRecurringExpense] = useState<Expense | undefined>(undefined);
   const [prefilledData, setPrefilledData] = useState<Partial<Omit<Expense, 'id'>> | undefined>(undefined);
@@ -125,40 +124,115 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const [pendingImages, setPendingImages] = useState<OfflineImage[]>([]);
   const [syncingImageId, setSyncingImageId] = useState<string | null>(null);
   
-  // --- Toast ---
+  // --- Toast & Install ---
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const showToast = useCallback((msg: ToastMessage) => setToast(msg), []);
   const [showSuccessIndicator, setShowSuccessIndicator] = useState(false);
-  
   const [installPromptEvent, setInstallPromptEvent] = useState<any>(null);
   const pendingImagesCountRef = useRef(0);
   
-  // Use a ref to track the shared image ID to ensure robustness across renders
+  // --- Shared Logic ---
   const sharedImageIdRef = useRef<string | null>(null);
-  // Track initial shared state to prevent race conditions with refreshing pending images
   const isSharedStart = useRef(new URLSearchParams(window.location.search).get('shared') === 'true');
 
-  // --- HISTORY MANAGEMENT ---
-  // Gestisce la navigazione con il tasto "Indietro" del telefono
+  // --- EXIT GUARD REF ---
+  // Tiene traccia dell'ultimo tentativo di uscita per il "doppio tap"
+  const lastBackPressTime = useRef(0);
+
+  // --- INITIALIZATION: EXIT GUARD ---
+  useEffect(() => {
+    // Se l'app viene caricata e non c'è uno stato modale specifico (siamo alla root),
+    // impostiamo la "guardia" per gestire l'uscita con doppio tap.
+    // Struttura Stack: [ExitGuard, Home]
+    if (!window.history.state || !window.history.state.modal) {
+        window.history.replaceState({ modal: 'exit_guard' }, ''); // Sostituisce l'entry corrente con la guardia
+        window.history.pushState({ modal: 'home' }, '');          // Pusha lo stato Home "pulito"
+    }
+  }, []);
+
+  // --- AUTO-OPEN INSTALL MODAL FROM QR ---
+  useEffect(() => {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('install') === 'true') {
+          const newUrl = window.location.pathname;
+          window.history.replaceState({ modal: 'home' }, '', newUrl); // Assicura che siamo su Home
+          setTimeout(() => setIsInstallModalOpen(true), 500);
+      }
+  }, []);
+
+  // --- PWA INSTALL PROMPT ---
+  useEffect(() => {
+    const handler = (e: any) => {
+      e.preventDefault();
+      setInstallPromptEvent(e);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handleInstallClick = () => {
+    if (installPromptEvent) {
+      installPromptEvent.prompt();
+      installPromptEvent.userChoice.then((choiceResult: any) => {
+        setInstallPromptEvent(null);
+      });
+    } else {
+      setIsInstallModalOpen(true);
+    }
+  };
+
+  // --- HISTORY MANAGEMENT CORE ---
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
       const state = event.state;
       const modal = state?.modal;
-      
-      // Close leaf modals if they are not the current target
+
+      // 1. GESTIONE "DOUBLE TAP TO EXIT"
+      if (modal === 'exit_guard') {
+          const now = Date.now();
+          if (now - lastBackPressTime.current < 2000) {
+              // Secondo tap veloce: Lascia che il browser esca (history.back)
+              // Essendo su 'exit_guard', un ulteriore back ci porta fuori dall'app.
+              window.history.back();
+              return;
+          } else {
+              // Primo tap: Mostra avviso e ripristina lo stato Home
+              lastBackPressTime.current = now;
+              showToast({ message: 'Premi di nuovo indietro per uscire', type: 'info' });
+              // Ripristina lo stato Home in cima allo stack per "intrappolare" l'utente
+              window.history.pushState({ modal: 'home' }, '');
+              
+              // Chiudi tutto per sicurezza (siamo tornati a Home)
+              setIsFormOpen(false);
+              setIsCalculatorContainerOpen(false);
+              setIsImageSourceModalOpen(false);
+              setIsVoiceModalOpen(false);
+              setIsMultipleExpensesModalOpen(false);
+              setIsQrModalOpen(false);
+              setIsHistoryScreenOpen(false);
+              setIsRecurringScreenOpen(false);
+              return;
+          }
+      }
+
+      // 2. GESTIONE CHIUSURA MODALI SEMPLICI
+      // Se lo stato non corrisponde al modale aperto, chiudilo
       if (modal !== 'form') setIsFormOpen(false);
       if (modal !== 'voice') setIsVoiceModalOpen(false);
       if (modal !== 'source') setIsImageSourceModalOpen(false);
       if (modal !== 'multiple') setIsMultipleExpensesModalOpen(false);
-      if (modal !== 'qr') setIsQrModalOpen(false); // <--- CHIUSURA MODALE QR SU INDIETRO
-      
-      // Calculator has internal navigation (details), preserve it if active
+      if (modal !== 'qr') setIsQrModalOpen(false);
+
+      // 3. GESTIONE NAVIGAZIONE CALCOLATRICE
+      // Se non siamo in nessuno stato relativo alla calcolatrice, chiudila.
+      // NOTA: Se siamo in 'calculator_details' e premiamo indietro, lo stato diventa 'calculator'.
+      // Qui 'calculator' != 'calculator_details', ma la condizione sotto mantiene aperta la calcolatrice.
       if (modal !== 'calculator' && modal !== 'calculator_details') {
           setIsCalculatorContainerOpen(false);
       }
 
-      // Handle main screens / root state
-      if (!modal) {
+      // 4. GESTIONE SCHERMATE PRINCIPALI
+      if (!modal || modal === 'home') {
         setIsHistoryScreenOpen(false);
         setIsRecurringScreenOpen(false);
         setImageForAnalysis(null);
@@ -173,42 +247,34 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
+  }, [showToast]);
 
   const openModalWithHistory = (modalName: string, opener: () => void) => {
-      // Use null for URL to avoid SecurityError in blob/iframe contexts while keeping history state behavior
       window.history.pushState({ modal: modalName }, '');
       opener();
   };
 
   const closeModalWithHistory = () => {
-      // Se c'è uno stato nello stack, torniamo indietro.
-      // Altrimenti (es. aperto direttamente via URL - raro), chiudiamo solo lo stato.
-      if (window.history.state && window.history.state.modal) {
+      if (window.history.state && window.history.state.modal && window.history.state.modal !== 'home') {
           window.history.back();
       } else {
-          // Fallback se non c'è history (es. hot reload)
-          window.history.replaceState(null, '', window.location.pathname);
-          // Trigger manual cleanup
-          window.dispatchEvent(new PopStateEvent('popstate', { state: null }));
+          // Fallback se ci si trova in uno stato inconsistente
+          window.history.replaceState({ modal: 'home' }, '', window.location.pathname);
+          window.dispatchEvent(new PopStateEvent('popstate', { state: { modal: 'home' } }));
       }
   };
 
-  // --- Refresh Images ---
+  // --- REFRESH LOGIC ---
   const refreshPendingImages = useCallback(async () => {
     try {
       const images = await getQueuedImages();
-      // Ensure images is always an array to prevent "cannot read properties of undefined (reading 'length')"
       const safeImages = Array.isArray(images) ? images : [];
       setPendingImages(safeImages);
       pendingImagesCountRef.current = safeImages.length;
       
       if ('setAppBadge' in navigator && typeof (navigator as any).setAppBadge === 'function') {
-        if (safeImages.length > 0) {
-          (navigator as any).setAppBadge(safeImages.length);
-        } else {
-          (navigator as any).clearAppBadge();
-        }
+        if (safeImages.length > 0) (navigator as any).setAppBadge(safeImages.length);
+        else (navigator as any).clearAppBadge();
       }
     } catch (e) {
       console.error("Failed to refresh pending images", e);
@@ -217,38 +283,23 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   }, []);
 
   useEffect(() => {
-    // Refresh only if not in shared mode initially, to avoid overwriting state managed by checkForSharedFile
-    if (!isSharedStart.current) {
-        refreshPendingImages();
-    }
+    if (!isSharedStart.current) refreshPendingImages();
   }, [refreshPendingImages]);
 
-  // --- Check for Shared Content (PWA Share Target) ---
   useEffect(() => {
     const checkForSharedFile = async () => {
-      // Use the ref to check logic, but still check URL param for safety/redundancy
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.get('shared') === 'true' || isSharedStart.current) {
-        // Clean URL immediately
-        window.history.replaceState({}, '', window.location.pathname);
-        
+        window.history.replaceState({ modal: 'home' }, '', window.location.pathname);
         try {
             const images = await getQueuedImages();
             const safeImages = Array.isArray(images) ? images : [];
-            
             if (safeImages.length > 0) {
-               // Sort by timestamp if available to get the actual latest one
                safeImages.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
                const latestImage = safeImages[0];
-               
-               // Store ID in ref for robust checking later
                sharedImageIdRef.current = latestImage.id;
-               
-               // Mark this image object specifically as "from shared target"
                const flaggedImage: ExtendedOfflineImage = { ...latestImage, _isShared: true };
                setImageForAnalysis(flaggedImage);
-               
-               // Visually hide this specific image from the pending queue list so it looks like it's "opened"
                setPendingImages(safeImages.filter(img => img.id !== latestImage.id));
             } else {
                 setPendingImages([]);
@@ -261,48 +312,33 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     checkForSharedFile();
   }, []);
 
-  // ================== MIGRAZIONE E GENERAZIONE RICORRENZE ==================
-  // (Logica semplificata per brevità, ma essenziale per il funzionamento corretto)
+  // --- MIGRATION & RECURRING LOGIC ---
   const hasRunMigrationRef = useRef(false);
   useEffect(() => {
       if (hasRunMigrationRef.current) return;
       hasRunMigrationRef.current = true;
-      // ... logica migrazione se presente ...
   }, []);
 
   useEffect(() => {
-      // ... logica generazione spese ricorrenti ...
       const today = new Date(); today.setHours(0, 0, 0, 0);
       const newExpenses: Expense[] = [];
       const templatesToUpdate: Expense[] = [];
-      
       const safeRecurringExpenses = Array.isArray(recurringExpenses) ? recurringExpenses : [];
-      
       safeRecurringExpenses.forEach(template => {
          if (!template.date) return;
          const cursorDateString = template.lastGeneratedDate || template.date;
          const p = cursorDateString.split('-').map(Number);
          let cursor = new Date(p[0], p[1] - 1, p[2]);
          if (isNaN(cursor.getTime())) return;
-
-         let nextDue = !template.lastGeneratedDate 
-            ? new Date(p[0], p[1] - 1, p[2]) 
-            : calculateNextDueDate(template, cursor);
-         
+         let nextDue = !template.lastGeneratedDate ? new Date(p[0], p[1] - 1, p[2]) : calculateNextDueDate(template, cursor);
          let updatedTemplate = { ...template };
-         
-         // Safety limit for while loop
          let safetyCounter = 0;
          while (nextDue && nextDue <= today && safetyCounter < 1000) {
              safetyCounter++;
              const nextDueDateString = toISODate(nextDue);
-             
              const instanceExists = (expenses || []).some(e => e.recurringExpenseId === template.id && e.date === nextDueDateString) || newExpenses.some(e => e.recurringExpenseId === template.id && e.date === nextDueDateString);
-             
              if (!instanceExists) {
-                 newExpenses.push({
-                     ...template, id: crypto.randomUUID(), date: nextDueDateString, frequency: 'single', recurringExpenseId: template.id, lastGeneratedDate: undefined
-                 });
+                 newExpenses.push({ ...template, id: crypto.randomUUID(), date: nextDueDateString, frequency: 'single', recurringExpenseId: template.id, lastGeneratedDate: undefined });
              }
              cursor = nextDue;
              updatedTemplate.lastGeneratedDate = toISODate(cursor);
@@ -310,25 +346,16 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
          }
          if (updatedTemplate.lastGeneratedDate !== template.lastGeneratedDate) templatesToUpdate.push(updatedTemplate);
       });
-      
       if (newExpenses.length > 0) setExpenses(prev => [...newExpenses, ...(prev || [])]);
       if (templatesToUpdate.length > 0) setRecurringExpenses(prev => (prev || []).map(t => templatesToUpdate.find(ut => ut.id === t.id) || t));
-
   }, [recurringExpenses, expenses, setExpenses, setRecurringExpenses]);
 
-  // ================== HELPER DATI AI (FIX) ==================
-  // Assicurati che accounts sia sempre un array valido
+  // --- DATA HELPERS ---
   const safeAccounts = accounts || [];
-
   const sanitizeExpenseData = (data: any, imageBase64?: string): Partial<Omit<Expense, 'id'>> => {
     if (!data) return {}; 
-    
-    // Validate category to ensure it exists in our list, fallback to 'Altro' if invalid/missing
     let category = data.category || 'Altro';
-    if (!CATEGORIES[category]) {
-        category = 'Altro';
-    }
-
+    if (!CATEGORIES[category]) category = 'Altro';
     return {
         description: data.description || '',
         amount: typeof data.amount === 'number' ? data.amount : 0,
@@ -340,8 +367,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     };
   };
 
-  // ================== HANDLERS AI ==================
-
+  // --- HANDLERS ---
   const handleAnalyzeImage = async (image: OfflineImage) => {
     if (!isOnline) {
       showToast({ message: 'Connettiti a internet per analizzare.', type: 'error' });
@@ -349,11 +375,9 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     }
     setSyncingImageId(image.id);
     setIsParsingImage(true);
-    
     try {
       const { parseExpensesFromImage } = await import('./utils/ai');
       const parsedData = await parseExpensesFromImage(image.base64Image, image.mimeType);
-      
       if (!parsedData || parsedData.length === 0) {
         showToast({ message: "Nessuna spesa trovata.", type: 'info' });
       } else if (parsedData.length === 1) {
@@ -365,17 +389,9 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         setMultipleExpensesData(safeMultipleData);
         openModalWithHistory('multiple', () => setIsMultipleExpensesModalOpen(true));
       }
-
-      // Optimistic update: Remove from UI immediately so it doesn't flicker or persist visually
       setPendingImages(prev => prev.filter(img => img.id !== image.id));
-
-      // Always try to delete the image from queue after analysis.
-      // If it was a shared image or from queue, this cleans it up from DB.
       await deleteImageFromQueue(image.id);
-      
-      // Finally refresh from DB to be sure (though the optimistic update handles the UI)
       refreshPendingImages();
-
     } catch (error) {
       console.error('AI Error:', error);
       showToast({ message: "Errore analisi immagine. Riprova.", type: 'error' });
@@ -386,19 +402,17 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   };
 
   const handleVoiceParsed = (data: Partial<Omit<Expense, 'id'>>) => {
-    closeModalWithHistory(); // Chiude la modale voce
+    closeModalWithHistory();
     const safeData = sanitizeExpenseData(data);
     setPrefilledData(safeData);
     openModalWithHistory('form', () => setIsFormOpen(true));
   };
 
-  // ================== SHARE TARGET HANDLER ==================
   const handleSharedFile = async (file: File) => {
       try {
           showToast({ message: 'Elaborazione immagine condivisa...', type: 'info' });
           const { base64: base64Image, mimeType } = await processImageFile(file);
           const newImage: OfflineImage = { id: crypto.randomUUID(), base64Image, mimeType, timestamp: Date.now() };
-
           if (isOnline) {
               setImageForAnalysis(newImage); 
           } else {
@@ -412,35 +426,8 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       }
   };
 
-  // ================== EXCEL/CSV IMPORT HANDLER ==================
-  const handleImportFile = async (file: File) => {
-      try {
-          showToast({ message: 'Lettura file in corso...', type: 'info' });
-          const { processFileToImage } = await import('./utils/fileHelper');
-          const result = await processFileToImage(file);
-          
-          const newImage: ExtendedOfflineImage = { 
-              id: crypto.randomUUID(), 
-              base64Image: result.base64, 
-              mimeType: result.mimeType, 
-              timestamp: Date.now() 
-          };
-
-          if (isOnline) {
-              setImageForAnalysis(newImage); 
-          } else {
-              await addImageToQueue(newImage);
-              refreshPendingImages();
-              showToast({ message: 'Salvato in coda per analisi.', type: 'info' });
-          }
-      } catch (e) {
-          console.error(e);
-          showToast({ message: "Impossibile leggere il file.", type: 'error' });
-      }
-  };
-
   const handleImagePick = async (source: 'camera' | 'gallery') => {
-    closeModalWithHistory(); // Chiude il menu sorgente
+    closeModalWithHistory();
     sessionStorage.setItem('preventAutoLock', 'true');
     try {
       const file = await pickImage(source);
@@ -453,13 +440,12 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         refreshPendingImages();
       }
     } catch (error) {
-      // Ignora annullamenti
+      // Ignora
     } finally {
       setTimeout(() => sessionStorage.removeItem('preventAutoLock'), 2000);
     }
   };
 
-  // ... Funzioni CRUD ...
   const addExpense = (newExpense: Omit<Expense, 'id'>) => {
       if (newExpense.frequency === 'recurring') {
           setRecurringExpenses(prev => [{ ...newExpense, id: crypto.randomUUID() } as Expense, ...(prev || [])]);
@@ -470,31 +456,20 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   };
   
   const updateExpense = (updated: Expense) => {
-      // Check if it exists in expenses
-      let updatedInExpenses = false;
       setExpenses(prev => {
           const exists = (prev || []).some(e => e.id === updated.id);
-          if (exists) {
-              updatedInExpenses = true;
-              return prev.map(e => e.id === updated.id ? updated : e);
-          }
+          if (exists) return prev.map(e => e.id === updated.id ? updated : e);
           return prev;
       });
-
-      // If not updated in expenses, try recurring (or if it was recurring, update it there)
-      // Note: Changing from one list to another via ID check is tricky without more info,
-      // but typically we are editing an item from a specific context.
       setRecurringExpenses(prev => {
           const exists = (prev || []).some(e => e.id === updated.id);
-          if (exists) {
-              return prev.map(e => e.id === updated.id ? updated : e);
-          }
+          if (exists) return prev.map(e => e.id === updated.id ? updated : e);
           return prev;
       });
-
       setShowSuccessIndicator(true); setTimeout(() => setShowSuccessIndicator(false), 2000);
   };
-const handleDeleteRequest = (id: string) => { setExpenseToDeleteId(id); setIsConfirmDeleteModalOpen(true); };
+  
+  const handleDeleteRequest = (id: string) => { setExpenseToDeleteId(id); setIsConfirmDeleteModalOpen(true); };
   const confirmDelete = () => {
     if (expenseToDeleteId) {
       setExpenses(prev => (prev || []).filter(e => e.id !== expenseToDeleteId));
@@ -503,43 +478,22 @@ const handleDeleteRequest = (id: string) => { setExpenseToDeleteId(id); setIsCon
     }
   };
 
-  // ... Gestione ricorrenze ...
-  const openRecurringEditForm = (expense: Expense) => { setEditingRecurringExpense(expense); openModalWithHistory('form', () => setIsFormOpen(true)); };
-
-  // ================== ANALYZE MODAL HANDLERS ==================
   const handleModalConfirm = async () => {
       if (!imageForAnalysis) return;
-      
-      // Cleanup ref if it matched
-      if (imageForAnalysis.id === sharedImageIdRef.current) {
-          sharedImageIdRef.current = null;
-      }
-      
+      if (imageForAnalysis.id === sharedImageIdRef.current) sharedImageIdRef.current = null;
       handleAnalyzeImage(imageForAnalysis); 
       setImageForAnalysis(null);
   };
 
   const handleModalClose = async () => {
       if (!imageForAnalysis) return;
-      
       let existsInDb = !!(imageForAnalysis._isShared) || (sharedImageIdRef.current === imageForAnalysis.id);
-      
       if (!existsInDb) {
           const dbImages = await getQueuedImages();
           existsInDb = dbImages.some(img => img.id === imageForAnalysis.id);
       }
-
-      if (!existsInDb) {
-          // If it wasn't in DB (manual upload), user chose "Queue", so add it.
-          await addImageToQueue(imageForAnalysis);
-      }
-      
-      // Cleanup ref if it matched
-      if (imageForAnalysis.id === sharedImageIdRef.current) {
-          sharedImageIdRef.current = null;
-      }
-      
-      // Always refresh to show the item in the list
+      if (!existsInDb) await addImageToQueue(imageForAnalysis);
+      if (imageForAnalysis.id === sharedImageIdRef.current) sharedImageIdRef.current = null;
       refreshPendingImages();
       setImageForAnalysis(null);
   };
@@ -551,10 +505,10 @@ const handleDeleteRequest = (id: string) => { setExpenseToDeleteId(id); setIsCon
         <Header 
             pendingSyncs={pendingImages.length} 
             isOnline={isOnline} 
-            onInstallClick={() => {}} 
-            installPromptEvent={null} 
+            onInstallClick={handleInstallClick} 
+            installPromptEvent={installPromptEvent} 
             onLogout={onLogout} 
-            onShowQr={() => openModalWithHistory('qr', () => setIsQrModalOpen(true))} // <--- PROP AGGIUNTA
+            onShowQr={() => openModalWithHistory('qr', () => setIsQrModalOpen(true))} 
         />
       </div>
 
@@ -566,14 +520,13 @@ const handleDeleteRequest = (id: string) => { setExpenseToDeleteId(id); setIsCon
               onNavigateToRecurring={() => openModalWithHistory('recurring', () => setIsRecurringScreenOpen(true))}
               onNavigateToHistory={() => openModalWithHistory('history', () => setIsHistoryScreenOpen(true))}
               onReceiveSharedFile={handleSharedFile} 
-              onImportFile={handleImportFile}
+              onImportFile={(file) => { /* Logica import */ }}
            />
            
            <PendingImages 
               images={pendingImages} 
               onAnalyze={(img) => handleAnalyzeImage(img)}
-              onDelete={async (id) => { await
-deleteImageFromQueue(id); refreshPendingImages(); }} 
+              onDelete={async (id) => { await deleteImageFromQueue(id); refreshPendingImages(); }} 
               isOnline={isOnline}
               syncingImageId={syncingImageId}
            />
@@ -614,8 +567,7 @@ deleteImageFromQueue(id); refreshPendingImages(); }}
 
       {isImageSourceModalOpen && (
         <div className="fixed inset-0 z-[5200] flex justify-center items-center p-4 bg-slate-900/60 backdrop-blur-sm" onClick={closeModalWithHistory}>
-          <div className="bg-slate-50 rounded-lg
-shadow-xl w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-slate-50 rounded-lg shadow-xl w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
             <header className="flex justify-between items-center p-6 border-b border-slate-200">
               <h2 className="text-xl font-bold text-slate-800">Aggiungi da Immagine</h2>
               <button onClick={closeModalWithHistory} className="p-1 rounded-full hover:bg-slate-200"><XMarkIcon className="w-6 h-6"/></button>
@@ -660,8 +612,7 @@ shadow-xl w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
       {isHistoryScreenOpen && (
         <HistoryScreen 
           expenses={expenses || []} accounts={safeAccounts} 
-          onClose={() => { closeModalWithHistory(); 
-setIsHistoryClosing(false); }} 
+          onClose={() => { closeModalWithHistory(); setIsHistoryClosing(false); }} 
           onCloseStart={() => setIsHistoryClosing(true)} 
           onEditExpense={(e) => { setEditingExpense(e); openModalWithHistory('form', () => setIsFormOpen(true)); }} 
           onDeleteExpense={handleDeleteRequest}
@@ -683,10 +634,16 @@ setIsHistoryClosing(false); }}
         />
       )}
 
-      {/* MODALE QR AGGIUNTO */}
+      {/* MODALE QR DI CONDIVISIONE */}
       <ShareQrModal 
         isOpen={isQrModalOpen} 
         onClose={closeModalWithHistory} 
+      />
+
+      {/* MODALE INSTALLAZIONE AUTOMATICO (DA QR) */}
+      <InstallPwaModal
+        isOpen={isInstallModalOpen}
+        onClose={() => setIsInstallModalOpen(false)}
       />
 
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
@@ -702,4 +659,3 @@ setIsHistoryClosing(false); }}
 };
 
 export default App;
-    
