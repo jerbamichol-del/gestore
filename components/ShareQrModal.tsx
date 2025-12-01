@@ -9,8 +9,14 @@ interface ShareQrModalProps {
 
 const ShareQrModal: React.FC<ShareQrModalProps> = ({ isOpen, onClose }) => {
   const [isAnimating, setIsAnimating] = useState(false);
-  // Legge l'URL attuale del browser per generare il QR
-  const url = typeof window !== 'undefined' ? window.location.href : '';
+  
+  // Genera l'URL aggiungendo il parametro ?install=true
+  // Usiamo l'oggetto URL per gestire correttamente eventuali parametri esistenti
+  const url = typeof window !== 'undefined' ? (() => {
+      const u = new URL(window.location.href);
+      u.searchParams.set('install', 'true');
+      return u.toString();
+  })() : '';
 
   useEffect(() => {
     if (isOpen) {
@@ -50,7 +56,8 @@ const ShareQrModal: React.FC<ShareQrModalProps> = ({ isOpen, onClose }) => {
                 />
             </div>
             <p className="text-center text-slate-600 text-sm">
-                Scansiona questo codice per aprire e installare l'app su un altro dispositivo.
+                Fai scansionare questo codice. <br/>
+                All'apertura, l'app chiederà automaticamente di essere installata.
             </p>
         </div>
       </div>
