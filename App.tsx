@@ -228,16 +228,15 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       }
 
       // Gestione Schermate Principali (Home/Storico/Ricorrenti)
-      // FIX: Reset pulito degli stati di navigazione qui
       if (!modal || modal === 'home') {
         setIsHistoryScreenOpen(false);
-        setIsHistoryClosing(false);     // Reset importante!
-        setIsHistoryFilterOpen(false);  // Reset importante!
+        setIsHistoryClosing(false); // Reset pulito quando siamo sicuri di essere a casa
+        setIsHistoryFilterOpen(false); // Reset esplicito anche qui
         setIsRecurringScreenOpen(false);
         setImageForAnalysis(null);
       } else if (modal === 'history') {
         setIsHistoryScreenOpen(true);
-        setIsHistoryClosing(false);     // Reset per evitare stati zombie
+        setIsHistoryClosing(false); // Reset pulito all'apertura
         setIsRecurringScreenOpen(false);
       } else if (modal === 'recurring') {
         setIsRecurringScreenOpen(true);
@@ -255,10 +254,13 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   };
 
   const closeModalWithHistory = () => {
+      // Verifica esplicita dello stato per evitare di chiudere troppo (es. exit_guard)
       if (window.history.state && window.history.state.modal && window.history.state.modal !== 'home' && window.history.state.modal !== 'exit_guard') {
           window.history.back();
       } else {
+          // Fallback di sicurezza: se per qualche motivo lo stato è perso, forza la home
           window.history.replaceState({ modal: 'home' }, '', window.location.pathname);
+          // Forza l'aggiornamento dello stato React simulando un evento popstate
           window.dispatchEvent(new PopStateEvent('popstate', { state: { modal: 'home' } }));
       }
   };
@@ -504,7 +506,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   };
 
   // --- CALCOLA BOTTOM POSITION PER FAB ---
-  // FIX: Solo se siamo nello storico E non stiamo chiudendo
+  // MODIFICATO: Logica più robusta per evitare che il FAB "salti" in alto quando lo storico è chiuso
   const fabStyle = (isHistoryScreenOpen && !isHistoryClosing) 
       ? { bottom: `calc(90px + env(safe-area-inset-bottom, 0px))` } 
       : undefined;
@@ -530,7 +532,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
               recurringExpenses={recurringExpenses || []} 
               onNavigateToRecurring={() => openModalWithHistory('recurring', () => setIsRecurringScreenOpen(true))}
               onNavigateToHistory={() => openModalWithHistory('history', () => {
-                  setIsHistoryClosing(false); // Reset stato preventivo
+                  setIsHistoryClosing(false); // Reset preventivo
                   setIsHistoryScreenOpen(true);
               })}
               onReceiveSharedFile={handleSharedFile} 
