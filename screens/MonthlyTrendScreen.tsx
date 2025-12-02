@@ -19,7 +19,7 @@ const renderActiveShape = (props: any) => {
       <text x={cx} y={cy + 12} textAnchor="middle" fill={fill} className="text-xl font-extrabold">
         {formatCurrency(payload.value)}
       </text>
-      <text x={cx} y={cy + 32} textAnchor="middle" fill="#64748b" className="text-xs">
+      <text x={cx} y={cy + 32} textAnchor="middle" fill="#334155" className="text-sm font-bold">
         {`(${(percent * 100).toFixed(2)}%)`}
       </text>
       
