@@ -39,7 +39,11 @@ const AuthGate: React.FC = () => {
     if (token && email) {
         setResetContext({ token, email });
         // Pulisce l'URL per evitare che il reset venga riattivato al refresh della pagina
-        window.history.replaceState({}, document.title, window.location.pathname);
+        try {
+            window.history.replaceState({}, document.title, window.location.pathname);
+        } catch (e) {
+            // Ignora errore su ambienti restrittivi (es. blob/iframe)
+        }
     }
   }, []);
 
