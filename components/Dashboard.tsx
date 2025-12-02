@@ -3,7 +3,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Sector } from 'recharts';
 import { Expense } from '../types';
 import { formatCurrency } from './icons/formatters';
 import { getCategoryStyle } from '../utils/categoryStyles';
-import { ArrowsUpDownIcon } from './icons/ArrowsUpDownicon';
+import { ArrowsUpDownIcon } from './icons/ArrowsUpDownIcon';
 import { ArrowDownTrayIcon } from './icons/ArrowDownTrayIcon';
 import { ArrowUpTrayIcon } from './icons/ArrowUpTrayIcon';
 import { XMarkIcon } from './icons/XMarkIcon';
