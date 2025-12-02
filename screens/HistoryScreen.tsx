@@ -436,7 +436,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
 
   const handleClose = () => {
     setOpenItemId(null);
-    if (onCloseStart) onCloseStart();
+    if (onCloseStart) onCloseStart(); // Signal start of closing animation
     setIsAnimatingIn(false);
     setTimeout(onClose, 300);
   };
@@ -728,7 +728,15 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
       className={`fixed inset-0 z-20 bg-slate-100 transform transition-transform duration-300 ease-in-out ${
         isAnimatingIn ? 'translate-y-0 pointer-events-auto' : 'translate-y-full pointer-events-none'
       }`}
-      style={{ touchAction: 'pan-y', willChange: 'transform' }}
+      style={{ 
+          touchAction: 'pan-y', 
+          willChange: 'transform',
+          // Explicit visibility transition: visible immediately when opening, hidden AFTER transform ends when closing
+          visibility: isAnimatingIn ? 'visible' : 'hidden',
+          transitionProperty: 'transform, visibility',
+          transitionDuration: '300ms, 0s',
+          transitionDelay: isAnimatingIn ? '0s, 0s' : '0s, 300ms' 
+      }}
     >
       <header className="sticky top-0 z-20 flex items-center gap-4 p-4 bg-white/80 backdrop-blur-sm shadow-sm h-[60px]">
         {isSelectionMode ? (
