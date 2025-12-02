@@ -14,7 +14,7 @@ import { TrashIcon } from '../components/icons/TrashIcon';
 import { HistoryFilterCard } from '../components/HistoryFilterCard';
 import { ArrowLeftIcon } from '../components/icons/ArrowLeftIcon';
 import { CheckIcon } from '../components/icons/CheckIcon';
-import { ArrowsUpDownIcon } from '../components/icons/ArrowsUpDownicon';
+import { ArrowsUpDownIcon } from '../components/icons/ArrowsUpDownIcon';
 import { CalendarIcon } from '../components/icons/CalendarIcon';
 import { CurrencyEuroIcon } from '../components/icons/CurrencyEuroIcon';
 import { TagIcon } from '../components/icons/TagIcon';
