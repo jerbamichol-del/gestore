@@ -20,7 +20,7 @@ const urlsToCache = [
   'https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs',
   'https://esm.sh/react-qr-code@2.0.15',
   // Tailwind CDN (fondamentale se usi il CDN in index.html)
-  'https://cdn.tailwindcss.com'
+  //'https://cdn.tailwindcss.com'
 ];
 
 // --- INSTALLAZIONE ---
