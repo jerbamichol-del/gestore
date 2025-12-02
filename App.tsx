@@ -157,8 +157,13 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     }
     const params = new URLSearchParams(window.location.search);
     if (params.get('install') === 'true') {
-        const newUrl = window.location.pathname;
-        window.history.replaceState({ modal: 'home' }, '', newUrl); 
+        try {
+            const newUrl = window.location.pathname;
+            window.history.replaceState({ modal: 'home' }, '', newUrl);
+        } catch (e) {
+            // Fallback for environments where replaceState URL is restricted (e.g. blob/iframe)
+            window.history.replaceState({ modal: 'home' }, '');
+        } 
         setTimeout(() => setIsInstallModalOpen(true), 500);
     }
   }, []);
@@ -260,7 +265,11 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   // Usato quando si chiude un modale "definitivamente" (es. dopo aver salvato)
   // per evitare problemi di history stack incasinata (es. calc -> details -> calc -> home)
   const forceNavigateHome = () => {
-      window.history.replaceState({ modal: 'home' }, '', window.location.pathname);
+      try {
+          window.history.replaceState({ modal: 'home' }, '', window.location.pathname);
+      } catch (e) {
+          window.history.replaceState({ modal: 'home' }, '');
+      }
       window.dispatchEvent(new PopStateEvent('popstate', { state: { modal: 'home' } }));
   };
 
@@ -296,7 +305,11 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     const checkForSharedFile = async () => {
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.get('shared') === 'true' || isSharedStart.current) {
-        window.history.replaceState({ modal: 'home' }, '', window.location.pathname);
+        try {
+            window.history.replaceState({ modal: 'home' }, '', window.location.pathname);
+        } catch (e) {
+            window.history.replaceState({ modal: 'home' }, '');
+        }
         try {
             const images = await getQueuedImages();
             const safeImages = Array.isArray(images) ? images : [];
@@ -414,6 +427,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   };
 
   const handleVoiceParsed = (data: Partial<Omit<Expense, 'id'>>) => {
+    // replaceState here is fine as it doesn't change URL, just state object
     window.history.replaceState({ modal: 'form' }, '');
     setIsVoiceModalOpen(false);
     const safeData = sanitizeExpenseData(data);
