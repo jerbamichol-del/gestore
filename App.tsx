@@ -162,7 +162,9 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
             const newUrl = window.location.pathname;
             window.history.replaceState({ modal: 'home' }, '', newUrl);
         } catch (e) {
-            window.history.replaceState({ modal: 'home' }, '');
+            try {
+              window.history.replaceState({ modal: 'home' }, '');
+            } catch (e) {}
         } 
         setTimeout(() => setIsInstallModalOpen(true), 500);
     }
@@ -266,7 +268,9 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       try {
           window.history.replaceState({ modal: 'home' }, '', window.location.pathname);
       } catch (e) {
-          window.history.replaceState({ modal: 'home' }, '');
+          try {
+            window.history.replaceState({ modal: 'home' }, '');
+          } catch(e) {}
       }
       window.dispatchEvent(new PopStateEvent('popstate', { state: { modal: 'home' } }));
   };
@@ -312,7 +316,9 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         try {
             window.history.replaceState({ modal: 'home' }, '', window.location.pathname);
         } catch (e) {
-            window.history.replaceState({ modal: 'home' }, '');
+            try {
+              window.history.replaceState({ modal: 'home' }, '');
+            } catch(e) {}
         }
         try {
             const images = await getQueuedImages();
@@ -458,6 +464,32 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       }
   };
 
+  const handleImportFile = async (file: File) => {
+      try {
+          showToast({ message: 'Elaborazione file...', type: 'info' });
+          const { processFileToImage } = await import('./utils/fileHelper');
+          const { base64: base64Image, mimeType } = await processFileToImage(file);
+          
+          const newImage: OfflineImage = { 
+              id: crypto.randomUUID(), 
+              base64Image, 
+              mimeType, 
+              timestamp: Date.now() 
+          };
+          
+          if (isOnline) {
+              setImageForAnalysis(newImage); 
+          } else {
+              await addImageToQueue(newImage);
+              refreshPendingImages();
+              showToast({ message: 'File salvato in coda (offline).', type: 'info' });
+          }
+      } catch (e) {
+          console.error('File import error:', e);
+          showToast({ message: "Errore importazione file.", type: 'error' });
+      }
+  };
+
   const handleImagePick = async (source: 'camera' | 'gallery') => {
     try {
         window.history.replaceState({ modal: 'home' }, '');
@@ -564,7 +596,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
                   setIsHistoryScreenOpen(true);
               })}
               onReceiveSharedFile={handleSharedFile} 
-              onImportFile={(file) => { /* Logica import */ }}
+              onImportFile={handleImportFile}
            />
            
            <PendingImages 
