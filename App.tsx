@@ -17,8 +17,8 @@ import Toast from './components/Toast';
 import HistoryScreen from './screens/HistoryScreen';
 import RecurringExpensesScreen from './screens/RecurringExpensesScreen';
 import ImageSourceCard from './components/ImageSourceCard';
-import ShareQrModal from './components/ShareQrModal'; // Assicurati che questo file esista o rimuovi l'import se non lo usi
-import InstallPwaModal from './components/InstallPwaModal'; // Assicurati che questo file esista o rimuovi l'import se non lo usi
+import ShareQrModal from './components/ShareQrModal';
+import InstallPwaModal from './components/InstallPwaModal';
 import { CameraIcon } from './components/icons/CameraIcon';
 import { ComputerDesktopIcon } from './components/icons/ComputerDesktopIcon';
 import { XMarkIcon } from './components/icons/XMarkIcon';
@@ -137,22 +137,14 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   // --- EXIT GUARD REF ---
   const lastBackPressTime = useRef(0);
 
-  // --- FIX CRITICO: Reset stato filtri quando si chiude lo storico ---
+  // --- RESET STATE EFFECT (SOLUZIONE PROBLEMA FAB/DASHBOARD) ---
   useEffect(() => {
+    // Se lo storico è chiuso, forziamo la chiusura del pannello filtri.
+    // Questo assicura che il FAB torni nella posizione corretta.
     if (!isHistoryScreenOpen) {
-      // Quando lo storico si chiude, forziamo la chiusura del pannello filtri.
-      // Questo risolve il problema del FAB che rimane alzato.
       setIsHistoryFilterOpen(false);
     }
   }, [isHistoryScreenOpen]);
-
-  // --- DERIVED STATE ---
-  // Blocca interazioni dashboard solo se un modale "overlay" è aperto.
-  // HistoryScreen e RecurringScreen sono full-screen, quindi coprono già tutto.
-  // Il problema potrebbe essere che HistoryScreen non smonta correttamente.
-  const isOverlayOpen = isFormOpen || isCalculatorContainerOpen || isImageSourceModalOpen || 
-                        isVoiceModalOpen || isConfirmDeleteModalOpen || isMultipleExpensesModalOpen || 
-                        isQrModalOpen || isInstallModalOpen;
 
   // --- INITIALIZATION ---
   useEffect(() => {
@@ -208,23 +200,24 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
           }
       }
 
+      // Chiudi modali semplici
       if (modal !== 'form') setIsFormOpen(false);
       if (modal !== 'voice') setIsVoiceModalOpen(false);
       if (modal !== 'source') setIsImageSourceModalOpen(false);
       if (modal !== 'multiple') setIsMultipleExpensesModalOpen(false);
       if (modal !== 'qr') setIsQrModalOpen(false);
 
+      // Gestione Calcolatrice
       if (modal !== 'calculator' && modal !== 'calculator_details') {
           setIsCalculatorContainerOpen(false);
       }
 
-      // FIX: Assicuriamoci che tornando alla home si chiudano tutte le schermate full-screen
+      // Gestione Schermate Principali (Home/Storico/Ricorrenti)
       if (!modal || modal === 'home') {
         setIsHistoryScreenOpen(false);
+        setIsHistoryFilterOpen(false); // Reset esplicito anche qui
         setIsRecurringScreenOpen(false);
         setImageForAnalysis(null);
-        // Reset manuale per sicurezza (anche se l'useEffect sopra lo fa)
-        setIsHistoryFilterOpen(false); 
       } else if (modal === 'history') {
         setIsHistoryScreenOpen(true);
         setIsRecurringScreenOpen(false);
@@ -508,8 +501,6 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   };
 
   // --- CALCOLA BOTTOM POSITION PER FAB ---
-  // Se storico è aperto E non si sta chiudendo, il FAB deve alzarsi.
-  // Ma se stiamo tornando alla home, lo storico si chiude e il FAB deve tornare giù.
   const fabStyle = (isHistoryScreenOpen && !isHistoryClosing) 
       ? { bottom: `calc(90px + env(safe-area-inset-bottom, 0px))` } 
       : undefined;
@@ -528,8 +519,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         />
       </div>
 
-      {/* FIX BLOCK DASHBOARD: Se un modale è aperto, disabilita click sulla dashboard */}
-      <main className={`flex-grow bg-slate-100 transition-opacity ${isOverlayOpen ? 'pointer-events-none' : ''}`}>
+      <main className="flex-grow bg-slate-100">
         <div className="w-full h-full overflow-y-auto space-y-6" style={{ touchAction: 'pan-y' }}>
            <Dashboard 
               expenses={expenses || []} 
@@ -550,7 +540,6 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         </div>
       </main>
 
-      {/* FAB: Nascosto se Calcolatrice o Pannello Filtri (dentro storico) sono aperti */}
       {!isCalculatorContainerOpen && !isHistoryFilterOpen && (
          <FloatingActionButton 
             onAddManually={() => openModalWithHistory('calculator', () => setIsCalculatorContainerOpen(true))}
