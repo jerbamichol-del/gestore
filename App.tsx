@@ -101,9 +101,12 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const [isConfirmDeleteModalOpen, setIsConfirmDeleteModalOpen] = useState(false);
   const [isMultipleExpensesModalOpen, setIsMultipleExpensesModalOpen] = useState(false);
   const [isParsingImage, setIsParsingImage] = useState(false);
+  
+  // Navigazione principale
   const [isRecurringScreenOpen, setIsRecurringScreenOpen] = useState(false);
   const [isHistoryScreenOpen, setIsHistoryScreenOpen] = useState(false);
   const [isHistoryClosing, setIsHistoryClosing] = useState(false);
+  
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
   
@@ -137,10 +140,9 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   // --- EXIT GUARD REF ---
   const lastBackPressTime = useRef(0);
 
-  // --- RESET STATE EFFECT (SOLUZIONE PROBLEMA FAB/DASHBOARD) ---
+  // --- RESET STATE EFFECT ---
+  // Se lo storico è chiuso, assicuriamoci che il filtro sia resettato
   useEffect(() => {
-    // Se lo storico è chiuso, forziamo la chiusura del pannello filtri.
-    // Questo assicura che il FAB torni nella posizione corretta.
     if (!isHistoryScreenOpen) {
       setIsHistoryFilterOpen(false);
     }
@@ -180,6 +182,19 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     }
   };
 
+  const closeAllModals = () => {
+      setIsFormOpen(false);
+      setIsCalculatorContainerOpen(false);
+      setIsImageSourceModalOpen(false);
+      setIsVoiceModalOpen(false);
+      setIsMultipleExpensesModalOpen(false);
+      setIsQrModalOpen(false);
+      setIsHistoryScreenOpen(false);
+      setIsHistoryFilterOpen(false);
+      setIsRecurringScreenOpen(false);
+      setImageForAnalysis(null);
+  };
+
   // --- HISTORY MANAGEMENT ---
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
@@ -213,13 +228,16 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       }
 
       // Gestione Schermate Principali (Home/Storico/Ricorrenti)
+      // FIX: Reset pulito degli stati di navigazione qui
       if (!modal || modal === 'home') {
         setIsHistoryScreenOpen(false);
-        setIsHistoryFilterOpen(false); // Reset esplicito anche qui
+        setIsHistoryClosing(false);     // Reset importante!
+        setIsHistoryFilterOpen(false);  // Reset importante!
         setIsRecurringScreenOpen(false);
         setImageForAnalysis(null);
       } else if (modal === 'history') {
         setIsHistoryScreenOpen(true);
+        setIsHistoryClosing(false);     // Reset per evitare stati zombie
         setIsRecurringScreenOpen(false);
       } else if (modal === 'recurring') {
         setIsRecurringScreenOpen(true);
@@ -230,19 +248,6 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, [showToast]);
-
-  const closeAllModals = () => {
-      setIsFormOpen(false);
-      setIsCalculatorContainerOpen(false);
-      setIsImageSourceModalOpen(false);
-      setIsVoiceModalOpen(false);
-      setIsMultipleExpensesModalOpen(false);
-      setIsQrModalOpen(false);
-      setIsHistoryScreenOpen(false);
-      setIsHistoryFilterOpen(false);
-      setIsRecurringScreenOpen(false);
-      setImageForAnalysis(null);
-  };
 
   const openModalWithHistory = (modalName: string, opener: () => void) => {
       window.history.pushState({ modal: modalName }, '');
@@ -478,8 +483,6 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     }
   };
 
-  const openRecurringEditForm = (expense: Expense) => { setEditingRecurringExpense(expense); openModalWithHistory('form', () => setIsFormOpen(true)); };
-
   const handleModalConfirm = async () => {
       if (!imageForAnalysis) return;
       if (imageForAnalysis.id === sharedImageIdRef.current) sharedImageIdRef.current = null;
@@ -501,6 +504,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   };
 
   // --- CALCOLA BOTTOM POSITION PER FAB ---
+  // FIX: Solo se siamo nello storico E non stiamo chiudendo
   const fabStyle = (isHistoryScreenOpen && !isHistoryClosing) 
       ? { bottom: `calc(90px + env(safe-area-inset-bottom, 0px))` } 
       : undefined;
@@ -525,7 +529,10 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
               expenses={expenses || []} 
               recurringExpenses={recurringExpenses || []} 
               onNavigateToRecurring={() => openModalWithHistory('recurring', () => setIsRecurringScreenOpen(true))}
-              onNavigateToHistory={() => openModalWithHistory('history', () => setIsHistoryScreenOpen(true))}
+              onNavigateToHistory={() => openModalWithHistory('history', () => {
+                  setIsHistoryClosing(false); // Reset stato preventivo
+                  setIsHistoryScreenOpen(true);
+              })}
               onReceiveSharedFile={handleSharedFile} 
               onImportFile={(file) => { /* Logica import */ }}
            />
@@ -619,7 +626,10 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       {isHistoryScreenOpen && (
         <HistoryScreen 
           expenses={expenses || []} accounts={safeAccounts} 
-          onClose={() => { closeModalWithHistory(); setIsHistoryClosing(false); }} 
+          onClose={() => { 
+              closeModalWithHistory(); 
+              // FIX: Non resettare isHistoryClosing qui! Lascia che l'unmount/popstate lo gestiscano
+          }} 
           onCloseStart={() => setIsHistoryClosing(true)} 
           onEditExpense={(e) => { setEditingExpense(e); openModalWithHistory('form', () => setIsFormOpen(true)); }} 
           onDeleteExpense={handleDeleteRequest}
