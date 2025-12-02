@@ -1,5 +1,6 @@
 // --- CONFIGURAZIONE ---
-const CACHE_NAME = 'expense-manager-v48-final-fix'; // Versione incrementata
+// Incrementiamo la versione per forzare l'aggiornamento e invalidare la vecchia cache corrotta
+const CACHE_NAME = 'expense-manager-v50-fix-404'; 
 const DB_NAME = 'expense-manager-db';
 const STORE_NAME = 'offline-images';
 const DB_VERSION = 1;
@@ -10,23 +11,28 @@ const urlsToCache = [
   './manifest.json',
   './icon-192.svg',
   './icon-512.svg',
-  // RIMOSSO Tailwind per evitare il blocco CORS che impedisce l'aggiornamento
+  // Librerie esterne (ESM)
   'https://esm.sh/react@18.3.1',
   'https://esm.sh/react-dom@18.3.1',
   'https://esm.sh/react-dom@18.3.1/client',
   'https://aistudiocdn.com/@google/genai@^1.21.0',
   'https://esm.sh/recharts@2.12.7',
-  'https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs'
+  'https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs',
+  'https://esm.sh/react-qr-code@2.0.15',
+  // Tailwind CDN (fondamentale se usi il CDN in index.html)
+  'https://cdn.tailwindcss.com'
 ];
 
 // --- INSTALLAZIONE ---
 self.addEventListener('install', event => {
+  // Forza il nuovo SW a diventare attivo immediatamente
   self.skipWaiting();
+  
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
-      // Usiamo Promise.allSettled per non bloccare tutto se un file fallisce
+      // Usa Promise.allSettled per evitare che un singolo fallimento blocchi tutto
       return Promise.allSettled(urlsToCache.map(url => 
-        cache.add(url).catch(err => console.warn('Skipping cache for:', url))
+        cache.add(url).catch(err => console.warn('Failed to cache:', url, err))
       ));
     })
   );
@@ -34,9 +40,16 @@ self.addEventListener('install', event => {
 
 // --- ATTIVAZIONE ---
 self.addEventListener('activate', event => {
+  // Prendi il controllo di tutti i client aperti immediatamente
   event.waitUntil(
     caches.keys().then(keys => Promise.all(
-      keys.map(key => key !== CACHE_NAME ? caches.delete(key) : null)
+      keys.map(key => {
+        // CANCELLA tutte le cache vecchie che non corrispondono al nome attuale
+        if (key !== CACHE_NAME) {
+          console.log('Deleting old cache:', key);
+          return caches.delete(key);
+        }
+      })
     )).then(() => self.clients.claim())
   );
 });
@@ -52,7 +65,6 @@ function saveToIndexedDB(data) {
     request.onsuccess = (e) => {
       const db = e.target.result;
       const tx = db.transaction(STORE_NAME, 'readwrite');
-      // Changed to put to prevent key collision errors
       tx.objectStore(STORE_NAME).put(data);
       tx.oncomplete = () => { db.close(); resolve(); };
       tx.onerror = () => reject(tx.error);
@@ -65,7 +77,7 @@ function saveToIndexedDB(data) {
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // 1. SHARE TARGET (POST) - Solo per richieste interne (es. dalla galleria)
+  // 1. SHARE TARGET (POST)
   if (event.request.method === 'POST' && url.origin === self.location.origin) {
     event.respondWith(
       (async () => {
@@ -97,21 +109,25 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // 2. CACHE STANDARD
+  // 2. CACHE STRATEGY: Stale-While-Revalidate per file statici, Network First per API
   if (event.request.method === 'GET') {
+      // Ignora schemi non supportati
+      if (!url.protocol.startsWith('http')) return;
+
       event.respondWith(
-        caches.match(event.request).then(response => {
-          return response || fetch(event.request).then(netResponse => {
-            // Cachiamo solo se è HTTP/HTTPS e NON è Tailwind (che blocca)
-            if(netResponse && netResponse.status === 200 && 
-               event.request.url.startsWith('http') && 
-               !url.href.includes('cdn.tailwindcss.com')) { 
-               
+        caches.match(event.request).then(cachedResponse => {
+          // Se c'è in cache, restituiscilo, ma aggiornalo in background
+          const fetchPromise = fetch(event.request).then(netResponse => {
+            if(netResponse && netResponse.status === 200 && event.request.url.startsWith('http')) {
                const clone = netResponse.clone();
                caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
             }
             return netResponse;
+          }).catch(() => {
+             // Se offline e fetch fallisce, non fare nulla (abbiamo già cachedResponse se esiste)
           });
+
+          return cachedResponse || fetchPromise;
         })
       );
   }
