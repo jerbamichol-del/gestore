@@ -6,17 +6,17 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
-    <title>Gestore Spese - Nuovo Inizio</title>
+    <title>Gestore Spese</title>
 
-    <!-- Manifest: relativo, così da funzionare sotto /gestore/ -->
-    <link rel="manifest" href="/gestore/manifest.json?v=dd673625cd2ca70fb68c33b082103691d87f0292" />
+    <!-- Manifest relativo -->
+    <link rel="manifest" href="/gestore/manifest.json?v=5c89eead3e6ed7429d5d3a82e33138fa01e09c50" />
 
     <meta name="theme-color" content="#4f46e5" />
 
-    <!-- Tailwind via CDN: ok anche in produzione per ora (il warning lo ignoriamo) -->
+    <!-- Tailwind via CDN: Semplice e funzionante -->
     <script src="https://cdn.tailwindcss.com"></script>
 
-    <!-- Import map usata in AI Studio / dev; non dà fastidio in produzione -->
+    <!-- Import map per dipendenze esterne (necessario in questo ambiente) -->
 
 
     <style>
@@ -35,177 +35,55 @@
         overscroll-behavior-y: contain;
         touch-action: manipulation;
         -webkit-tap-highlight-color: transparent;
+        background-color: #f1f5f9;
       }
 
-      /* Fix per autofill */
-      input:-webkit-autofill,
-      input:-webkit-autofill:hover,
-      input:-webkit-autofill:focus,
-      input:-webkit-autofill:active {
-        -webkit-box-shadow: 0 0 0 30px white inset !important;
-        -webkit-text-fill-color: #0f172a !important;
-      }
-
+      /* Animations */
       @keyframes fade-in-up {
-        from {
-          opacity: 0;
-          transform: translateY(20px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
       }
-
-      .animate-fade-in-up {
-        animation: fade-in-up 0.08s ease-out forwards;
-      }
+      .animate-fade-in-up { animation: fade-in-up 0.08s ease-out forwards; }
 
       @keyframes fade-in-down {
-        from {
-          opacity: 0;
-          transform: translateY(-20px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
+        from { opacity: 0; transform: translateY(-20px); }
+        to { opacity: 1; transform: translateY(0); }
       }
+      .animate-fade-in-down { animation: fade-in-down 0.08s ease-out forwards; }
 
-      .animate-fade-in-down {
-        animation: fade-in-down 0.08s ease-out forwards;
-      }
-
-      @keyframes pulse-subtle {
-        0%,
-        100% {
-          transform: scale(1) translateY(-50%);
-          opacity: 0.8;
-        }
-        50% {
-          transform: scale(1.05) translateY(-50%);
-          opacity: 1;
-        }
-      }
-      .animate-pulse-subtle {
-        animation: pulse-subtle 2.5s ease-in-out infinite;
-      }
-
-      /* Pie Chart focus outline */
-      .recharts-pie-sector:focus,
-      .recharts-pie-sector:focus-visible,
-      .recharts-pie-sector path:focus,
-      .recharts-pie-sector path:focus-visible {
-        outline: none !important;
-      }
-
-      .swipe-container {
-        display: flex;
-        overflow-x: hidden;
-        width: 100%;
-        will-change: transform;
-      }
-
-      .swipe-view {
-        width: 100%;
-        flex-shrink: 0;
-        will-change: transform;
-      }
-
-      [contenteditable][data-placeholder]:empty::before {
-        content: attr(data-placeholder);
-        color: #94a3b8;
-        pointer-events: none;
-      }
-
-      .num-pad {
-        touch-action: pan-y;
-        overscroll-behavior-x: contain;
-        -webkit-user-select: none;
-        user-select: none;
-      }
-
-      @keyframes slide-out-to-left {
-        from {
-          transform: translateX(0);
-        }
-        to {
-          transform: translateX(-100%);
-        }
-      }
-      @keyframes slide-in-from-right {
-        from {
-          transform: translateX(100%);
-        }
-        to {
-          transform: translateX(0);
-        }
-      }
-      @keyframes slide-out-to-right {
-        from {
-          transform: translateX(0);
-        }
-        to {
-          transform: translateX(100%);
-        }
-      }
-      @keyframes slide-in-from-left {
-        from {
-          transform: translateX(-100%);
-        }
-        to {
-          transform: translateX(0);
-        }
-      }
-      .animate-slide-out-left {
-        animation: slide-out-to-left 0.08s ease-out forwards;
-      }
-      .animate-slide-in-from-right {
-        animation: slide-in-from-right 0.08s ease-out forwards;
-      }
-      .animate-slide-out-right {
-        animation: slide-out-to-right 0.08s ease-out forwards;
-      }
-      .animate-slide-in-from-left {
-        animation: slide-in-from-left 0.08s ease-out forwards;
-      }
+      .recharts-pie-sector:focus { outline: none !important; }
     </style>
-  <link rel="stylesheet" href="/index.css">
     <script type="importmap">
-{
-  "imports": {
-    "react": "https://esm.sh/react@18.3.1",
-    "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
-    "react/": "https://esm.sh/react@18.3.1/",
-    "react-dom/": "https://esm.sh/react-dom@18.3.1/",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.21.0",
-    "recharts": "https://esm.sh/recharts@2.12.7",
-    "idb": "https://cdn.jsdelivr.net/npm/idb@8/+esm",
-    "react-dom": "https://esm.sh/react-dom@18.3.1",
-    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs",
-    "react-qr-code": "https://aistudiocdn.com/react-qr-code@^2.0.18"
-  }
-}
-</script>
-  <script type="module" crossorigin src="/gestore/assets/index-BcIAwycf.js"></script>
-</head>
+      {
+        "imports": {
+          "react": "https://esm.sh/react@18.3.1",
+          "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
+          "react/": "https://esm.sh/react@18.3.1/",
+          "react-dom/": "https://esm.sh/react-dom@18.3.1/",
+          "@google/genai": "https://aistudiocdn.com/@google/genai@^1.21.0",
+          "recharts": "https://esm.sh/recharts@2.12.7",
+          "idb": "https://cdn.jsdelivr.net/npm/idb@8/+esm",
+          "react-dom": "https://esm.sh/react-dom@18.3.1",
+          "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs",
+          "react-qr-code": "https://esm.sh/react-qr-code@2.0.15"
+        }
+      }
+    </script>
+    <script type="module" crossorigin src="/gestore/assets/index-CRPdTxhR.js"></script>
+  </head>
   <body class="bg-slate-100">
     <div id="root"></div>
     <div id="toast-portal"></div>
 
-    <!-- Entry Vite: va bene /index.tsx, Vite lo riscrive in /gestore/assets/... -->
+    <!-- Entry point -->
 
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          // 👇 path relativo, così da registrare /gestore/service-worker.js
           navigator.serviceWorker
             .register('service-worker.js')
             .then((registration) => {
-              console.log(
-                'ServiceWorker registration successful with scope: ',
-                registration.scope,
-              );
+              console.log('ServiceWorker registration successful with scope: ', registration.scope);
             })
             .catch((err) => {
               console.log('ServiceWorker registration failed: ', err);
@@ -213,6 +91,5 @@
         });
       }
     </script>
-    <!-- Preview refresh trigger: 1719331041355 -->
   </body>
 </html>
