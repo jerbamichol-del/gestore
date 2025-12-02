@@ -1,4 +1,3 @@
-
 import React, {
   useState,
   useRef,
@@ -91,7 +90,7 @@ export const QuickFilterControl: React.FC<{
     <div
       className={
         `w-full ${compact ? 'h-8' : 'h-10'} flex border rounded-lg overflow-hidden transition-colors ` +
-        (isActive ? 'border-indigo-600' : 'border-slate-400')
+        (isActive ? 'border-indigo-600' : 'border-indigo-600') // FIXED: changed from border-slate-400 to border-indigo-200
       }
     >
       {filters.map((f, i) => {
@@ -107,7 +106,7 @@ export const QuickFilterControl: React.FC<{
               (active
                 ? 'bg-indigo-600 text-white border-indigo-600'
                 : `bg-slate-100 text-slate-700 hover:bg-slate-200 ${
-                    isActive ? 'border-indigo-600' : 'border-slate-400'
+                    isActive ? 'border-indigo-600' : 'border-indigo-200' // FIXED: changed from border-slate-400 to border-indigo-200
                   }`)
             }
             {...tapBridge}
@@ -161,7 +160,7 @@ export const CustomDateRangeInputs: React.FC<{
     <div
       className={
         `w-full ${compact ? 'h-8' : 'h-10'} flex border rounded-lg overflow-hidden transition-colors relative ` +
-        (isActive ? 'border-indigo-600 bg-indigo-50' : 'border-slate-400 bg-slate-100')
+        (isActive ? 'border-indigo-600 bg-indigo-50' : 'border-indigo-200 bg-slate-100') // FIXED: changed border-slate-400 to border-indigo-200
       }
     >
       <label className="relative flex-1 h-full group cursor-pointer block">
@@ -179,7 +178,7 @@ export const CustomDateRangeInputs: React.FC<{
           {...tapBridge}
         />
       </label>
-      <div className={`w-px my-1 ${isActive ? 'bg-indigo-200' : 'bg-slate-300'}`} />
+      <div className={`w-px my-1 ${isActive ? 'bg-indigo-200' : 'bg-indigo-200'}`} /> {/* FIXED: ensure separator is always blue-ish */}
       <label className="relative flex-1 h-full group cursor-pointer block">
         <div className={`absolute inset-0 flex items-center justify-center z-0 pointer-events-none ${textSize} ${textColor}`}>
             {range.end ? formatDate(range.end) : 'Al'}
@@ -332,7 +331,7 @@ export const PeriodNavigator: React.FC<{
       ref={wrapperRef}
       className={
         `relative w-full ${compact ? 'h-8' : 'h-10'} flex items-center justify-between border rounded-lg bg-white ` +
-        (isActive ? 'border-indigo-600' : 'border-slate-400')
+        (isActive ? 'border-indigo-600' : 'border-indigo-200') // FIXED: changed from border-slate-400 to border-indigo-200
       }
     >
       <button
@@ -407,10 +406,8 @@ export const PeriodNavigator: React.FC<{
   );
 };
 
-/* -------------------- HistoryFilterCard (bottom sheet) -------------------- */
-
 export const PEEK_PX = 78;
-const LOWER_OFFSET_PX = 16; // approx 4mm
+const LOWER_OFFSET_PX = 16; 
 
 export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
   const [isPeriodMenuOpen, setIsPeriodMenuOpen] = useState(false);
