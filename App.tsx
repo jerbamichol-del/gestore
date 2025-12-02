@@ -136,17 +136,14 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const isSharedStart = useRef(new URLSearchParams(window.location.search).get('shared') === 'true');
 
   // --- EXIT GUARD REF ---
-  // Tiene traccia dell'ultimo tentativo di uscita per il "doppio tap"
   const lastBackPressTime = useRef(0);
 
-  // --- INITIALIZATION: EXIT GUARD ---
+  // --- INITIALIZATION ---
   useEffect(() => {
-    // Se l'app viene caricata e non c'è uno stato modale specifico (siamo alla root),
-    // impostiamo la "guardia" per gestire l'uscita con doppio tap.
-    // Struttura Stack: [ExitGuard, Home]
+    // Gestione Exit Guard per il doppio tap
     if (!window.history.state || !window.history.state.modal) {
-        window.history.replaceState({ modal: 'exit_guard' }, ''); // Sostituisce l'entry corrente con la guardia
-        window.history.pushState({ modal: 'home' }, '');          // Pusha lo stato Home "pulito"
+        window.history.replaceState({ modal: 'exit_guard' }, ''); 
+        window.history.pushState({ modal: 'home' }, '');
     }
   }, []);
 
@@ -155,7 +152,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       const params = new URLSearchParams(window.location.search);
       if (params.get('install') === 'true') {
           const newUrl = window.location.pathname;
-          window.history.replaceState({ modal: 'home' }, '', newUrl); // Assicura che siamo su Home
+          window.history.replaceState({ modal: 'home' }, '', newUrl); 
           setTimeout(() => setIsInstallModalOpen(true), 500);
       }
   }, []);
@@ -181,28 +178,24 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     }
   };
 
-  // --- HISTORY MANAGEMENT CORE ---
+  // --- HISTORY MANAGEMENT ---
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
       const state = event.state;
       const modal = state?.modal;
 
-      // 1. GESTIONE "DOUBLE TAP TO EXIT"
+      // 1. Double Tap to Exit
       if (modal === 'exit_guard') {
           const now = Date.now();
           if (now - lastBackPressTime.current < 2000) {
-              // Secondo tap veloce: Lascia che il browser esca (history.back)
-              // Essendo su 'exit_guard', un ulteriore back ci porta fuori dall'app.
-              window.history.back();
+              window.history.back(); // Esce dall'app
               return;
           } else {
-              // Primo tap: Mostra avviso e ripristina lo stato Home
               lastBackPressTime.current = now;
               showToast({ message: 'Premi di nuovo indietro per uscire', type: 'info' });
-              // Ripristina lo stato Home in cima allo stack per "intrappolare" l'utente
-              window.history.pushState({ modal: 'home' }, '');
+              window.history.pushState({ modal: 'home' }, ''); // Ripristina Home
               
-              // Chiudi tutto per sicurezza (siamo tornati a Home)
+              // Chiudi tutto
               setIsFormOpen(false);
               setIsCalculatorContainerOpen(false);
               setIsImageSourceModalOpen(false);
@@ -215,23 +208,19 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
           }
       }
 
-      // 2. GESTIONE CHIUSURA MODALI SEMPLICI
-      // Se lo stato non corrisponde al modale aperto, chiudilo
+      // 2. Chiudi modali standard
       if (modal !== 'form') setIsFormOpen(false);
       if (modal !== 'voice') setIsVoiceModalOpen(false);
       if (modal !== 'source') setIsImageSourceModalOpen(false);
       if (modal !== 'multiple') setIsMultipleExpensesModalOpen(false);
       if (modal !== 'qr') setIsQrModalOpen(false);
 
-      // 3. GESTIONE NAVIGAZIONE CALCOLATRICE
-      // Se non siamo in nessuno stato relativo alla calcolatrice, chiudila.
-      // NOTA: Se siamo in 'calculator_details' e premiamo indietro, lo stato diventa 'calculator'.
-      // Qui 'calculator' != 'calculator_details', ma la condizione sotto mantiene aperta la calcolatrice.
+      // 3. Calculator Nav
       if (modal !== 'calculator' && modal !== 'calculator_details') {
           setIsCalculatorContainerOpen(false);
       }
 
-      // 4. GESTIONE SCHERMATE PRINCIPALI
+      // 4. Main Screens
       if (!modal || modal === 'home') {
         setIsHistoryScreenOpen(false);
         setIsRecurringScreenOpen(false);
@@ -258,7 +247,6 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       if (window.history.state && window.history.state.modal && window.history.state.modal !== 'home') {
           window.history.back();
       } else {
-          // Fallback se ci si trova in uno stato inconsistente
           window.history.replaceState({ modal: 'home' }, '', window.location.pathname);
           window.dispatchEvent(new PopStateEvent('popstate', { state: { modal: 'home' } }));
       }
@@ -383,11 +371,14 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       } else if (parsedData.length === 1) {
         const safeData = sanitizeExpenseData(parsedData[0], image.base64Image);
         setPrefilledData(safeData);
-        openModalWithHistory('form', () => setIsFormOpen(true));
+        // FIX: Sostituisci lo stato history invece di push per evitare conflitti se veniamo da un altro modale
+        window.history.replaceState({ modal: 'form' }, '');
+        setIsFormOpen(true);
       } else {
         const safeMultipleData = parsedData.map(item => sanitizeExpenseData(item, image.base64Image));
         setMultipleExpensesData(safeMultipleData);
-        openModalWithHistory('multiple', () => setIsMultipleExpensesModalOpen(true));
+        window.history.replaceState({ modal: 'multiple' }, '');
+        setIsMultipleExpensesModalOpen(true);
       }
       setPendingImages(prev => prev.filter(img => img.id !== image.id));
       await deleteImageFromQueue(image.id);
@@ -402,10 +393,17 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   };
 
   const handleVoiceParsed = (data: Partial<Omit<Expense, 'id'>>) => {
-    closeModalWithHistory();
+    // FIX: Navigazione fluida e sicura
+    // Invece di chiudere (back) e aprire (push), SOSTITUISCIAMO lo stato corrente ('voice') con 'form'.
+    // Questo evita la race condition del popstate e mantiene la history pulita.
+    window.history.replaceState({ modal: 'form' }, '');
+    
+    // Aggiorna lo stato React SINCORNAMENTE
+    setIsVoiceModalOpen(false); // Chiudi modale voce
+    
     const safeData = sanitizeExpenseData(data);
     setPrefilledData(safeData);
-    openModalWithHistory('form', () => setIsFormOpen(true));
+    setIsFormOpen(true); // Apri modale form
   };
 
   const handleSharedFile = async (file: File) => {
@@ -427,7 +425,11 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   };
 
   const handleImagePick = async (source: 'camera' | 'gallery') => {
-    closeModalWithHistory();
+    // FIX: Sostituisci il menu sorgente con lo stato di attesa, invece di fare back
+    // (L'immagine verrà caricata e poi gestita)
+    window.history.replaceState({ modal: 'home' }, ''); // Torniamo virtualmente a home per pulizia
+    setIsImageSourceModalOpen(false);
+    
     sessionStorage.setItem('preventAutoLock', 'true');
     try {
       const file = await pickImage(source);
