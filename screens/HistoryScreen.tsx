@@ -726,9 +726,9 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
   return (
     <div
       className={`fixed inset-0 z-20 bg-slate-100 transform transition-transform duration-300 ease-in-out ${
-        isAnimatingIn ? 'translate-y-0' : 'translate-y-full'
+        isAnimatingIn ? 'translate-y-0 pointer-events-auto' : 'translate-y-full pointer-events-none'
       }`}
-      style={{ touchAction: 'pan-y' }}
+      style={{ touchAction: 'pan-y', willChange: 'transform' }}
     >
       <header className="sticky top-0 z-20 flex items-center gap-4 p-4 bg-white/80 backdrop-blur-sm shadow-sm h-[60px]">
         {isSelectionMode ? (
