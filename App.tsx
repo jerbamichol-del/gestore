@@ -17,8 +17,8 @@ import Toast from './components/Toast';
 import HistoryScreen from './screens/HistoryScreen';
 import RecurringExpensesScreen from './screens/RecurringExpensesScreen';
 import ImageSourceCard from './components/ImageSourceCard';
-import ShareQrModal from './components/ShareQrModal';
-import InstallPwaModal from './components/InstallPwaModal';
+import ShareQrModal from './components/ShareQrModal'; // Assicurati che questo file esista o rimuovi l'import se non lo usi
+import InstallPwaModal from './components/InstallPwaModal'; // Assicurati che questo file esista o rimuovi l'import se non lo usi
 import { CameraIcon } from './components/icons/CameraIcon';
 import { ComputerDesktopIcon } from './components/icons/ComputerDesktopIcon';
 import { XMarkIcon } from './components/icons/XMarkIcon';
@@ -107,7 +107,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
   
-  // Track History Filter Panel state
+  // Track History Filter Panel state to hide FAB
   const [isHistoryFilterOpen, setIsHistoryFilterOpen] = useState(false);
 
   // --- Data ---
@@ -123,22 +123,38 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const [pendingImages, setPendingImages] = useState<OfflineImage[]>([]);
   const [syncingImageId, setSyncingImageId] = useState<string | null>(null);
   
+  // --- Toast & Install ---
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const showToast = useCallback((msg: ToastMessage) => setToast(msg), []);
   const [showSuccessIndicator, setShowSuccessIndicator] = useState(false);
   const [installPromptEvent, setInstallPromptEvent] = useState<any>(null);
   const pendingImagesCountRef = useRef(0);
   
+  // --- Shared Logic ---
   const sharedImageIdRef = useRef<string | null>(null);
   const isSharedStart = useRef(new URLSearchParams(window.location.search).get('shared') === 'true');
+
+  // --- EXIT GUARD REF ---
   const lastBackPressTime = useRef(0);
 
-  // --- DERIVED STATE: Block interactions on Dashboard when overlays are active ---
-  // Fix per Ghost Clicks (Microfono -> Storico)
-  const isAnyOverlayOpen = isFormOpen || isCalculatorContainerOpen || isImageSourceModalOpen || 
-                           isVoiceModalOpen || isConfirmDeleteModalOpen || isMultipleExpensesModalOpen || 
-                           isQrModalOpen || isInstallModalOpen || isHistoryScreenOpen || isRecurringScreenOpen;
+  // --- FIX CRITICO: Reset stato filtri quando si chiude lo storico ---
+  useEffect(() => {
+    if (!isHistoryScreenOpen) {
+      // Quando lo storico si chiude, forziamo la chiusura del pannello filtri.
+      // Questo risolve il problema del FAB che rimane alzato.
+      setIsHistoryFilterOpen(false);
+    }
+  }, [isHistoryScreenOpen]);
 
+  // --- DERIVED STATE ---
+  // Blocca interazioni dashboard solo se un modale "overlay" è aperto.
+  // HistoryScreen e RecurringScreen sono full-screen, quindi coprono già tutto.
+  // Il problema potrebbe essere che HistoryScreen non smonta correttamente.
+  const isOverlayOpen = isFormOpen || isCalculatorContainerOpen || isImageSourceModalOpen || 
+                        isVoiceModalOpen || isConfirmDeleteModalOpen || isMultipleExpensesModalOpen || 
+                        isQrModalOpen || isInstallModalOpen;
+
+  // --- INITIALIZATION ---
   useEffect(() => {
     if (!window.history.state || !window.history.state.modal) {
         window.history.replaceState({ modal: 'exit_guard' }, ''); 
@@ -172,6 +188,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     }
   };
 
+  // --- HISTORY MANAGEMENT ---
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
       const state = event.state;
@@ -201,18 +218,19 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
           setIsCalculatorContainerOpen(false);
       }
 
+      // FIX: Assicuriamoci che tornando alla home si chiudano tutte le schermate full-screen
       if (!modal || modal === 'home') {
         setIsHistoryScreenOpen(false);
-        setIsHistoryFilterOpen(false); // FIX: Reset filter panel state when closing history
         setIsRecurringScreenOpen(false);
         setImageForAnalysis(null);
+        // Reset manuale per sicurezza (anche se l'useEffect sopra lo fa)
+        setIsHistoryFilterOpen(false); 
       } else if (modal === 'history') {
         setIsHistoryScreenOpen(true);
         setIsRecurringScreenOpen(false);
       } else if (modal === 'recurring') {
         setIsRecurringScreenOpen(true);
         setIsHistoryScreenOpen(false);
-        setIsHistoryFilterOpen(false); // Ensure history filter is closed
       }
     };
 
@@ -228,7 +246,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       setIsMultipleExpensesModalOpen(false);
       setIsQrModalOpen(false);
       setIsHistoryScreenOpen(false);
-      setIsHistoryFilterOpen(false); // Fix reset
+      setIsHistoryFilterOpen(false);
       setIsRecurringScreenOpen(false);
       setImageForAnalysis(null);
   };
@@ -330,14 +348,12 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       if (templatesToUpdate.length > 0) setRecurringExpenses(prev => (prev || []).map(t => templatesToUpdate.find(ut => ut.id === t.id) || t));
   }, [recurringExpenses, expenses, setExpenses, setRecurringExpenses]);
 
-  // --- FIX 4: Sanitize Data with Type Conversion ---
   const safeAccounts = accounts || [];
   const sanitizeExpenseData = (data: any, imageBase64?: string): Partial<Omit<Expense, 'id'>> => {
     if (!data) return {}; 
     let category = data.category || 'Altro';
     if (!CATEGORIES[category]) category = 'Altro';
     
-    // Converte importo stringa in numero se necessario
     let amount = data.amount;
     if (typeof amount === 'string') {
         amount = parseFloat(amount.replace(',', '.'));
@@ -469,6 +485,8 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     }
   };
 
+  const openRecurringEditForm = (expense: Expense) => { setEditingRecurringExpense(expense); openModalWithHistory('form', () => setIsFormOpen(true)); };
+
   const handleModalConfirm = async () => {
       if (!imageForAnalysis) return;
       if (imageForAnalysis.id === sharedImageIdRef.current) sharedImageIdRef.current = null;
@@ -489,6 +507,14 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       setImageForAnalysis(null);
   };
 
+  // --- CALCOLA BOTTOM POSITION PER FAB ---
+  // Se storico è aperto E non si sta chiudendo, il FAB deve alzarsi.
+  // Ma se stiamo tornando alla home, lo storico si chiude e il FAB deve tornare giù.
+  const fabStyle = (isHistoryScreenOpen && !isHistoryClosing) 
+      ? { bottom: `calc(90px + env(safe-area-inset-bottom, 0px))` } 
+      : undefined;
+
+  // --- RENDER ---
   return (
     <div className="h-full w-full bg-slate-100 flex flex-col font-sans" style={{ touchAction: 'pan-y' }}>
       <div className="flex-shrink-0 z-20">
@@ -502,8 +528,8 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         />
       </div>
 
-      {/* FIX 1: Disable interactions on dashboard when any overlay is active */}
-      <main className={`flex-grow bg-slate-100 transition-opacity ${isAnyOverlayOpen ? 'pointer-events-none' : ''}`}>
+      {/* FIX BLOCK DASHBOARD: Se un modale è aperto, disabilita click sulla dashboard */}
+      <main className={`flex-grow bg-slate-100 transition-opacity ${isOverlayOpen ? 'pointer-events-none' : ''}`}>
         <div className="w-full h-full overflow-y-auto space-y-6" style={{ touchAction: 'pan-y' }}>
            <Dashboard 
               expenses={expenses || []} 
@@ -524,12 +550,13 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         </div>
       </main>
 
+      {/* FAB: Nascosto se Calcolatrice o Pannello Filtri (dentro storico) sono aperti */}
       {!isCalculatorContainerOpen && !isHistoryFilterOpen && (
          <FloatingActionButton 
             onAddManually={() => openModalWithHistory('calculator', () => setIsCalculatorContainerOpen(true))}
             onAddFromImage={() => openModalWithHistory('source', () => setIsImageSourceModalOpen(true))}
             onAddFromVoice={() => openModalWithHistory('voice', () => setIsVoiceModalOpen(true))}
-            style={(isHistoryScreenOpen && !isHistoryClosing) ? { bottom: `calc(90px + env(safe-area-inset-bottom, 0px))` } : undefined}
+            style={fabStyle}
          />
       )}
       
