@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Expense, Account, CATEGORIES } from './types';
 import { useLocalStorage } from './hooks/useLocalStorage';
@@ -161,7 +162,6 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
             const newUrl = window.location.pathname;
             window.history.replaceState({ modal: 'home' }, '', newUrl);
         } catch (e) {
-            // Fallback for environments where replaceState URL is restricted (e.g. blob/iframe)
             window.history.replaceState({ modal: 'home' }, '');
         } 
         setTimeout(() => setIsInstallModalOpen(true), 500);
@@ -262,8 +262,6 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   };
 
   // FIX: Force reset to home state. 
-  // Usato quando si chiude un modale "definitivamente" (es. dopo aver salvato)
-  // per evitare problemi di history stack incasinata (es. calc -> details -> calc -> home)
   const forceNavigateHome = () => {
       try {
           window.history.replaceState({ modal: 'home' }, '', window.location.pathname);
@@ -274,6 +272,12 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   };
 
   const closeModalWithHistory = () => {
+      // Direct state management fallback if navigating from 'history' to handle potential popstate misses
+      if (window.history.state?.modal === 'history') {
+          setIsHistoryScreenOpen(false);
+          setIsHistoryClosing(false);
+      }
+
       if (window.history.state && window.history.state.modal && window.history.state.modal !== 'home' && window.history.state.modal !== 'exit_guard') {
           window.history.back();
       } else {
@@ -427,8 +431,9 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   };
 
   const handleVoiceParsed = (data: Partial<Omit<Expense, 'id'>>) => {
-    // replaceState here is fine as it doesn't change URL, just state object
-    window.history.replaceState({ modal: 'form' }, '');
+    try {
+      window.history.replaceState({ modal: 'form' }, '');
+    } catch(e) {} // ignore security error
     setIsVoiceModalOpen(false);
     const safeData = sanitizeExpenseData(data);
     setPrefilledData(safeData);
@@ -454,7 +459,9 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   };
 
   const handleImagePick = async (source: 'camera' | 'gallery') => {
-    window.history.replaceState({ modal: 'home' }, '');
+    try {
+        window.history.replaceState({ modal: 'home' }, '');
+    } catch(e) {}
     setIsImageSourceModalOpen(false);
     sessionStorage.setItem('preventAutoLock', 'true');
     try {
