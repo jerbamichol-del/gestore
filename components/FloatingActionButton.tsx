@@ -1,10 +1,10 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
 import { PlusIcon } from './icons/PlusIcon';
 import { MicrophoneIcon } from './icons/MicrophoneIcon';
 import { PhotoIcon } from './icons/PhotoIcon';
 import { PencilIcon } from './icons/PencilIcon';
-import { useTapBridge } from '../hooks/useTapBridge';
 
 interface FloatingActionButtonProps {
   onAddManually: () => void;
@@ -19,7 +19,6 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({ onAddManual
     const [renderActions, setRenderActions] = useState(false); // State to control rendering for animations
     const timerRef = useRef<number | null>(null);
     const animationTimerRef = useRef<number | null>(null);
-    const tapBridge = useTapBridge();
 
     useEffect(() => {
         // Trigger the entrance animation shortly after the component mounts
@@ -97,7 +96,6 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({ onAddManual
                             tabIndex={isOpen ? 0 : -1}
                             className={`flex justify-center items-center w-14 h-14 ${action.bgColor} text-white rounded-full shadow-lg ${action.hoverBgColor} focus:outline-none`}
                             aria-label={action.label}
-                            {...tapBridge}
                         >
                             {action.icon}
                         </button>
@@ -110,7 +108,6 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({ onAddManual
                 className={`pointer-events-auto flex justify-center items-center w-16 h-16 bg-indigo-600 text-white rounded-full shadow-lg hover:bg-indigo-700 transition-all transform duration-500 ease-in-out focus:outline-none ${isMounted ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-16 scale-90'}`}
                 aria-expanded={isOpen}
                 aria-label={isOpen ? "Chiudi menu azioni" : "Apri menu azioni"}
-                {...tapBridge}
             >
                  <div className={`transition-transform duration-300 ease-in-out ${isOpen ? 'rotate-45' : ''}`}>
                      <PlusIcon className="w-8 h-8" />
