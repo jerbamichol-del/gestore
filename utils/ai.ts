@@ -15,25 +15,55 @@ type VoiceResponse = {
   error?: string;
 };
 
+// Timeout di sicurezza per le chiamate (30 secondi)
+const FETCH_TIMEOUT = 30000;
+
 async function callAiEndpoint<T>(payload: any): Promise<T> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
+
   try {
+    console.log(`[AI] Invio richiesta... Payload size: ${JSON.stringify(payload).length}`);
+
     const res = await fetch(AI_ENDPOINT, {
       method: 'POST',
+      mode: 'cors',
+      cache: 'no-cache',
+      credentials: 'omit', // Cruciale per evitare errori CORS con Google Apps Script
       headers: {
-        // text/plain evita il preflight CORS (opzione OPTIONS) di Google Apps Script
         'Content-Type': 'text/plain;charset=utf-8',
       },
       body: JSON.stringify(payload),
+      signal: controller.signal,
     });
 
+    clearTimeout(timeoutId);
+
     if (!res.ok) {
-      throw new Error(`AI endpoint HTTP ${res.status}`);
+      const errorText = await res.text();
+      console.error(`[AI] Errore HTTP ${res.status}:`, errorText);
+      throw new Error(`Errore server: ${res.status}`);
     }
 
-    const json = await res.json();
-    return json as T;
-  } catch (e) {
+    // Leggiamo prima il testo per poterlo loggare in caso di JSON non valido
+    const text = await res.text();
+    
+    try {
+        const json = JSON.parse(text);
+        return json as T;
+    } catch (e) {
+        console.error('[AI] Errore parsing JSON. Risposta grezza:', text);
+        throw new Error("Il server ha restituito una risposta non valida.");
+    }
+
+  } catch (e: any) {
+    clearTimeout(timeoutId);
     console.error("AI Call Error:", e);
+    
+    if (e.name === 'AbortError') {
+        throw new Error("Tempo scaduto. Il server ci sta mettendo troppo tempo.");
+    }
+    // Rilanciamo l'errore per farlo gestire alla UI (VoiceInputModal)
     throw e;
   }
 }
@@ -74,6 +104,11 @@ export async function parseExpensesFromImage(
 export async function parseExpenseFromAudio(
   audioBlob: Blob
 ): Promise<Partial<Expense> | null> {
+  // Controllo preventivo se il blob è vuoto
+  if (!audioBlob || audioBlob.size === 0) {
+      throw new Error("Registrazione vuota o non valida.");
+  }
+
   const mimeType = audioBlob.type || 'audio/webm';
   const audioBase64 = await blobToBase64(audioBlob);
 
