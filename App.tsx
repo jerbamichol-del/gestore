@@ -28,7 +28,6 @@ import SuccessIndicator from './components/SuccessIndicator';
 
 type ToastMessage = { message: string; type: 'success' | 'info' | 'error' };
 
-// Extended type for internal use to track shared origin
 type ExtendedOfflineImage = OfflineImage & { _isShared?: boolean };
 
 // --- HELPER FUNCTIONS ---
@@ -108,7 +107,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
   
-  // Track History Filter Panel state to hide FAB
+  // Track History Filter Panel state
   const [isHistoryFilterOpen, setIsHistoryFilterOpen] = useState(false);
 
   // --- Data ---
@@ -124,40 +123,35 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const [pendingImages, setPendingImages] = useState<OfflineImage[]>([]);
   const [syncingImageId, setSyncingImageId] = useState<string | null>(null);
   
-  // --- Toast & Install ---
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const showToast = useCallback((msg: ToastMessage) => setToast(msg), []);
   const [showSuccessIndicator, setShowSuccessIndicator] = useState(false);
   const [installPromptEvent, setInstallPromptEvent] = useState<any>(null);
   const pendingImagesCountRef = useRef(0);
   
-  // --- Shared Logic ---
   const sharedImageIdRef = useRef<string | null>(null);
   const isSharedStart = useRef(new URLSearchParams(window.location.search).get('shared') === 'true');
-
-  // --- EXIT GUARD REF ---
   const lastBackPressTime = useRef(0);
 
-  // --- INITIALIZATION ---
+  // --- DERIVED STATE: Block interactions on Dashboard when overlays are active ---
+  // Fix per Ghost Clicks (Microfono -> Storico)
+  const isAnyOverlayOpen = isFormOpen || isCalculatorContainerOpen || isImageSourceModalOpen || 
+                           isVoiceModalOpen || isConfirmDeleteModalOpen || isMultipleExpensesModalOpen || 
+                           isQrModalOpen || isInstallModalOpen || isHistoryScreenOpen || isRecurringScreenOpen;
+
   useEffect(() => {
-    // Gestione Exit Guard per il doppio tap
     if (!window.history.state || !window.history.state.modal) {
         window.history.replaceState({ modal: 'exit_guard' }, ''); 
         window.history.pushState({ modal: 'home' }, '');
     }
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('install') === 'true') {
+        const newUrl = window.location.pathname;
+        window.history.replaceState({ modal: 'home' }, '', newUrl); 
+        setTimeout(() => setIsInstallModalOpen(true), 500);
+    }
   }, []);
 
-  // --- AUTO-OPEN INSTALL MODAL FROM QR ---
-  useEffect(() => {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get('install') === 'true') {
-          const newUrl = window.location.pathname;
-          window.history.replaceState({ modal: 'home' }, '', newUrl); 
-          setTimeout(() => setIsInstallModalOpen(true), 500);
-      }
-  }, []);
-
-  // --- PWA INSTALL PROMPT ---
   useEffect(() => {
     const handler = (e: any) => {
       e.preventDefault();
@@ -178,51 +172,38 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     }
   };
 
-  // --- HISTORY MANAGEMENT ---
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
       const state = event.state;
       const modal = state?.modal;
 
-      // 1. Double Tap to Exit
       if (modal === 'exit_guard') {
           const now = Date.now();
           if (now - lastBackPressTime.current < 2000) {
-              window.history.back(); // Esce dall'app
+              window.history.back(); 
               return;
           } else {
               lastBackPressTime.current = now;
               showToast({ message: 'Premi di nuovo indietro per uscire', type: 'info' });
-              window.history.pushState({ modal: 'home' }, ''); // Ripristina Home
-              
-              // Chiudi tutto
-              setIsFormOpen(false);
-              setIsCalculatorContainerOpen(false);
-              setIsImageSourceModalOpen(false);
-              setIsVoiceModalOpen(false);
-              setIsMultipleExpensesModalOpen(false);
-              setIsQrModalOpen(false);
-              setIsHistoryScreenOpen(false);
-              setIsRecurringScreenOpen(false);
+              window.history.pushState({ modal: 'home' }, ''); 
+              closeAllModals();
               return;
           }
       }
 
-      // 2. Chiudi modali standard
       if (modal !== 'form') setIsFormOpen(false);
       if (modal !== 'voice') setIsVoiceModalOpen(false);
       if (modal !== 'source') setIsImageSourceModalOpen(false);
       if (modal !== 'multiple') setIsMultipleExpensesModalOpen(false);
       if (modal !== 'qr') setIsQrModalOpen(false);
 
-      // 3. Calculator Nav
       if (modal !== 'calculator' && modal !== 'calculator_details') {
           setIsCalculatorContainerOpen(false);
       }
 
-      // 4. Main Screens
       if (!modal || modal === 'home') {
         setIsHistoryScreenOpen(false);
+        setIsHistoryFilterOpen(false); // FIX: Reset filter panel state when closing history
         setIsRecurringScreenOpen(false);
         setImageForAnalysis(null);
       } else if (modal === 'history') {
@@ -231,6 +212,7 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       } else if (modal === 'recurring') {
         setIsRecurringScreenOpen(true);
         setIsHistoryScreenOpen(false);
+        setIsHistoryFilterOpen(false); // Ensure history filter is closed
       }
     };
 
@@ -238,13 +220,26 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     return () => window.removeEventListener('popstate', handlePopState);
   }, [showToast]);
 
+  const closeAllModals = () => {
+      setIsFormOpen(false);
+      setIsCalculatorContainerOpen(false);
+      setIsImageSourceModalOpen(false);
+      setIsVoiceModalOpen(false);
+      setIsMultipleExpensesModalOpen(false);
+      setIsQrModalOpen(false);
+      setIsHistoryScreenOpen(false);
+      setIsHistoryFilterOpen(false); // Fix reset
+      setIsRecurringScreenOpen(false);
+      setImageForAnalysis(null);
+  };
+
   const openModalWithHistory = (modalName: string, opener: () => void) => {
       window.history.pushState({ modal: modalName }, '');
       opener();
   };
 
   const closeModalWithHistory = () => {
-      if (window.history.state && window.history.state.modal && window.history.state.modal !== 'home') {
+      if (window.history.state && window.history.state.modal && window.history.state.modal !== 'home' && window.history.state.modal !== 'exit_guard') {
           window.history.back();
       } else {
           window.history.replaceState({ modal: 'home' }, '', window.location.pathname);
@@ -252,14 +247,12 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       }
   };
 
-  // --- REFRESH LOGIC ---
   const refreshPendingImages = useCallback(async () => {
     try {
       const images = await getQueuedImages();
       const safeImages = Array.isArray(images) ? images : [];
       setPendingImages(safeImages);
       pendingImagesCountRef.current = safeImages.length;
-      
       if ('setAppBadge' in navigator && typeof (navigator as any).setAppBadge === 'function') {
         if (safeImages.length > 0) (navigator as any).setAppBadge(safeImages.length);
         else (navigator as any).clearAppBadge();
@@ -300,7 +293,6 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     checkForSharedFile();
   }, []);
 
-  // --- MIGRATION & RECURRING LOGIC ---
   const hasRunMigrationRef = useRef(false);
   useEffect(() => {
       if (hasRunMigrationRef.current) return;
@@ -338,15 +330,23 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       if (templatesToUpdate.length > 0) setRecurringExpenses(prev => (prev || []).map(t => templatesToUpdate.find(ut => ut.id === t.id) || t));
   }, [recurringExpenses, expenses, setExpenses, setRecurringExpenses]);
 
-  // --- DATA HELPERS ---
+  // --- FIX 4: Sanitize Data with Type Conversion ---
   const safeAccounts = accounts || [];
   const sanitizeExpenseData = (data: any, imageBase64?: string): Partial<Omit<Expense, 'id'>> => {
     if (!data) return {}; 
     let category = data.category || 'Altro';
     if (!CATEGORIES[category]) category = 'Altro';
+    
+    // Converte importo stringa in numero se necessario
+    let amount = data.amount;
+    if (typeof amount === 'string') {
+        amount = parseFloat(amount.replace(',', '.'));
+    }
+    if (typeof amount !== 'number' || isNaN(amount)) amount = 0;
+
     return {
         description: data.description || '',
-        amount: typeof data.amount === 'number' ? data.amount : 0,
+        amount: amount,
         category: category,
         date: data.date || toISODate(new Date()),
         tags: Array.isArray(data.tags) ? data.tags : [],
@@ -355,7 +355,6 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     };
   };
 
-  // --- HANDLERS ---
   const handleAnalyzeImage = async (image: OfflineImage) => {
     if (!isOnline) {
       showToast({ message: 'Connettiti a internet per analizzare.', type: 'error' });
@@ -371,13 +370,12 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       } else if (parsedData.length === 1) {
         const safeData = sanitizeExpenseData(parsedData[0], image.base64Image);
         setPrefilledData(safeData);
-        // FIX: Sostituisci lo stato history invece di push per evitare conflitti se veniamo da un altro modale
-        window.history.replaceState({ modal: 'form' }, '');
+        window.history.replaceState({ modal: 'form' }, ''); 
         setIsFormOpen(true);
       } else {
         const safeMultipleData = parsedData.map(item => sanitizeExpenseData(item, image.base64Image));
         setMultipleExpensesData(safeMultipleData);
-        window.history.replaceState({ modal: 'multiple' }, '');
+        window.history.replaceState({ modal: 'multiple' }, ''); 
         setIsMultipleExpensesModalOpen(true);
       }
       setPendingImages(prev => prev.filter(img => img.id !== image.id));
@@ -393,17 +391,11 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   };
 
   const handleVoiceParsed = (data: Partial<Omit<Expense, 'id'>>) => {
-    // FIX: Navigazione fluida e sicura
-    // Invece di chiudere (back) e aprire (push), SOSTITUISCIAMO lo stato corrente ('voice') con 'form'.
-    // Questo evita la race condition del popstate e mantiene la history pulita.
     window.history.replaceState({ modal: 'form' }, '');
-    
-    // Aggiorna lo stato React SINCORNAMENTE
-    setIsVoiceModalOpen(false); // Chiudi modale voce
-    
+    setIsVoiceModalOpen(false);
     const safeData = sanitizeExpenseData(data);
     setPrefilledData(safeData);
-    setIsFormOpen(true); // Apri modale form
+    setIsFormOpen(true);
   };
 
   const handleSharedFile = async (file: File) => {
@@ -425,11 +417,8 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   };
 
   const handleImagePick = async (source: 'camera' | 'gallery') => {
-    // FIX: Sostituisci il menu sorgente con lo stato di attesa, invece di fare back
-    // (L'immagine verrà caricata e poi gestita)
-    window.history.replaceState({ modal: 'home' }, ''); // Torniamo virtualmente a home per pulizia
+    window.history.replaceState({ modal: 'home' }, '');
     setIsImageSourceModalOpen(false);
-    
     sessionStorage.setItem('preventAutoLock', 'true');
     try {
       const file = await pickImage(source);
@@ -500,7 +489,6 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
       setImageForAnalysis(null);
   };
 
-  // ================== RENDER ==================
   return (
     <div className="h-full w-full bg-slate-100 flex flex-col font-sans" style={{ touchAction: 'pan-y' }}>
       <div className="flex-shrink-0 z-20">
@@ -514,7 +502,8 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         />
       </div>
 
-      <main className="flex-grow bg-slate-100">
+      {/* FIX 1: Disable interactions on dashboard when any overlay is active */}
+      <main className={`flex-grow bg-slate-100 transition-opacity ${isAnyOverlayOpen ? 'pointer-events-none' : ''}`}>
         <div className="w-full h-full overflow-y-auto space-y-6" style={{ touchAction: 'pan-y' }}>
            <Dashboard 
               expenses={expenses || []} 
@@ -636,17 +625,9 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         />
       )}
 
-      {/* MODALE QR DI CONDIVISIONE */}
-      <ShareQrModal 
-        isOpen={isQrModalOpen} 
-        onClose={closeModalWithHistory} 
-      />
+      <ShareQrModal isOpen={isQrModalOpen} onClose={closeModalWithHistory} />
 
-      {/* MODALE INSTALLAZIONE AUTOMATICO (DA QR) */}
-      <InstallPwaModal
-        isOpen={isInstallModalOpen}
-        onClose={() => setIsInstallModalOpen(false)}
-      />
+      <InstallPwaModal isOpen={isInstallModalOpen} onClose={() => setIsInstallModalOpen(false)} />
 
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       
