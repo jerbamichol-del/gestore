@@ -5,6 +5,7 @@ import { useLocalStorage } from './hooks/useLocalStorage';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { getQueuedImages, deleteImageFromQueue, OfflineImage, addImageToQueue } from './utils/db';
 import { DEFAULT_ACCOUNTS } from './utils/defaults';
+import { processImageFile, pickImage } from './utils/fileHelper';
 
 import Header from './components/Header';
 import Dashboard from './components/Dashboard';
@@ -32,42 +33,7 @@ type ToastMessage = { message: string; type: 'success' | 'info' | 'error' };
 type ExtendedOfflineImage = OfflineImage & { _isShared?: boolean };
 
 // --- HELPER FUNCTIONS ---
-const processImageFile = (file: File): Promise<{ base64: string; mimeType: string }> => {
-    return new Promise((resolve, reject) => {
-        const img = new Image();
-        const url = URL.createObjectURL(file);
-        img.onload = () => {
-            const canvas = document.createElement('canvas');
-            let { width, height } = img;
-            const MAX = 1024; 
-            if (width > height && width > MAX) { height = Math.round((height * MAX) / width); width = MAX; }
-            else if (height >= width && height > MAX) { width = Math.round((width * MAX) / height); height = MAX; }
-            canvas.width = width; canvas.height = height;
-            const ctx = canvas.getContext('2d');
-            if(ctx) { 
-                ctx.drawImage(img, 0, 0, width, height);
-                const mime = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
-                resolve({ base64: canvas.toDataURL(mime, 0.8).split(',')[1], mimeType: mime });
-            } else reject(new Error('Canvas error'));
-        };
-        img.onerror = () => reject(new Error('Image load error'));
-        img.src = url;
-    });
-};
-
-const pickImage = (source: 'camera' | 'gallery'): Promise<File> => {
-    return new Promise((resolve, reject) => {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = 'image/*';
-        if(source === 'camera') input.capture = 'environment';
-        input.onchange = (e: any) => {
-            if(e.target.files && e.target.files[0]) resolve(e.target.files[0]);
-            else reject(new Error('Nessun file'));
-        };
-        input.click();
-    });
-};
+// Spostate in utils/fileHelper.ts
 
 const calculateNextDueDate = (template: Expense, fromDate: Date): Date | null => {
   if (template.frequency !== 'recurring' || !template.recurrence) return null;
