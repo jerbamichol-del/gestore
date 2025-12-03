@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Expense, Account, CATEGORIES } from '../types';
 import { XMarkIcon } from './icons/XMarkIcon';
@@ -6,6 +7,7 @@ import { CurrencyEuroIcon } from './icons/CurrencyEuroIcon';
 import { CalendarIcon } from './icons/CalendarIcon';
 import { TagIcon } from './icons/TagIcon';
 import { CreditCardIcon } from './icons/CreditCardIcon';
+import { TrashIcon } from './icons/TrashIcon';
 import SelectionMenu from './SelectionMenu';
 import { getCategoryStyle } from '../utils/categoryStyles';
 import { ClockIcon } from './icons/ClockIcon';
@@ -312,8 +314,10 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                               formData.recurrenceEndType !== originalExpenseState.recurrenceEndType ||
                               formData.recurrenceEndDate !== originalExpenseState.recurrenceEndDate ||
                               formData.recurrenceCount !== originalExpenseState.recurrenceCount;
+                              
+    const receiptsChanged = JSON.stringify(formData.receipts) !== JSON.stringify(originalExpenseState.receipts);
 
-    const changed = amountChanged || descriptionChanged || dateChanged || timeChanged || categoryChanged || subcategoryChanged || accountIdChanged || frequencyChanged || recurrenceChanged;
+    const changed = amountChanged || descriptionChanged || dateChanged || timeChanged || categoryChanged || subcategoryChanged || accountIdChanged || frequencyChanged || recurrenceChanged || receiptsChanged;
     
     setHasChanges(changed);
 
@@ -414,6 +418,14 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                 ? currentDays.filter(d => d !== dayValue)
                 : [...currentDays, dayValue];
             return newDays.sort((a, b) => (a === 0 ? 7 : a) - (b === 0 ? 7 : b));
+        });
+    };
+    
+    const handleRemoveReceipt = (index: number) => {
+        setFormData(prev => {
+            const currentReceipts = prev.receipts || [];
+            const newReceipts = currentReceipts.filter((_, i) => i !== index);
+            return { ...prev, receipts: newReceipts };
         });
     };
 
@@ -538,7 +550,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
   
   return (
     <div
-      className={`fixed inset-0 z-[2000] transition-opacity duration-300 ease-in-out ${isAnimating ? 'opacity-100' : 'opacity-0'} bg-slate-900/60 backdrop-blur-sm`}
+      className={`fixed inset-0 z-[5000] transition-opacity duration-300 ease-in-out ${isAnimating ? 'opacity-100' : 'opacity-0'} bg-slate-900/60 backdrop-blur-sm`}
       onClick={handleBackdropClick}
       aria-modal="true"
       role="dialog"
@@ -655,6 +667,41 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                    icon={<TagIcon className="h-5 w-5" />}
                 />
               </div>
+              
+              {/* Ricevute in modalità Modifica */}
+              {formData.receipts && formData.receipts.length > 0 && (
+                  <div>
+                      <label className="block text-base font-medium text-slate-700 mb-1">Ricevute</label>
+                      <div className="grid grid-cols-2 gap-2">
+                          {formData.receipts.map((receipt, index) => (
+                              <div key={index} className="relative group rounded-lg overflow-hidden border border-slate-200 shadow-sm aspect-video bg-slate-50">
+                                  <img 
+                                      src={`data:image/png;base64,${receipt}`} 
+                                      alt="Ricevuta" 
+                                      className="w-full h-full object-cover"
+                                  />
+                                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                      <button 
+                                          type="button"
+                                          onClick={() => handleRemoveReceipt(index)}
+                                          className="p-2 bg-red-600 text-white rounded-full hover:bg-red-700"
+                                      >
+                                          <TrashIcon className="w-5 h-5" />
+                                      </button>
+                                  </div>
+                                  {/* Mobile always visible delete button */}
+                                  <button 
+                                      type="button"
+                                      onClick={() => handleRemoveReceipt(index)}
+                                      className="md:hidden absolute top-1 right-1 p-1 bg-white/90 text-red-600 rounded-full shadow-sm"
+                                  >
+                                      <XMarkIcon className="w-4 h-4" />
+                                  </button>
+                              </div>
+                          ))}
+                      </div>
+                  </div>
+              )}
               
               {isForRecurringTemplate && (
                  <div className="bg-white p-4 rounded-lg border border-slate-200 space-y-4">
