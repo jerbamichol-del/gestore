@@ -102,6 +102,7 @@ export const QuickFilterControl: React.FC<{
             key={f.value}
             onClick={() => onSelect(f.value)}
             type="button"
+            data-no-drag
             className={
               `flex-1 flex items-center justify-center px-2 text-center font-semibold ${compact ? 'text-xs' : 'text-sm'} transition-colors duration-200 focus:outline-none ` +
               (i > 0 ? 'border-l ' : '') +
@@ -129,7 +130,8 @@ export const CustomDateRangeInputs: React.FC<{
   compact?: boolean;
   tapBridge?: any;
 }> = ({ range, onChange, isActive, compact, tapBridge }) => {
-  const textColor = isActive ? 'text-indigo-700' : 'text-slate-700';
+  // MODIFICATO: Colori sempre attivi (Indigo) come richiesto
+  const textColor = 'text-indigo-700';
   const textSize = 'text-sm font-semibold';
 
   const formatDate = (iso: string) => {
@@ -160,11 +162,10 @@ export const CustomDateRangeInputs: React.FC<{
   return (
     <div
       className={
-        `w-full ${compact ? 'h-8' : 'h-10'} flex border rounded-lg overflow-hidden transition-colors relative ` +
-        (isActive ? 'border-indigo-600 bg-indigo-50' : 'border-indigo-200 bg-slate-100')
+        `w-full ${compact ? 'h-8' : 'h-10'} flex border rounded-lg overflow-hidden transition-colors relative border-indigo-600 bg-indigo-50`
       }
     >
-      <label className="relative flex-1 h-full group cursor-pointer block">
+      <label className="relative flex-1 h-full group cursor-pointer block" data-no-drag>
          <div className={`absolute inset-0 flex items-center justify-center z-0 pointer-events-none ${textSize} ${textColor}`}>
             {range.start ? formatDate(range.start) : 'Dal'}
          </div>
@@ -179,8 +180,8 @@ export const CustomDateRangeInputs: React.FC<{
           {...tapBridge}
         />
       </label>
-      <div className={`w-px my-1 ${isActive ? 'bg-indigo-200' : 'bg-indigo-200'}`} />
-      <label className="relative flex-1 h-full group cursor-pointer block">
+      <div className="w-px my-1 bg-indigo-200" />
+      <label className="relative flex-1 h-full group cursor-pointer block" data-no-drag>
         <div className={`absolute inset-0 flex items-center justify-center z-0 pointer-events-none ${textSize} ${textColor}`}>
             {range.end ? formatDate(range.end) : 'Al'}
          </div>
@@ -331,8 +332,7 @@ export const PeriodNavigator: React.FC<{
     <div
       ref={wrapperRef}
       className={
-        `relative w-full ${compact ? 'h-8' : 'h-10'} flex items-center justify-between border rounded-lg bg-white ` +
-        (isActive ? 'border-indigo-600' : 'border-indigo-200')
+        `relative w-full ${compact ? 'h-8' : 'h-10'} flex items-center justify-between border rounded-lg bg-white border-indigo-600`
       }
     >
       <button
@@ -340,6 +340,7 @@ export const PeriodNavigator: React.FC<{
         type="button"
         className={`h-full px-4 rounded-l-lg ${compact ? '' : 'hover:bg-slate-100'}`}
         aria-label="Periodo precedente"
+        data-no-drag
         {...tapBridge}
       >
         <ChevronLeftIcon className="w-5 h-5 text-slate-700" />
@@ -348,12 +349,10 @@ export const PeriodNavigator: React.FC<{
         onClick={() => onMenuToggle(!isMenuOpen)}
         type="button"
         className={
-          `flex-1 h-full text-sm font-semibold ` +
-          (isActive
-            ? 'bg-indigo-100 text-indigo-700'
-            : 'bg-slate-100 text-slate-700') +
-          (compact ? '' : ' hover:bg-slate-200')
+          `flex-1 h-full text-sm font-semibold bg-indigo-100 text-indigo-700 ` +
+          (compact ? '' : ' hover:bg-indigo-200')
         }
+        data-no-drag
         {...tapBridge}
       >
         {label}
@@ -363,6 +362,7 @@ export const PeriodNavigator: React.FC<{
         type="button"
         className={`h-full px-4 rounded-r-lg ${compact ? '' : 'hover:bg-slate-100'}`}
         aria-label="Periodo successivo"
+        data-no-drag
         {...tapBridge}
       >
         <ChevronRightIcon className="w-5 h-5 text-slate-700" />
@@ -384,6 +384,7 @@ export const PeriodNavigator: React.FC<{
                 onMenuToggle(false);
               }}
               type="button"
+              data-no-drag
               className={
                 'w-full text-left px-4 py-2 text-sm font-semibold rounded-lg ' +
                 (isActive && periodType === v
