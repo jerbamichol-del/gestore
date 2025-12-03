@@ -1,3 +1,4 @@
+
 // TransactionDetailPage.tsx
 import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
 import { Expense, Account } from '../types';
@@ -75,7 +76,14 @@ const Modal = memo<{
   return (
     <div
       className={`absolute inset-0 z-[60] flex justify-center items-center p-4 transition-opacity duration-300 ${isAnimating ? 'opacity-100' : 'opacity-0'} bg-slate-900/60 backdrop-blur-sm`}
-      onClick={onClose}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClose();
+      }}
+      // Stop bubbling per isolare il modal dal TapBridge sottostante
+      onPointerDown={(e) => e.stopPropagation()}
+      onPointerUp={(e) => e.stopPropagation()}
+      onPointerMove={(e) => e.stopPropagation()}
       aria-modal="true"
       role="dialog"
     >
@@ -203,11 +211,18 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
   // Receipt Menu
   const [isReceiptMenuOpen, setIsReceiptMenuOpen] = useState(false);
   const [isReceiptMenuAnimating, setIsReceiptMenuAnimating] = useState(false);
+  
+  // Ghost click protection for receipt menu
+  const receiptMenuCloseTimeRef = useRef(0);
 
   const [tempRecurrence, setTempRecurrence] = useState(formData.recurrence);
   const [tempRecurrenceInterval, setTempRecurrenceInterval] = useState<number | undefined>(formData.recurrenceInterval);
   const [tempRecurrenceDays, setTempRecurrenceDays] = useState<number[] | undefined>(formData.recurrenceDays);
   const [tempMonthlyRecurrenceType, setTempMonthlyRecurrenceType] = useState(formData.monthlyRecurrenceType);
+
+  // Keep ref up to date for async callbacks
+  const formDataRef = useRef(formData);
+  useEffect(() => { formDataRef.current = formData; }, [formData]);
 
   const isSingleRecurring =
     formData.frequency === 'recurring' &&
@@ -364,20 +379,38 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     setIsRecurrenceModalAnimating(false);
   };
   
-  const handlePickReceipt = async (source: 'camera' | 'gallery') => {
-      try {
-          setIsReceiptMenuOpen(false);
-          setIsReceiptMenuAnimating(false);
-          
-          const file = await pickImage(source);
-          const { base64 } = await processImageFile(file);
-          
-          // Aggiungi ai receipts esistenti
-          const currentReceipts = formData.receipts || [];
-          onFormChange({ receipts: [...currentReceipts, base64] });
-      } catch (e) {
-          console.error("Receipt pick error", e);
-      }
+  // Safe helper to close Receipt Menu and update timestamp for cooldown
+  const handleCloseReceiptMenu = useCallback(() => {
+      setIsReceiptMenuOpen(false);
+      setIsReceiptMenuAnimating(false);
+      receiptMenuCloseTimeRef.current = Date.now();
+  }, []);
+
+  const handlePickReceipt = (e: React.MouseEvent, source: 'camera' | 'gallery') => {
+      e.stopPropagation();
+      e.preventDefault();
+      
+      // Trigger file picker immediately to satisfy browser security requirements
+      const filePromise = pickImage(source);
+      
+      // Delay closing the modal to allow any pending click events (ghost clicks) to resolve
+      // targeting the modal overlay/buttons instead of elements underneath.
+      // We also update the timestamp to trigger the cooldown.
+      setTimeout(() => {
+          handleCloseReceiptMenu();
+      }, 500); // 500ms safety margin
+      
+      filePromise
+          .then(async (file) => {
+              const { base64 } = await processImageFile(file);
+              // Use ref to ensure we append to the latest state
+              const currentReceipts = formDataRef.current.receipts || [];
+              onFormChange({ receipts: [...currentReceipts, base64] });
+          })
+          .catch(e => {
+              // User cancelled or error
+              // console.error("Receipt pick error", e);
+          });
   };
   
   const handleRemoveReceipt = (index: number) => {
@@ -592,7 +625,11 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
 
                   <button
                       type="button"
-                      onClick={() => setIsReceiptMenuOpen(true)}
+                      onClick={() => {
+                          // Prevent ghost click immediate reopen
+                          if (Date.now() - receiptMenuCloseTimeRef.current < 500) return;
+                          setIsReceiptMenuOpen(true);
+                      }}
                       className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-base rounded-lg border border-dashed border-indigo-300 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:border-indigo-400 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                   >
                       <PaperClipIcon className="w-5 h-5" />
@@ -677,12 +714,12 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
       <Modal
         isOpen={isReceiptMenuOpen}
         isAnimating={isReceiptMenuAnimating}
-        onClose={() => { setIsReceiptMenuOpen(false); setIsReceiptMenuAnimating(false); }}
+        onClose={handleCloseReceiptMenu}
         title="Allega Ricevuta"
       >
         <div className="p-4 grid grid-cols-2 gap-4">
           <button 
-            onClick={() => handlePickReceipt('camera')} 
+            onClick={(e) => handlePickReceipt(e, 'camera')} 
             className="flex flex-col items-center justify-center gap-3 p-4 rounded-xl bg-slate-50 border border-slate-200 hover:bg-indigo-50 hover:border-indigo-200 transition-colors"
           >
              <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-sm text-indigo-600">
@@ -691,7 +728,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
              <span className="font-semibold text-slate-700">Fotocamera</span>
           </button>
           <button 
-            onClick={() => handlePickReceipt('gallery')} 
+            onClick={(e) => handlePickReceipt(e, 'gallery')} 
             className="flex flex-col items-center justify-center gap-3 p-4 rounded-xl bg-slate-50 border border-slate-200 hover:bg-indigo-50 hover:border-indigo-200 transition-colors"
           >
              <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-sm text-purple-600">
@@ -722,7 +759,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
             </button>
 
             {isRecurrenceOptionsOpen && (
-              <div className="absolute top-full mt-1 w-full bg-white border border-slate-200 shadow-lg rounded-lg z-20 p-2 space-y-1">
+              <div className="absolute top-full mt-1 w-full bg-white border border-slate-200 shadow-lg rounded-lg z-20 p-2 space-y-1 animate-fade-in-down">
                 {(Object.keys(recurrenceLabels) as Array<keyof typeof recurrenceLabels>).map((k) => (
                   <button
                     key={k}
