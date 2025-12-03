@@ -8,9 +8,14 @@ import { CreditCardIcon } from './icons/CreditCardIcon';
 import { ClockIcon } from './icons/ClockIcon';
 import { ChevronDownIcon } from './icons/ChevronDownIcon';
 import { XMarkIcon } from './icons/XMarkIcon';
+import { PaperClipIcon } from './icons/PaperClipIcon';
+import { CameraIcon } from './icons/CameraIcon';
+import { PhotoIcon } from './icons/PhotoIcon';
+import { TrashIcon } from './icons/TrashIcon';
 import { formatCurrency } from './icons/formatters';
 import SelectionMenu from './SelectionMenu';
 import { useTapBridge } from '../hooks/useTapBridge';
+import { pickImage, processImageFile } from '../utils/fileHelper';
 
 interface TransactionDetailPageProps {
   formData: Partial<Omit<Expense, 'id'>>;
@@ -194,6 +199,10 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
   const [isRecurrenceModalAnimating, setIsRecurrenceModalAnimating] = useState(false);
   const [isRecurrenceOptionsOpen, setIsRecurrenceOptionsOpen] = useState(false);
   const [isRecurrenceEndOptionsOpen, setIsRecurrenceEndOptionsOpen] = useState(false);
+  
+  // Receipt Menu
+  const [isReceiptMenuOpen, setIsReceiptMenuOpen] = useState(false);
+  const [isReceiptMenuAnimating, setIsReceiptMenuAnimating] = useState(false);
 
   const [tempRecurrence, setTempRecurrence] = useState(formData.recurrence);
   const [tempRecurrenceInterval, setTempRecurrenceInterval] = useState<number | undefined>(formData.recurrenceInterval);
@@ -244,9 +253,9 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
 
   // blocca swipe container quando modali/menu aperti
   useEffect(() => {
-    const anyOpen = !!(activeMenu || isFrequencyModalOpen || isRecurrenceModalOpen);
+    const anyOpen = !!(activeMenu || isFrequencyModalOpen || isRecurrenceModalOpen || isReceiptMenuOpen);
     onMenuStateChange(anyOpen);
-  }, [activeMenu, isFrequencyModalOpen, isRecurrenceModalOpen, onMenuStateChange]);
+  }, [activeMenu, isFrequencyModalOpen, isRecurrenceModalOpen, isReceiptMenuOpen, onMenuStateChange]);
 
   // animazioni modali
   useEffect(() => {
@@ -257,6 +266,15 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
       setIsFrequencyModalAnimating(false);
     }
   }, [isFrequencyModalOpen]);
+  
+  useEffect(() => {
+    if (isReceiptMenuOpen) {
+      const t = setTimeout(() => setIsReceiptMenuAnimating(true), 10);
+      return () => clearTimeout(t);
+    } else {
+      setIsReceiptMenuAnimating(false);
+    }
+  }, [isReceiptMenuOpen]);
 
   useEffect(() => {
     if (isRecurrenceModalOpen) {
@@ -344,6 +362,28 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     });
     setIsRecurrenceModalOpen(false);
     setIsRecurrenceModalAnimating(false);
+  };
+  
+  const handlePickReceipt = async (source: 'camera' | 'gallery') => {
+      try {
+          setIsReceiptMenuOpen(false);
+          setIsReceiptMenuAnimating(false);
+          
+          const file = await pickImage(source);
+          const { base64 } = await processImageFile(file);
+          
+          // Aggiungi ai receipts esistenti
+          const currentReceipts = formData.receipts || [];
+          onFormChange({ receipts: [...currentReceipts, base64] });
+      } catch (e) {
+          console.error("Receipt pick error", e);
+      }
+  };
+  
+  const handleRemoveReceipt = (index: number) => {
+      const currentReceipts = formData.receipts || [];
+      const newReceipts = currentReceipts.filter((_, i) => i !== index);
+      onFormChange({ receipts: newReceipts });
   };
 
   const dynamicMonthlyDayOfWeekLabel = useMemo(() => {
@@ -442,6 +482,9 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     </div>
   ), [formData.frequency, formData.date, dateError, formData.time, isSingleRecurring]);
 
+  // Sezione Ricevuta - attiva SEMPRE
+  const canAttachReceipt = true;
+
   return (
     <div
       ref={rootRef}
@@ -512,6 +555,51 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
           </div>
 
           {!isFrequencySet && DateTimeInputs}
+          
+          {/* Sezione Ricevuta */}
+          {canAttachReceipt && (
+              <div>
+                  <label className="block text-base font-medium text-slate-700 mb-1">Ricevuta</label>
+                  
+                  {formData.receipts && formData.receipts.length > 0 ? (
+                      <div className="grid grid-cols-2 gap-2 mb-2">
+                          {formData.receipts.map((receipt, index) => (
+                              <div key={index} className="relative group rounded-lg overflow-hidden border border-slate-200 shadow-sm aspect-video bg-slate-50">
+                                  <img 
+                                      src={`data:image/png;base64,${receipt}`} 
+                                      alt="Ricevuta" 
+                                      className="w-full h-full object-cover"
+                                  />
+                                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                      <button 
+                                          onClick={() => handleRemoveReceipt(index)}
+                                          className="p-2 bg-red-600 text-white rounded-full hover:bg-red-700"
+                                      >
+                                          <TrashIcon className="w-5 h-5" />
+                                      </button>
+                                  </div>
+                                  {/* Mobile always visible delete button */}
+                                  <button 
+                                      onClick={() => handleRemoveReceipt(index)}
+                                      className="md:hidden absolute top-1 right-1 p-1 bg-white/90 text-red-600 rounded-full shadow-sm"
+                                  >
+                                      <XMarkIcon className="w-4 h-4" />
+                                  </button>
+                              </div>
+                          ))}
+                      </div>
+                  ) : null}
+
+                  <button
+                      type="button"
+                      onClick={() => setIsReceiptMenuOpen(true)}
+                      className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-base rounded-lg border border-dashed border-indigo-300 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:border-indigo-400 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  >
+                      <PaperClipIcon className="w-5 h-5" />
+                      <span>{formData.receipts && formData.receipts.length > 0 ? 'Aggiungi un\'altra ricevuta' : 'Allega Ricevuta'}</span>
+                  </button>
+              </div>
+          )}
 
           <div className="bg-white p-4 rounded-lg border border-slate-200 space-y-4">
             <div>
@@ -571,6 +659,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
         onSelect={handleAccountSelect}
       />
 
+      {/* Modal Frequenza */}
       <Modal
         isOpen={isFrequencyModalOpen}
         isAnimating={isFrequencyModalAnimating}
@@ -583,7 +672,37 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
           <button onClick={() => handleFrequencySelect('recurring')} className="w-full px-4 py-3 text-base font-semibold rounded-lg bg-slate-100 text-slate-800 hover:bg-indigo-100 hover:text-indigo-800">Ricorrente</button>
         </div>
       </Modal>
+      
+      {/* Modal Scelta Ricevuta */}
+      <Modal
+        isOpen={isReceiptMenuOpen}
+        isAnimating={isReceiptMenuAnimating}
+        onClose={() => { setIsReceiptMenuOpen(false); setIsReceiptMenuAnimating(false); }}
+        title="Allega Ricevuta"
+      >
+        <div className="p-4 grid grid-cols-2 gap-4">
+          <button 
+            onClick={() => handlePickReceipt('camera')} 
+            className="flex flex-col items-center justify-center gap-3 p-4 rounded-xl bg-slate-50 border border-slate-200 hover:bg-indigo-50 hover:border-indigo-200 transition-colors"
+          >
+             <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-sm text-indigo-600">
+                 <CameraIcon className="w-7 h-7" />
+             </div>
+             <span className="font-semibold text-slate-700">Fotocamera</span>
+          </button>
+          <button 
+            onClick={() => handlePickReceipt('gallery')} 
+            className="flex flex-col items-center justify-center gap-3 p-4 rounded-xl bg-slate-50 border border-slate-200 hover:bg-indigo-50 hover:border-indigo-200 transition-colors"
+          >
+             <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-sm text-purple-600">
+                 <PhotoIcon className="w-7 h-7" />
+             </div>
+             <span className="font-semibold text-slate-700">Galleria</span>
+          </button>
+        </div>
+      </Modal>
 
+      {/* Modal Ricorrenza */}
       <Modal
         isOpen={isRecurrenceModalOpen}
         isAnimating={isRecurrenceModalAnimating}
