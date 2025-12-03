@@ -30,7 +30,7 @@ export interface Expense {
 
 export const CATEGORIES: Record<string, string[]> = {
   'Alimentari': ['Supermercato', 'Ristorante', 'Bar', 'Caffè'],
-  'Trasporti': ['Mezzi Pubblici', 'Benzina', 'Taxi', 'Manutenzione Auto'],
+  'Trasporti': ['Mezzi Pubblici', 'Benzina', 'Taxi', 'Manutenzione Auto', 'Pedaggio'],
   'Casa': ['Affitto/Mutuo', 'Bollette', 'Manutenzione', 'Arredamento'],
   'Shopping': ['Abbigliamento', 'Elettronica', 'Libri', 'Regali'],
   'Tempo Libero': ['Cinema', 'Concerti', 'Sport', 'Viaggi'],
