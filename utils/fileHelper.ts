@@ -1,3 +1,4 @@
+
 import * as XLSX from 'xlsx';
 import { Expense } from '../types';
 
@@ -80,7 +81,11 @@ export const processFileToImage = async (file: File): Promise<{ base64: string; 
     // Converti in CSV per semplicità di rappresentazione testuale
     textContent = XLSX.utils.sheet_to_csv(sheet);
   } else {
-    throw new Error('Formato file non supportato. Usa CSV o Excel.');
+    // Se è già un'immagine, la processiamo standard
+    if (file.type.startsWith('image/')) {
+        return processImageFile(file);
+    }
+    throw new Error('Formato file non supportato. Usa CSV, Excel o Immagini.');
   }
 
   // Se il contenuto è vuoto
@@ -95,6 +100,43 @@ export const processFileToImage = async (file: File): Promise<{ base64: string; 
     base64: base64Image,
     mimeType: 'image/png',
   };
+};
+
+export const processImageFile = (file: File): Promise<{ base64: string; mimeType: string }> => {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let { width, height } = img;
+            const MAX = 1024; 
+            if (width > height && width > MAX) { height = Math.round((height * MAX) / width); width = MAX; }
+            else if (height >= width && height > MAX) { width = Math.round((width * MAX) / height); height = MAX; }
+            canvas.width = width; canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if(ctx) { 
+                ctx.drawImage(img, 0, 0, width, height);
+                const mime = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+                resolve({ base64: canvas.toDataURL(mime, 0.8).split(',')[1], mimeType: mime });
+            } else reject(new Error('Canvas error'));
+        };
+        img.onerror = () => reject(new Error('Image load error'));
+        img.src = url;
+    });
+};
+
+export const pickImage = (source: 'camera' | 'gallery'): Promise<File> => {
+    return new Promise((resolve, reject) => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        if(source === 'camera') input.capture = 'environment';
+        input.onchange = (e: any) => {
+            if(e.target.files && e.target.files[0]) resolve(e.target.files[0]);
+            else reject(new Error('Nessun file'));
+        };
+        input.click();
+    });
 };
 
 export const exportExpenses = (expenses: Expense[]) => {
