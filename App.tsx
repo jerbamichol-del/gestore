@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Expense, Account, CATEGORIES } from './types';
 import { useLocalStorage } from './hooks/useLocalStorage';
@@ -6,6 +5,8 @@ import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { getQueuedImages, deleteImageFromQueue, OfflineImage, addImageToQueue } from './utils/db';
 import { DEFAULT_ACCOUNTS } from './utils/defaults';
 import { processImageFile, pickImage } from './utils/fileHelper';
+import { saveToCloud } from './utils/cloud';
+import { getUsers } from './utils/api';
 
 import Header from './components/Header';
 import Dashboard from './components/Dashboard';
@@ -59,6 +60,8 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const [expenses, setExpenses] = useLocalStorage<Expense[]>('expenses_v2', []);
   const [recurringExpenses, setRecurringExpenses] = useLocalStorage<Expense[]>('recurring_expenses_v1', []);
   const [accounts, setAccounts] = useLocalStorage<Account[]>('accounts_v1', DEFAULT_ACCOUNTS);
+  // Serve per sapere chi è l'utente attivo e salvare nel cloud
+  const [activeUserEmail] = useLocalStorage<string | null>('last_active_user_email', null);
 
   // --- UI State ---
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -106,6 +109,33 @@ const App: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
   // --- EXIT GUARD REF ---
   const lastBackPressTime = useRef(0);
+
+  // --- CLOUD SYNC AUTOMATICO ---
+  useEffect(() => {
+    if (!activeUserEmail || !isOnline) return;
+
+    const timer = setTimeout(() => {
+        // Recuperiamo i dati di sicurezza dell'utente corrente
+        const allUsers = getUsers();
+        const currentUser = allUsers[activeUserEmail.toLowerCase()];
+
+        if (currentUser) {
+            console.log("☁️ Salvataggio Cloud con credenziali...");
+            saveToCloud(
+                activeUserEmail, 
+                {
+                    expenses: expenses,
+                    recurringExpenses: recurringExpenses,
+                    accounts: accounts
+                },
+                currentUser.pinHash, // Inviamo l'hash attuale
+                currentUser.pinSalt  // Inviamo il sale attuale
+            );
+        }
+    }, 5000);
+
+    return () => clearTimeout(timer);
+  }, [expenses, recurringExpenses, accounts, activeUserEmail, isOnline]);
 
   // --- SAFETY RESET ---
   // Questo effect forza il reset dello stato quando history non è attiva
