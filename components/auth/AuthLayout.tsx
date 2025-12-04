@@ -64,8 +64,8 @@ const Header: React.FC = () => (
     <div
       style={{
         margin: '0 auto 12px',
-        width: 64,
-        height: 64,
+        width: 120,
+        height: 120,
       }}
     >
       <AppLogoIcon
