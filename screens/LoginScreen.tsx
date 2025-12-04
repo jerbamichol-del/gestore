@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import AuthLayout from '../components/auth/AuthLayout';
 import PinInput from '../components/auth/PinInput';
-import { login } from '../utils/api';
+import { login, getUsers, saveUsers, StoredUser } from '../utils/api';
+import { loadFromCloud } from '../utils/cloud';
 import { SpinnerIcon } from '../components/icons/SpinnerIcon';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import LoginEmail from '../components/auth/LoginEmail';
@@ -187,12 +188,58 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pin, activeEmail]);
 
-  const handleEmailSubmit = (email: string) => {
-    if (email) {
-      const normalized = email.toLowerCase();
+  // --- MODIFICATO: Supporto Cloud Restore ---
+  const handleEmailSubmit = async (email: string) => {
+    if (!email) return;
+    const normalized = email.toLowerCase();
+    
+    // 1. Controllo Locale
+    const localUsers = getUsers();
+    
+    if (localUsers[normalized]) {
+      // Utente esiste nel telefono -> procedi normale
       setActiveEmail(normalized);
       setError(null);
       setBiometricEmail(normalized);
+      return;
+    }
+
+    // 2. Utente NON esiste locale -> PROVO IL CLOUD (Ripristino)
+    setIsLoading(true);
+    try {
+      const cloudResult = await loadFromCloud(normalized);
+      
+      if (cloudResult) {
+        // TROVATO! Ripristiniamo tutto
+        
+        // A. Ripristina i dati delle spese
+        localStorage.setItem('expenses_v2', JSON.stringify(cloudResult.data.expenses));
+        localStorage.setItem('recurring_expenses_v1', JSON.stringify(cloudResult.data.recurringExpenses));
+        localStorage.setItem('accounts_v1', JSON.stringify(cloudResult.data.accounts));
+        
+        // B. Ripristina l'UTENTE (Hash e Salt) nel database locale
+        // Questo "inganna" l'app facendole credere che l'utente si fosse registrato qui
+        const newUser: StoredUser = {
+            email: normalized,
+            pinHash: cloudResult.pinHash,
+            pinSalt: cloudResult.pinSalt,
+            createdAt: new Date().toISOString()
+        };
+        localUsers[normalized] = newUser;
+        saveUsers(localUsers);
+
+        // C. Ora procedi come se fosse un login normale
+        setActiveEmail(normalized);
+        setError(null); // Pulisci errori precedenti
+        setBiometricEmail(normalized);
+      } else {
+        setError("Nessun account trovato con questa email (nè locale nè cloud).");
+      }
+    } catch (e) {
+      console.error(e);
+      setError("Errore di connessione durante il recupero.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -310,10 +357,22 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
           <h2 className="text-xl font-bold text-slate-800 mb-2">Bentornato!</h2>
           <p className="text-slate-500 mb-6">Inserisci la tua email per continuare.</p>
 
+          {/* Passiamo il nuovo handler asincrono */}
           <LoginEmail onSubmit={handleEmailSubmit} />
+          
+          {/* Se stiamo caricando (check cloud), mostriamo spinner */}
+          {isLoading && (
+             <div className="mt-4 flex justify-center">
+                <SpinnerIcon className="w-6 h-6 text-indigo-600" />
+             </div>
+          )}
+          
+          {error && (
+             <p className="mt-4 text-sm text-red-500 bg-red-50 p-2 rounded">{error}</p>
+          )}
 
           {/* PULSANTE BIOMETRICO NELLA SCHERMATA EMAIL */}
-          {bioSupported && bioEnabled && biometricEmail && (
+          {bioSupported && bioEnabled && biometricEmail && !isLoading && (
             <div className="mt-6">
               <button
                 type="button"
@@ -328,7 +387,6 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
           )}
 
           <div className="mt-4 space-y-3">
-            {/* MODIFICATO: DEEP LINK per recupero email */}
             <a
               href="https://t.me/mailsendreset_bot?start=recover"
               target="_blank"
