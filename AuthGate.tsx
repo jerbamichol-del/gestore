@@ -107,10 +107,9 @@ const AuthGate: React.FC = () => {
     return <App onLogout={handleLogout} />;
   }
   
-  // Forziamo la vista di registrazione se non ci sono utenti
-  if (!hasUsers() && authView !== 'register') {
-      setAuthView('register');
-  }
+  // --- MODIFICA: RIMOSSO IL BLOCCO CHE FORZAVA 'register' ---
+  // Abbiamo rimosso il controllo `if (!hasUsers() && authView !== 'register')`
+  // così l'utente può cliccare su "Accedi" e andare al login anche se il telefono è vuoto.
 
   switch (authView) {
     case 'register':
@@ -135,7 +134,6 @@ const AuthGate: React.FC = () => {
             onLoginSuccess={handleAuthSuccess}
             onGoToRegister={() => setAuthView('register')}
             onGoToForgotPassword={() => setAuthView('forgotPassword')}
-            // FIX: Add missing onGoToForgotEmail prop to satisfy LoginScreenProps.
             onGoToForgotEmail={() => setAuthView('forgotPassword')}
         />
       );
