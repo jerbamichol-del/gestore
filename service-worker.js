@@ -9,8 +9,8 @@ const urlsToCache = [
   './',
   './index.html',
   './manifest.json',
-  './icon-192.svg',
-  './icon-512.svg',
+  './icon-192.png',
+  './icon-512.png',
   // Librerie esterne (ESM)
   'https://esm.sh/react@18.3.1',
   'https://esm.sh/react-dom@18.3.1',
