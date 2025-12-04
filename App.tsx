@@ -5,7 +5,7 @@ import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { getQueuedImages, deleteImageFromQueue, OfflineImage, addImageToQueue } from './utils/db';
 import { DEFAULT_ACCOUNTS } from './utils/defaults';
 import { processImageFile, pickImage } from './utils/fileHelper';
-// MODIFICA: Nuovi import per il cloud
+// NUOVI IMPORT PER IL CLOUD
 import { saveToCloud } from './utils/cloud';
 import { getUsers } from './utils/api';
 
@@ -31,12 +31,9 @@ import CalculatorContainer from './components/CalculatorContainer';
 import SuccessIndicator from './components/SuccessIndicator';
 
 type ToastMessage = { message: string; type: 'success' | 'info' | 'error' };
-
 type ExtendedOfflineImage = OfflineImage & { _isShared?: boolean };
 
 // --- HELPER FUNCTIONS ---
-// Spostate in utils/fileHelper.ts
-
 const calculateNextDueDate = (template: Expense, fromDate: Date): Date | null => {
   if (template.frequency !== 'recurring' || !template.recurrence) return null;
   const interval = template.recurrenceInterval || 1;
@@ -57,7 +54,7 @@ const toISODate = (date: Date) => {
   return `${year}-${month}-${day}`;
 };
 
-// MODIFICA: Aggiunto currentEmail alle props
+// AGGIUNTA PROP currentEmail
 const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogout, currentEmail }) => {
   const [expenses, setExpenses] = useLocalStorage<Expense[]>('expenses_v2', []);
   const [recurringExpenses, setRecurringExpenses] = useLocalStorage<Expense[]>('recurring_expenses_v1', []);
@@ -79,8 +76,6 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
   
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
-  
-  // Track History Filter Panel state to hide FAB
   const [isHistoryFilterOpen, setIsHistoryFilterOpen] = useState(false);
 
   // --- Data ---
@@ -106,21 +101,18 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
   // --- Shared Logic ---
   const sharedImageIdRef = useRef<string | null>(null);
   const isSharedStart = useRef(new URLSearchParams(window.location.search).get('shared') === 'true');
-
-  // --- EXIT GUARD REF ---
   const lastBackPressTime = useRef(0);
 
-  // --- MODIFICA: CLOUD SYNC AUTOMATICO ---
+  // --- LOGICA DI BACKUP AUTOMATICO NEL CLOUD ---
   useEffect(() => {
     if (!currentEmail || !isOnline) return;
 
     const timer = setTimeout(() => {
-        // Recuperiamo i dati di sicurezza dell'utente corrente
         const allUsers = getUsers();
         const currentUser = allUsers[currentEmail.toLowerCase()];
 
         if (currentUser) {
-            console.log("☁️ Salvataggio Cloud con credenziali per:", currentEmail);
+            console.log("☁️ Backup Cloud in corso per:", currentEmail);
             saveToCloud(
                 currentEmail, 
                 {
@@ -128,19 +120,16 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
                     recurringExpenses: recurringExpenses,
                     accounts: accounts
                 },
-                currentUser.pinHash, // Inviamo l'hash attuale
-                currentUser.pinSalt  // Inviamo il sale attuale
-            ).then(ok => {
-                if (ok) console.log("✅ Backup Cloud completato");
-            });
+                currentUser.pinHash, 
+                currentUser.pinSalt
+            ).catch(err => console.warn("Backup fallito", err));
         }
-    }, 5000); // 5 secondi di attesa dopo l'ultima modifica
+    }, 5000); // Salva 5 secondi dopo l'ultima modifica
 
     return () => clearTimeout(timer);
   }, [expenses, recurringExpenses, accounts, currentEmail, isOnline]);
 
   // --- SAFETY RESET ---
-  // Questo effect forza il reset dello stato quando history non è attiva
   useEffect(() => {
     if (!isHistoryScreenOpen) {
       setIsHistoryFilterOpen(false);
@@ -160,19 +149,14 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
             const newUrl = window.location.pathname;
             window.history.replaceState({ modal: 'home' }, '', newUrl);
         } catch (e) {
-            try {
-              window.history.replaceState({ modal: 'home' }, '');
-            } catch (e) {}
+            try { window.history.replaceState({ modal: 'home' }, ''); } catch(e) {}
         } 
         setTimeout(() => setIsInstallModalOpen(true), 500);
     }
   }, []);
 
   useEffect(() => {
-    const handler = (e: any) => {
-      e.preventDefault();
-      setInstallPromptEvent(e);
-    };
+    const handler = (e: any) => { e.preventDefault(); setInstallPromptEvent(e); };
     window.addEventListener('beforeinstallprompt', handler);
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
@@ -180,24 +164,16 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
   const handleInstallClick = () => {
     if (installPromptEvent) {
       installPromptEvent.prompt();
-      installPromptEvent.userChoice.then((choiceResult: any) => {
-        setInstallPromptEvent(null);
-      });
+      installPromptEvent.userChoice.then((choiceResult: any) => { setInstallPromptEvent(null); });
     } else {
       setIsInstallModalOpen(true);
     }
   };
 
   const closeAllModals = () => {
-      setIsFormOpen(false);
-      setIsCalculatorContainerOpen(false);
-      setIsImageSourceModalOpen(false);
-      setIsVoiceModalOpen(false);
-      setIsMultipleExpensesModalOpen(false);
-      setIsQrModalOpen(false);
-      setIsHistoryScreenOpen(false);
-      setIsHistoryFilterOpen(false);
-      setIsRecurringScreenOpen(false);
+      setIsFormOpen(false); setIsCalculatorContainerOpen(false); setIsImageSourceModalOpen(false);
+      setIsVoiceModalOpen(false); setIsMultipleExpensesModalOpen(false); setIsQrModalOpen(false);
+      setIsHistoryScreenOpen(false); setIsHistoryFilterOpen(false); setIsRecurringScreenOpen(false);
       setImageForAnalysis(null);
   };
 
@@ -209,10 +185,8 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
 
       if (modal === 'exit_guard') {
           const now = Date.now();
-          if (now - lastBackPressTime.current < 2000) {
-              window.history.back(); 
-              return;
-          } else {
+          if (now - lastBackPressTime.current < 2000) { window.history.back(); return; } 
+          else {
               lastBackPressTime.current = now;
               showToast({ message: 'Premi di nuovo indietro per uscire', type: 'info' });
               window.history.pushState({ modal: 'home' }, ''); 
@@ -221,19 +195,14 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
           }
       }
 
-      // Chiudi modali semplici
       if (modal !== 'form') setIsFormOpen(false);
       if (modal !== 'voice') setIsVoiceModalOpen(false);
       if (modal !== 'source') setIsImageSourceModalOpen(false);
       if (modal !== 'multiple') setIsMultipleExpensesModalOpen(false);
       if (modal !== 'qr') setIsQrModalOpen(false);
 
-      // Gestione Calcolatrice
-      if (modal !== 'calculator' && modal !== 'calculator_details') {
-          setIsCalculatorContainerOpen(false);
-      }
+      if (modal !== 'calculator' && modal !== 'calculator_details') setIsCalculatorContainerOpen(false);
 
-      // Gestione Schermate Principali
       if (!modal || modal === 'home') {
         setIsHistoryScreenOpen(false);
         setIsHistoryClosing(false); 
@@ -242,8 +211,6 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
         setImageForAnalysis(null);
       } else if (modal === 'history') {
         setIsHistoryScreenOpen(true);
-        // NON resettiamo isHistoryClosing qui se stiamo aprendo, 
-        // lo facciamo solo se era true per errore (reset difensivo)
         if (isHistoryClosing) setIsHistoryClosing(false);
         setIsRecurringScreenOpen(false);
       } else if (modal === 'recurring') {
@@ -261,262 +228,30 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
       opener();
   };
 
-  // FIX: Force reset to home state. 
   const forceNavigateHome = () => {
-      try {
-          window.history.replaceState({ modal: 'home' }, '', window.location.pathname);
-      } catch (e) {
-          try {
-            window.history.replaceState({ modal: 'home' }, '');
-          } catch(e) {}
-      }
+      try { window.history.replaceState({ modal: 'home' }, '', window.location.pathname); } catch (e) { try { window.history.replaceState({ modal: 'home' }, ''); } catch(e) {} }
       window.dispatchEvent(new PopStateEvent('popstate', { state: { modal: 'home' } }));
   };
 
   const closeModalWithHistory = () => {
-      // Direct state management fallback if navigating from 'history' to handle potential popstate misses
-      if (window.history.state?.modal === 'history') {
-          setIsHistoryScreenOpen(false);
-          setIsHistoryClosing(false);
-      }
-
-      if (window.history.state && window.history.state.modal && window.history.state.modal !== 'home' && window.history.state.modal !== 'exit_guard') {
-          window.history.back();
-      } else {
-          forceNavigateHome();
-      }
+      if (window.history.state?.modal === 'history') { setIsHistoryScreenOpen(false); setIsHistoryClosing(false); }
+      if (window.history.state?.modal && window.history.state.modal !== 'home' && window.history.state.modal !== 'exit_guard') window.history.back();
+      else forceNavigateHome();
   };
 
   const refreshPendingImages = useCallback(async () => {
     try {
       const images = await getQueuedImages();
-      const safeImages = Array.isArray(images) ? images : [];
-      setPendingImages(safeImages);
-      pendingImagesCountRef.current = safeImages.length;
-      if ('setAppBadge' in navigator && typeof (navigator as any).setAppBadge === 'function') {
-        if (safeImages.length > 0) (navigator as any).setAppBadge(safeImages.length);
-        else (navigator as any).clearAppBadge();
-      }
-    } catch (e) {
-      console.error("Failed to refresh pending images", e);
-      setPendingImages([]);
-    }
+      setPendingImages(images || []);
+      pendingImagesCountRef.current = (images || []).length;
+    } catch (e) { setPendingImages([]); }
   }, []);
 
-  useEffect(() => {
-    if (!isSharedStart.current) refreshPendingImages();
-  }, [refreshPendingImages]);
-
-  useEffect(() => {
-    const checkForSharedFile = async () => {
-      const urlParams = new URLSearchParams(window.location.search);
-      if (urlParams.get('shared') === 'true' || isSharedStart.current) {
-        try {
-            window.history.replaceState({ modal: 'home' }, '', window.location.pathname);
-        } catch (e) {
-            try {
-              window.history.replaceState({ modal: 'home' }, '');
-            } catch(e) {}
-        }
-        try {
-            const images = await getQueuedImages();
-            const safeImages = Array.isArray(images) ? images : [];
-            if (safeImages.length > 0) {
-               safeImages.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-               const latestImage = safeImages[0];
-               sharedImageIdRef.current = latestImage.id;
-               const flaggedImage: ExtendedOfflineImage = { ...latestImage, _isShared: true };
-               setImageForAnalysis(flaggedImage);
-               setPendingImages(safeImages.filter(img => img.id !== latestImage.id));
-            } else {
-                setPendingImages([]);
-            }
-        } catch (e) {
-            console.error("Error checking shared file", e);
-        }
-      }
-    };
-    checkForSharedFile();
-  }, []);
-
-  const hasRunMigrationRef = useRef(false);
-  useEffect(() => {
-      if (hasRunMigrationRef.current) return;
-      hasRunMigrationRef.current = true;
-  }, []);
-
-  useEffect(() => {
-      const today = new Date(); today.setHours(0, 0, 0, 0);
-      const newExpenses: Expense[] = [];
-      const templatesToUpdate: Expense[] = [];
-      const safeRecurringExpenses = Array.isArray(recurringExpenses) ? recurringExpenses : [];
-      safeRecurringExpenses.forEach(template => {
-         if (!template.date) return;
-         const cursorDateString = template.lastGeneratedDate || template.date;
-         const p = cursorDateString.split('-').map(Number);
-         let cursor = new Date(p[0], p[1] - 1, p[2]);
-         if (isNaN(cursor.getTime())) return;
-         let nextDue = !template.lastGeneratedDate ? new Date(p[0], p[1] - 1, p[2]) : calculateNextDueDate(template, cursor);
-         let updatedTemplate = { ...template };
-         let safetyCounter = 0;
-         while (nextDue && nextDue <= today && safetyCounter < 1000) {
-             safetyCounter++;
-             const nextDueDateString = toISODate(nextDue);
-             const instanceExists = (expenses || []).some(e => e.recurringExpenseId === template.id && e.date === nextDueDateString) || newExpenses.some(e => e.recurringExpenseId === template.id && e.date === nextDueDateString);
-             if (!instanceExists) {
-                 newExpenses.push({ ...template, id: crypto.randomUUID(), date: nextDueDateString, frequency: 'single', recurringExpenseId: template.id, lastGeneratedDate: undefined });
-             }
-             cursor = nextDue;
-             updatedTemplate.lastGeneratedDate = toISODate(cursor);
-             nextDue = calculateNextDueDate(template, cursor);
-         }
-         if (updatedTemplate.lastGeneratedDate !== template.lastGeneratedDate) templatesToUpdate.push(updatedTemplate);
-      });
-      if (newExpenses.length > 0) setExpenses(prev => [...newExpenses, ...(prev || [])]);
-      if (templatesToUpdate.length > 0) setRecurringExpenses(prev => (prev || []).map(t => templatesToUpdate.find(ut => ut.id === t.id) || t));
-  }, [recurringExpenses, expenses, setExpenses, setRecurringExpenses]);
-
-  const safeAccounts = accounts || [];
-  const sanitizeExpenseData = (data: any, imageBase64?: string): Partial<Omit<Expense, 'id'>> => {
-    if (!data) return {}; 
-    let category = data.category || 'Altro';
-    if (!CATEGORIES[category]) category = 'Altro';
-    
-    let amount = data.amount;
-    if (typeof amount === 'string') {
-        amount = parseFloat(amount.replace(',', '.'));
-    }
-    if (typeof amount !== 'number' || isNaN(amount)) amount = 0;
-
-    return {
-        description: data.description || '',
-        amount: amount,
-        category: category,
-        date: data.date || toISODate(new Date()),
-        tags: Array.isArray(data.tags) ? data.tags : [],
-        receipts: Array.isArray(data.receipts) ? data.receipts : (imageBase64 ? [imageBase64] : []),
-        accountId: data.accountId || (safeAccounts.length > 0 ? safeAccounts[0].id : '')
-    };
-  };
-
-  const handleAnalyzeImage = async (image: OfflineImage) => {
-    if (!isOnline) {
-      showToast({ message: 'Connettiti a internet per analizzare.', type: 'error' });
-      return;
-    }
-    setSyncingImageId(image.id);
-    setIsParsingImage(true);
-    try {
-      const { parseExpensesFromImage } = await import('./utils/ai');
-      const parsedData = await parseExpensesFromImage(image.base64Image, image.mimeType);
-      if (!parsedData || parsedData.length === 0) {
-        showToast({ message: "Nessuna spesa trovata.", type: 'info' });
-      } else if (parsedData.length === 1) {
-        const safeData = sanitizeExpenseData(parsedData[0], image.base64Image);
-        setPrefilledData(safeData);
-        window.history.replaceState({ modal: 'form' }, ''); 
-        setIsFormOpen(true);
-      } else {
-        const safeMultipleData = parsedData.map(item => sanitizeExpenseData(item, image.base64Image));
-        setMultipleExpensesData(safeMultipleData);
-        window.history.replaceState({ modal: 'multiple' }, ''); 
-        setIsMultipleExpensesModalOpen(true);
-      }
-      setPendingImages(prev => prev.filter(img => img.id !== image.id));
-      await deleteImageFromQueue(image.id);
-      refreshPendingImages();
-    } catch (error) {
-      console.error('AI Error:', error);
-      showToast({ message: "Errore analisi immagine. Riprova.", type: 'error' });
-    } finally {
-      setIsParsingImage(false);
-      setSyncingImageId(null);
-    }
-  };
-
-  const handleVoiceParsed = (data: Partial<Omit<Expense, 'id'>>) => {
-    try {
-      window.history.replaceState({ modal: 'form' }, '');
-    } catch(e) {} // ignore security error
-    setIsVoiceModalOpen(false);
-    const safeData = sanitizeExpenseData(data);
-    setPrefilledData(safeData);
-    setIsFormOpen(true);
-  };
-
-  const handleSharedFile = async (file: File) => {
-      try {
-          showToast({ message: 'Elaborazione immagine condivisa...', type: 'info' });
-          const { base64: base64Image, mimeType } = await processImageFile(file);
-          const newImage: OfflineImage = { id: crypto.randomUUID(), base64Image, mimeType, timestamp: Date.now() };
-          if (isOnline) {
-              setImageForAnalysis(newImage); 
-          } else {
-              await addImageToQueue(newImage);
-              refreshPendingImages();
-              showToast({ message: 'Salvata in coda (offline).', type: 'info' });
-          }
-      } catch (e) {
-          console.error(e);
-          showToast({ message: "Errore file condiviso.", type: 'error' });
-      }
-  };
-
-  const handleImportFile = async (file: File) => {
-      try {
-          showToast({ message: 'Elaborazione file...', type: 'info' });
-          const { processFileToImage } = await import('./utils/fileHelper');
-          const { base64: base64Image, mimeType } = await processFileToImage(file);
-          
-          const newImage: OfflineImage = { 
-              id: crypto.randomUUID(), 
-              base64Image, 
-              mimeType, 
-              timestamp: Date.now() 
-          };
-          
-          if (isOnline) {
-              setImageForAnalysis(newImage); 
-          } else {
-              await addImageToQueue(newImage);
-              refreshPendingImages();
-              showToast({ message: 'File salvato in coda (offline).', type: 'info' });
-          }
-      } catch (e) {
-          console.error('File import error:', e);
-          showToast({ message: "Errore importazione file.", type: 'error' });
-      }
-  };
-
-  const handleImagePick = async (source: 'camera' | 'gallery') => {
-    try {
-        window.history.replaceState({ modal: 'home' }, '');
-    } catch(e) {}
-    setIsImageSourceModalOpen(false);
-    sessionStorage.setItem('preventAutoLock', 'true');
-    try {
-      const file = await pickImage(source);
-      const { base64: base64Image, mimeType } = await processImageFile(file);
-      const newImage: OfflineImage = { id: crypto.randomUUID(), base64Image, mimeType, timestamp: Date.now() };
-      if (isOnline) {
-        setImageForAnalysis(newImage);
-      } else {
-        await addImageToQueue(newImage);
-        refreshPendingImages();
-      }
-    } catch (error) {
-      // Ignora
-    } finally {
-      setTimeout(() => sessionStorage.removeItem('preventAutoLock'), 2000);
-    }
-  };
+  useEffect(() => { if (!isSharedStart.current) refreshPendingImages(); }, [refreshPendingImages]);
 
   const addExpense = (newExpense: Omit<Expense, 'id'>) => {
-      if (newExpense.frequency === 'recurring') {
-          setRecurringExpenses(prev => [{ ...newExpense, id: crypto.randomUUID() } as Expense, ...(prev || [])]);
-      } else {
-          setExpenses(prev => [{ ...newExpense, id: crypto.randomUUID() } as Expense, ...(prev || [])]);
-      }
+      if (newExpense.frequency === 'recurring') setRecurringExpenses(prev => [{ ...newExpense, id: crypto.randomUUID() } as Expense, ...(prev || [])]);
+      else setExpenses(prev => [{ ...newExpense, id: crypto.randomUUID() } as Expense, ...(prev || [])]);
       setShowSuccessIndicator(true); setTimeout(() => setShowSuccessIndicator(false), 2000);
   };
   
@@ -563,13 +298,8 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
       setImageForAnalysis(null);
   };
 
-  // --- CALCOLA BOTTOM POSITION PER FAB ---
-  // Solo se siamo nello storico E non stiamo chiudendo
-  const fabStyle = (isHistoryScreenOpen && !isHistoryClosing) 
-      ? { bottom: `calc(90px + env(safe-area-inset-bottom, 0px))` } 
-      : undefined;
+  const fabStyle = (isHistoryScreenOpen && !isHistoryClosing) ? { bottom: `calc(90px + env(safe-area-inset-bottom, 0px))` } : undefined;
 
-  // --- RENDER ---
   return (
     <div className="h-full w-full bg-slate-100 flex flex-col font-sans" style={{ touchAction: 'pan-y' }}>
       <div className="flex-shrink-0 z-20">
@@ -589,14 +319,10 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
               expenses={expenses || []} 
               recurringExpenses={recurringExpenses || []} 
               onNavigateToRecurring={() => openModalWithHistory('recurring', () => setIsRecurringScreenOpen(true))}
-              onNavigateToHistory={() => openModalWithHistory('history', () => {
-                  setIsHistoryClosing(false); // Reset stato per sicurezza
-                  setIsHistoryScreenOpen(true);
-              })}
+              onNavigateToHistory={() => openModalWithHistory('history', () => { setIsHistoryClosing(false); setIsHistoryScreenOpen(true); })}
               onReceiveSharedFile={handleSharedFile} 
               onImportFile={handleImportFile}
            />
-           
            <PendingImages 
               images={pendingImages} 
               onAnalyze={(img) => handleAnalyzeImage(img)}
@@ -624,7 +350,6 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
          onSubmit={(data) => { 
              if('id' in data) updateExpense(data as Expense); 
              else addExpense(data); 
-             // FIX: Force navigation to home to clear history stack and UI state
              forceNavigateHome();
          }}
          accounts={safeAccounts} 
@@ -640,7 +365,6 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
         onSubmit={(data) => { 
             if('id' in data) { updateExpense(data as Expense); } 
             else { addExpense(data); } 
-            // FIX: Force navigation to home
             forceNavigateHome();
         }}
         initialData={editingExpense || editingRecurringExpense}
@@ -699,10 +423,7 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
       {isHistoryScreenOpen && (
         <HistoryScreen 
           expenses={expenses || []} accounts={safeAccounts} 
-          onClose={() => { 
-              closeModalWithHistory(); 
-              // Lasciamo isHistoryClosing attivo finché handlePopState non smonta la pagina
-          }} 
+          onClose={() => { closeModalWithHistory(); }} 
           onCloseStart={() => setIsHistoryClosing(true)} 
           onEditExpense={(e) => { setEditingExpense(e); openModalWithHistory('form', () => setIsFormOpen(true)); }} 
           onDeleteExpense={handleDeleteRequest}
@@ -725,11 +446,8 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
       )}
 
       <ShareQrModal isOpen={isQrModalOpen} onClose={closeModalWithHistory} />
-
       <InstallPwaModal isOpen={isInstallModalOpen} onClose={() => setIsInstallModalOpen(false)} />
-
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
-      
       {isParsingImage && (
         <div className="fixed inset-0 bg-white/80 backdrop-blur-md flex flex-col items-center justify-center z-[100]">
            <SpinnerIcon className="w-12 h-12 text-indigo-600" />
