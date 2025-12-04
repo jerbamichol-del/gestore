@@ -1,8 +1,7 @@
-// utils/cloud.ts
 import { Expense, Account } from '../types';
 
-// INCOLLA IL TUO URL GOOGLE SCRIPT QUI
-const CLOUD_API_URL = 'https://script.google.com/macros/s/AKfycbzuAtweyuib21-BX4dQszoxEL5BW-nzVN2Vyum4UZvWH-TzP3GLZB5He1jFkrO6242JPA/exec';
+// Sostituisci con il tuo URL se è cambiato, altrimenti lascia quello che hai
+const CLOUD_API_URL = 'https://script.google.com/macros/s/AKfycbzuAtweyuib21-BX4dQszoxEL5BW-nzVN2Vyum4UZvWH-TzP3GLZB5He1jFkrO6242JPA/exec'; 
 
 export interface AppData {
   expenses: Expense[];
@@ -16,7 +15,28 @@ export interface CloudResponse {
   pinSalt: string;
 }
 
-// Salva Dati + Credenziali
+// Controlla se l'utente esiste già nel cloud
+export const checkUserInCloud = async (email: string): Promise<boolean> => {
+  try {
+    const response = await fetch(CLOUD_API_URL, {
+      method: 'POST',
+      redirect: 'follow',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'checkUser',
+        email: email
+      })
+    });
+
+    if (!response.ok) return false;
+    const json = await response.json();
+    return !!json.exists;
+  } catch (e) {
+    console.error("Errore check user:", e);
+    return false; // Se c'è errore, assumiamo che non esista per non bloccare, o gestisci diversamente
+  }
+};
+
 export const saveToCloud = async (
   email: string, 
   data: AppData, 
@@ -43,7 +63,6 @@ export const saveToCloud = async (
   }
 };
 
-// Carica Dati + Credenziali
 export const loadFromCloud = async (email: string): Promise<CloudResponse | null> => {
   try {
     const response = await fetch(CLOUD_API_URL, {
