@@ -1,20 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import AuthLayout from '../components/auth/AuthLayout';
 import PinInput from '../components/auth/PinInput';
-// NUOVI IMPORT AGGIUNTI
 import { login, getUsers, saveUsers, StoredUser } from '../utils/api';
 import { loadFromCloud } from '../utils/cloud';
 import { SpinnerIcon } from '../components/icons/SpinnerIcon';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import LoginEmail from '../components/auth/LoginEmail';
 import { FingerprintIcon } from '../components/icons/FingerprintIcon';
-import {
-  isBiometricsAvailable,
-  isBiometricsEnabled,
-  unlockWithBiometric,
-  registerBiometric,
-  setBiometricsOptOut,
-} from '../services/biometrics';
+import { isBiometricsAvailable, isBiometricsEnabled, unlockWithBiometric, registerBiometric, setBiometricsOptOut } from '../services/biometrics';
 
 type BioHelpers = {
   isBiometricSnoozed: () => boolean;
@@ -108,51 +101,45 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoToRegiste
 
   useEffect(() => { if (pin.length === 4 && activeEmail) handlePinVerify(); }, [pin, activeEmail]);
 
-  // --- LOGICA DI RIPRISTINO CLOUD ---
   const handleEmailSubmit = async (email: string) => {
-    if (email) {
-      const normalized = email.toLowerCase();
-      // 1. Cerca in locale
-      const localUsers = getUsers();
-      if (localUsers[normalized]) {
-          setActiveEmail(normalized);
-          setError(null);
-          setBiometricEmail(normalized);
-          return;
-      }
+    if (!email) return;
+    const normalized = email.toLowerCase();
+    const localUsers = getUsers();
+    
+    if (localUsers[normalized]) {
+      setActiveEmail(normalized);
+      setError(null);
+      setBiometricEmail(normalized);
+      return;
+    }
 
-      // 2. Se non c'è, cerca nel Cloud
-      setIsLoading(true);
-      try {
-          const cloudResult = await loadFromCloud(normalized);
-          if (cloudResult) {
-              // Ripristino dati
-              localStorage.setItem('expenses_v2', JSON.stringify(cloudResult.data.expenses));
-              localStorage.setItem('recurring_expenses_v1', JSON.stringify(cloudResult.data.recurringExpenses));
-              localStorage.setItem('accounts_v1', JSON.stringify(cloudResult.data.accounts));
-              
-              // Ripristino utente (Hash/Salt)
-              const newUser: StoredUser = {
-                  email: normalized,
-                  pinHash: cloudResult.pinHash,
-                  pinSalt: cloudResult.pinSalt,
-                  createdAt: new Date().toISOString()
-              };
-              localUsers[normalized] = newUser;
-              saveUsers(localUsers);
+    setIsLoading(true);
+    try {
+      const cloudResult = await loadFromCloud(normalized);
+      if (cloudResult) {
+        localStorage.setItem('expenses_v2', JSON.stringify(cloudResult.data.expenses));
+        localStorage.setItem('recurring_expenses_v1', JSON.stringify(cloudResult.data.recurringExpenses));
+        localStorage.setItem('accounts_v1', JSON.stringify(cloudResult.data.accounts));
+        
+        const newUser: StoredUser = {
+            email: normalized,
+            pinHash: cloudResult.pinHash,
+            pinSalt: cloudResult.pinSalt,
+            createdAt: new Date().toISOString()
+        };
+        localUsers[normalized] = newUser;
+        saveUsers(localUsers);
 
-              // Login riuscito (vai al PIN)
-              setActiveEmail(normalized);
-              setError(null);
-              setBiometricEmail(normalized);
-          } else {
-              setError("Account non trovato (locale o cloud).");
-          }
-      } catch (e) {
-          setError("Errore di connessione cloud.");
-      } finally {
-          setIsLoading(false);
+        setActiveEmail(normalized);
+        setError(null);
+        setBiometricEmail(normalized);
+      } else {
+        setError("Nessun account trovato (locale o cloud).");
       }
+    } catch (e) {
+      setError("Errore di connessione cloud.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -212,7 +199,6 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoToRegiste
   };
 
   const optOutBiometrics = () => { try { setBiometricsOptOut(true); } catch {} setShowEnableBox(false); };
-
   const handleSwitchUser = () => { setActiveEmail(null); setPin(''); setError(null); autoStartedRef.current = false; };
 
   const renderContent = () => {
@@ -220,7 +206,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoToRegiste
       return (
         <div className="text-center">
           <h2 className="text-xl font-bold text-slate-800 mb-2">Bentornato!</h2>
-          <p className="text-slate-500 mb-6">Inserisci la tua email per accedere o ripristinare i dati.</p>
+          <p className="text-slate-500 mb-6">Inserisci la tua email.</p>
           <LoginEmail onSubmit={handleEmailSubmit} />
           {isLoading && <div className="mt-4 flex justify-center"><SpinnerIcon className="w-6 h-6 text-indigo-600"/></div>}
           {error && <p className="mt-4 text-sm text-red-500 bg-red-50 p-2 rounded">{error}</p>}
@@ -242,12 +228,12 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoToRegiste
     return (
       <div className="text-center">
         <p className="text-sm text-slate-600 mb-2 truncate" title={activeEmail}>{activeEmail}</p>
-        <h2 className="text-xl font-bold text-slate-800 mb-2">Inserisci il PIN</h2>
+        <h2 className="text-xl font-bold text-slate-800 mb-2">Inserisci PIN</h2>
         <p className={`h-10 flex items-center justify-center transition-colors ${error ? 'text-red-500' : 'text-slate-500'}`}>
           {isLoading ? <SpinnerIcon className="w-6 h-6 text-indigo-600" /> : error || (bioEnabled && bioSupported ? 'Puoi anche usare l’impronta.' : 'Inserisci il tuo PIN di 4 cifre.')}
         </p>
         <PinInput pin={pin} onPinChange={setPin} />
-        <div className="mt-6 flex flex-col items-center justify-center gap-y-3">
+        <div className="mt-6 flex flex-col items-center gap-y-3">
           {showEnableBox && (
             <div className="w-full mb-2">
               <button onClick={bioEnabled ? loginWithBiometrics : enableBiometricsNow} disabled={bioBusy} className="flex items-center justify-center w-full gap-2 px-4 py-3 text-sm font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors disabled:opacity-50 shadow-sm border border-indigo-100">
