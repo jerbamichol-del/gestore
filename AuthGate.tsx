@@ -14,7 +14,7 @@ const LOCK_TIMEOUT_MS = 30000; // 30 secondi
 
 const AuthGate: React.FC = () => {
   const [sessionToken, setSessionToken] = useState<string | null>(null);
-  // MODIFICA: Destrutturiamo lastActiveUser per poterlo passare ad App
+  // RECUPERIAMO L'UTENTE ATTIVO PER PASSARLO AD APP (PER IL BACKUP)
   const [lastActiveUser, setLastActiveUser] = useLocalStorage<string | null>('last_active_user_email', null);
   const [resetContext, setResetContext] = useState<ResetContext>(null);
   const hiddenTimestampRef = useRef<number | null>(null);
@@ -39,11 +39,10 @@ const AuthGate: React.FC = () => {
 
     if (token && email) {
         setResetContext({ token, email });
-        // Pulisce l'URL per evitare che il reset venga riattivato al refresh della pagina
         try {
             window.history.replaceState({}, document.title, window.location.pathname);
         } catch (e) {
-            // Ignora errore su ambienti restrittivi (es. blob/iframe)
+           // Ignora su ambienti restrittivi
         }
     }
   }, []);
@@ -55,7 +54,7 @@ const AuthGate: React.FC = () => {
   
   const handleResetSuccess = () => {
     setResetContext(null);
-    setAuthView('login'); // Torna alla schermata di login dopo il reset
+    setAuthView('login');
   };
 
   const handleLogout = useCallback(() => {
@@ -73,7 +72,7 @@ const AuthGate: React.FC = () => {
       } else if (document.visibilityState === 'visible') {
         if (sessionStorage.getItem('preventAutoLock') === 'true') {
             sessionStorage.removeItem('preventAutoLock');
-            hiddenTimestampRef.current = null; // Reset timestamp to prevent logout
+            hiddenTimestampRef.current = null;
             return;
         }
 
@@ -105,11 +104,11 @@ const AuthGate: React.FC = () => {
   }
 
   if (sessionToken) {
-    // MODIFICA: Passiamo currentEmail ad App
+    // PASSIAMO LA MAIL ATTIVA COME PROP
     return <App onLogout={handleLogout} currentEmail={lastActiveUser || ''} />;
   }
   
-  // MODIFICA: RIMOSSO IL BLOCCO "if (!hasUsers()..." per permettere l'accesso al login
+  // RIMOSSO IL BLOCCO "if (!hasUsers()..." PER PERMETTERE IL RIPRISTINO DA LOGIN
 
   switch (authView) {
     case 'register':
