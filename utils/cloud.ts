@@ -2,7 +2,7 @@
 import { Expense, Account } from '../types';
 
 // INCOLLA IL TUO URL GOOGLE SCRIPT QUI
-const CLOUD_API_URL = 'https://script.google.com/macros/s/TUO_ID_DEPLOY/exec';
+const CLOUD_API_URL = 'https://script.google.com/macros/s/AKfycbzuAtweyuib21-BX4dQszoxEL5BW-nzVN2Vyum4UZvWH-TzP3GLZB5He1jFkrO6242JPA/exec';
 
 export interface AppData {
   expenses: Expense[];
