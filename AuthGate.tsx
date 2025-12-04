@@ -14,7 +14,8 @@ const LOCK_TIMEOUT_MS = 30000; // 30 secondi
 
 const AuthGate: React.FC = () => {
   const [sessionToken, setSessionToken] = useState<string | null>(null);
-  const [, setLastActiveUser] = useLocalStorage<string | null>('last_active_user_email', null);
+  // MODIFICA: Destrutturiamo lastActiveUser per poterlo passare ad App
+  const [lastActiveUser, setLastActiveUser] = useLocalStorage<string | null>('last_active_user_email', null);
   const [resetContext, setResetContext] = useState<ResetContext>(null);
   const hiddenTimestampRef = useRef<number | null>(null);
   const [emailForReset, setEmailForReset] = useState<string>('');
@@ -104,12 +105,11 @@ const AuthGate: React.FC = () => {
   }
 
   if (sessionToken) {
-    return <App onLogout={handleLogout} />;
+    // MODIFICA: Passiamo currentEmail ad App
+    return <App onLogout={handleLogout} currentEmail={lastActiveUser || ''} />;
   }
   
-  // --- MODIFICA: RIMOSSO IL BLOCCO CHE FORZAVA 'register' ---
-  // Abbiamo rimosso il controllo `if (!hasUsers() && authView !== 'register')`
-  // così l'utente può cliccare su "Accedi" e andare al login anche se il telefono è vuoto.
+  // MODIFICA: RIMOSSO IL BLOCCO "if (!hasUsers()..." per permettere l'accesso al login
 
   switch (authView) {
     case 'register':
