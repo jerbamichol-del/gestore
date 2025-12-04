@@ -32,33 +32,12 @@ import SuccessIndicator from './components/SuccessIndicator';
 type ToastMessage = { message: string; type: 'success' | 'info' | 'error' };
 type ExtendedOfflineImage = OfflineImage & { _isShared?: boolean };
 
-// --- HELPER FUNCTIONS ---
-const calculateNextDueDate = (template: Expense, fromDate: Date): Date | null => {
-  if (template.frequency !== 'recurring' || !template.recurrence) return null;
-  const interval = template.recurrenceInterval || 1;
-  const nextDate = new Date(fromDate);
-  switch (template.recurrence) {
-    case 'daily': nextDate.setDate(nextDate.getDate() + interval); break;
-    case 'weekly': nextDate.setDate(nextDate.getDate() + 7 * interval); break;
-    case 'monthly': nextDate.setMonth(nextDate.getMonth() + interval); break;
-    case 'yearly': nextDate.setFullYear(nextDate.getFullYear() + interval); break;
-  }
-  return nextDate;
-};
-
-const toISODate = (date: Date) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
 const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogout, currentEmail }) => {
   const [expenses, setExpenses] = useLocalStorage<Expense[]>('expenses_v2', []);
   const [recurringExpenses, setRecurringExpenses] = useLocalStorage<Expense[]>('recurring_expenses_v1', []);
   const [accounts, setAccounts] = useLocalStorage<Account[]>('accounts_v1', DEFAULT_ACCOUNTS);
 
-  // --- CORREZIONE: Definizione di safeAccounts ---
+  // DEFINTIZIONE safeAccounts
   const safeAccounts = accounts || [];
 
   // --- UI State ---
@@ -69,53 +48,41 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
   const [isConfirmDeleteModalOpen, setIsConfirmDeleteModalOpen] = useState(false);
   const [isMultipleExpensesModalOpen, setIsMultipleExpensesModalOpen] = useState(false);
   const [isParsingImage, setIsParsingImage] = useState(false);
-  
-  // Navigazione principale
   const [isRecurringScreenOpen, setIsRecurringScreenOpen] = useState(false);
   const [isHistoryScreenOpen, setIsHistoryScreenOpen] = useState(false);
   const [isHistoryClosing, setIsHistoryClosing] = useState(false);
-  
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
   const [isHistoryFilterOpen, setIsHistoryFilterOpen] = useState(false);
 
-  // --- Data ---
+  // --- Data & Sync ---
   const [editingExpense, setEditingExpense] = useState<Expense | undefined>(undefined);
   const [editingRecurringExpense, setEditingRecurringExpense] = useState<Expense | undefined>(undefined);
   const [prefilledData, setPrefilledData] = useState<Partial<Omit<Expense, 'id'>> | undefined>(undefined);
   const [expenseToDeleteId, setExpenseToDeleteId] = useState<string | null>(null);
   const [multipleExpensesData, setMultipleExpensesData] = useState<Partial<Omit<Expense, 'id'>>[]>([]);
   const [imageForAnalysis, setImageForAnalysis] = useState<ExtendedOfflineImage | null>(null);
-
-  // --- Sync ---
-  const isOnline = useOnlineStatus();
   const [pendingImages, setPendingImages] = useState<OfflineImage[]>([]);
   const [syncingImageId, setSyncingImageId] = useState<string | null>(null);
-  
-  // --- Toast & Install ---
   const [toast, setToast] = useState<ToastMessage | null>(null);
-  const showToast = useCallback((msg: ToastMessage) => setToast(msg), []);
   const [showSuccessIndicator, setShowSuccessIndicator] = useState(false);
   const [installPromptEvent, setInstallPromptEvent] = useState<any>(null);
-  const pendingImagesCountRef = useRef(0);
   
-  // --- Shared Logic ---
+  const isOnline = useOnlineStatus();
+  const pendingImagesCountRef = useRef(0);
   const sharedImageIdRef = useRef<string | null>(null);
   const isSharedStart = useRef(new URLSearchParams(window.location.search).get('shared') === 'true');
   const lastBackPressTime = useRef(0);
 
-  // --- FUNZIONI HELPER ---
+  const showToast = useCallback((msg: ToastMessage) => setToast(msg), []);
+
+  // --- HANDLERS (Spostati in alto) ---
 
   const refreshPendingImages = useCallback(async () => {
     try {
       const images = await getQueuedImages();
-      const safeImages = Array.isArray(images) ? images : [];
-      setPendingImages(safeImages);
-      pendingImagesCountRef.current = safeImages.length;
-      if ('setAppBadge' in navigator && typeof (navigator as any).setAppBadge === 'function') {
-        if (safeImages.length > 0) (navigator as any).setAppBadge(safeImages.length);
-        else (navigator as any).clearAppBadge();
-      }
+      setPendingImages(images || []);
+      pendingImagesCountRef.current = (images || []).length;
     } catch (e) {
       setPendingImages([]);
     }
@@ -133,7 +100,7 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
         description: data.description || '',
         amount: amount,
         category: category,
-        date: data.date || toISODate(new Date()),
+        date: data.date || new Date().toISOString().split('T')[0],
         tags: Array.isArray(data.tags) ? data.tags : [],
         receipts: Array.isArray(data.receipts) ? data.receipts : (imageBase64 ? [imageBase64] : []),
         accountId: data.accountId || (safeAccounts.length > 0 ? safeAccounts[0].id : '')
@@ -185,9 +152,8 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
       const file = await pickImage(source);
       const { base64: base64Image, mimeType } = await processImageFile(file);
       const newImage: OfflineImage = { id: crypto.randomUUID(), base64Image, mimeType, timestamp: Date.now() };
-      if (isOnline) {
-        setImageForAnalysis(newImage);
-      } else {
+      if (isOnline) setImageForAnalysis(newImage);
+      else {
         await addImageToQueue(newImage);
         refreshPendingImages();
       }
@@ -232,47 +198,61 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
         const currentUser = allUsers[currentEmail.toLowerCase()];
 
         if (currentUser) {
-            console.log("☁️ Backup Cloud in corso per:", currentEmail);
+            console.log("☁️ Backup Cloud per:", currentEmail);
             saveToCloud(
                 currentEmail, 
-                {
-                    expenses: expenses,
-                    recurringExpenses: recurringExpenses,
-                    accounts: accounts
-                },
+                { expenses, recurringExpenses, accounts },
                 currentUser.pinHash, 
                 currentUser.pinSalt
             ).then(ok => {
-                if (ok) console.log("✅ Backup Cloud completato");
-            });
+                if (ok) console.log("✅ Backup completato");
+            }).catch(e => console.warn("Cloud error", e));
         }
-    }, 5000); 
-
+    }, 5000);
     return () => clearTimeout(timer);
   }, [expenses, recurringExpenses, accounts, currentEmail, isOnline]);
 
-  // --- SAFETY RESET ---
+  // --- EFFECTS ---
   useEffect(() => {
-    if (!isHistoryScreenOpen) {
-      setIsHistoryFilterOpen(false);
-      setIsHistoryClosing(false);
-    }
-  }, [isHistoryScreenOpen]);
+    if (!isSharedStart.current) refreshPendingImages();
+  }, [refreshPendingImages]);
 
-  // --- INITIALIZATION ---
   useEffect(() => {
-    if (!window.history.state || !window.history.state.modal) {
+    const checkForSharedFile = async () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('shared') === 'true' || isSharedStart.current) {
+        try { window.history.replaceState({ modal: 'home' }, '', window.location.pathname); } catch (e) {}
+        try {
+            const images = await getQueuedImages();
+            const safeImages = Array.isArray(images) ? images : [];
+            if (safeImages.length > 0) {
+               safeImages.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+               const latestImage = safeImages[0];
+               sharedImageIdRef.current = latestImage.id;
+               const flaggedImage: ExtendedOfflineImage = { ...latestImage, _isShared: true };
+               setImageForAnalysis(flaggedImage);
+               setPendingImages(safeImages.filter(img => img.id !== latestImage.id));
+            } else { setPendingImages([]); }
+        } catch (e) { console.error("Error checking shared file", e); }
+      }
+    };
+    checkForSharedFile();
+  }, []);
+
+  const hasRunMigrationRef = useRef(false);
+  useEffect(() => {
+      if (hasRunMigrationRef.current) return;
+      hasRunMigrationRef.current = true;
+  }, []);
+
+  // --- INIT UI ---
+  useEffect(() => {
+    if (!window.history.state?.modal) {
         window.history.replaceState({ modal: 'exit_guard' }, ''); 
         window.history.pushState({ modal: 'home' }, '');
     }
     const params = new URLSearchParams(window.location.search);
     if (params.get('install') === 'true') {
-        try {
-            const newUrl = window.location.pathname;
-            window.history.replaceState({ modal: 'home' }, '', newUrl);
-        } catch (e) {
-            try { window.history.replaceState({ modal: 'home' }, ''); } catch(e) {}
-        } 
         setTimeout(() => setIsInstallModalOpen(true), 500);
     }
   }, []);
@@ -299,59 +279,8 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
       setImageForAnalysis(null);
   };
 
-  // --- HISTORY MANAGEMENT ---
-  useEffect(() => {
-    const handlePopState = (event: PopStateEvent) => {
-      const state = event.state;
-      const modal = state?.modal;
-
-      if (modal === 'exit_guard') {
-          const now = Date.now();
-          if (now - lastBackPressTime.current < 2000) { window.history.back(); return; } 
-          else {
-              lastBackPressTime.current = now;
-              showToast({ message: 'Premi di nuovo indietro per uscire', type: 'info' });
-              window.history.pushState({ modal: 'home' }, ''); 
-              closeAllModals();
-              return;
-          }
-      }
-
-      if (modal !== 'form') setIsFormOpen(false);
-      if (modal !== 'voice') setIsVoiceModalOpen(false);
-      if (modal !== 'source') setIsImageSourceModalOpen(false);
-      if (modal !== 'multiple') setIsMultipleExpensesModalOpen(false);
-      if (modal !== 'qr') setIsQrModalOpen(false);
-
-      if (modal !== 'calculator' && modal !== 'calculator_details') setIsCalculatorContainerOpen(false);
-
-      if (!modal || modal === 'home') {
-        setIsHistoryScreenOpen(false);
-        setIsHistoryClosing(false); 
-        setIsHistoryFilterOpen(false); 
-        setIsRecurringScreenOpen(false);
-        setImageForAnalysis(null);
-      } else if (modal === 'history') {
-        setIsHistoryScreenOpen(true);
-        if (isHistoryClosing) setIsHistoryClosing(false);
-        setIsRecurringScreenOpen(false);
-      } else if (modal === 'recurring') {
-        setIsRecurringScreenOpen(true);
-        setIsHistoryScreenOpen(false);
-      }
-    };
-
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, [showToast, isHistoryClosing]);
-
-  const openModalWithHistory = (modalName: string, opener: () => void) => {
-      window.history.pushState({ modal: modalName }, '');
-      opener();
-  };
-
   const forceNavigateHome = () => {
-      try { window.history.replaceState({ modal: 'home' }, '', window.location.pathname); } catch (e) { try { window.history.replaceState({ modal: 'home' }, ''); } catch(e) {} }
+      try { window.history.replaceState({ modal: 'home' }, '', window.location.pathname); } catch (e) {}
       window.dispatchEvent(new PopStateEvent('popstate', { state: { modal: 'home' } }));
   };
 
@@ -362,67 +291,28 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
   };
 
   useEffect(() => {
-    if (!isSharedStart.current) refreshPendingImages();
-  }, [refreshPendingImages]);
-
-  useEffect(() => {
-    const checkForSharedFile = async () => {
-      const urlParams = new URLSearchParams(window.location.search);
-      if (urlParams.get('shared') === 'true' || isSharedStart.current) {
-        try { window.history.replaceState({ modal: 'home' }, '', window.location.pathname); } catch (e) { try { window.history.replaceState({ modal: 'home' }, ''); } catch(e) {} }
-        try {
-            const images = await getQueuedImages();
-            const safeImages = Array.isArray(images) ? images : [];
-            if (safeImages.length > 0) {
-               safeImages.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-               const latestImage = safeImages[0];
-               sharedImageIdRef.current = latestImage.id;
-               const flaggedImage: ExtendedOfflineImage = { ...latestImage, _isShared: true };
-               setImageForAnalysis(flaggedImage);
-               setPendingImages(safeImages.filter(img => img.id !== latestImage.id));
-            } else { setPendingImages([]); }
-        } catch (e) { console.error("Error checking shared file", e); }
+    const handlePopState = (event: PopStateEvent) => {
+      const modal = event.state?.modal;
+      if (modal === 'exit_guard') {
+          const now = Date.now();
+          if (now - lastBackPressTime.current < 2000) { window.history.back(); return; } 
+          else {
+              lastBackPressTime.current = now;
+              showToast({ message: 'Premi di nuovo indietro per uscire', type: 'info' });
+              window.history.pushState({ modal: 'home' }, ''); 
+              closeAllModals();
+          }
+          return;
       }
+      if (modal !== 'form') setIsFormOpen(false);
+      if (modal !== 'calculator' && modal !== 'calculator_details') setIsCalculatorContainerOpen(false);
+      if (!modal || modal === 'home') closeAllModals();
+      else if (modal === 'history') { setIsHistoryScreenOpen(true); if (isHistoryClosing) setIsHistoryClosing(false); }
+      else if (modal === 'recurring') setIsRecurringScreenOpen(true);
     };
-    checkForSharedFile();
-  }, []);
-
-  const hasRunMigrationRef = useRef(false);
-  useEffect(() => {
-      if (hasRunMigrationRef.current) return;
-      hasRunMigrationRef.current = true;
-  }, []);
-
-  useEffect(() => {
-      const today = new Date(); today.setHours(0, 0, 0, 0);
-      const newExpenses: Expense[] = [];
-      const templatesToUpdate: Expense[] = [];
-      const safeRecurringExpenses = Array.isArray(recurringExpenses) ? recurringExpenses : [];
-      safeRecurringExpenses.forEach(template => {
-         if (!template.date) return;
-         const cursorDateString = template.lastGeneratedDate || template.date;
-         const p = cursorDateString.split('-').map(Number);
-         let cursor = new Date(p[0], p[1] - 1, p[2]);
-         if (isNaN(cursor.getTime())) return;
-         let nextDue = !template.lastGeneratedDate ? new Date(p[0], p[1] - 1, p[2]) : calculateNextDueDate(template, cursor);
-         let updatedTemplate = { ...template };
-         let safetyCounter = 0;
-         while (nextDue && nextDue <= today && safetyCounter < 1000) {
-             safetyCounter++;
-             const nextDueDateString = toISODate(nextDue);
-             const instanceExists = (expenses || []).some(e => e.recurringExpenseId === template.id && e.date === nextDueDateString) || newExpenses.some(e => e.recurringExpenseId === template.id && e.date === nextDueDateString);
-             if (!instanceExists) {
-                 newExpenses.push({ ...template, id: crypto.randomUUID(), date: nextDueDateString, frequency: 'single', recurringExpenseId: template.id, lastGeneratedDate: undefined });
-             }
-             cursor = nextDue;
-             updatedTemplate.lastGeneratedDate = toISODate(cursor);
-             nextDue = calculateNextDueDate(template, cursor);
-         }
-         if (updatedTemplate.lastGeneratedDate !== template.lastGeneratedDate) templatesToUpdate.push(updatedTemplate);
-      });
-      if (newExpenses.length > 0) setExpenses(prev => [...newExpenses, ...(prev || [])]);
-      if (templatesToUpdate.length > 0) setRecurringExpenses(prev => (prev || []).map(t => templatesToUpdate.find(ut => ut.id === t.id) || t));
-  }, [recurringExpenses, expenses, setExpenses, setRecurringExpenses]);
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [showToast, isHistoryClosing]);
 
   const handleAddExpense = (data: Omit<Expense, 'id'> | Expense) => {
       if ('id' in data) { 
@@ -435,6 +325,15 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
       }
       setShowSuccessIndicator(true); setTimeout(() => setShowSuccessIndicator(false), 2000);
       forceNavigateHome();
+  };
+
+  // --- REINSERITA LA FUNZIONE CHE MANCAVA ---
+  const handleVoiceParsed = (data: Partial<Omit<Expense, 'id'>>) => {
+    try { window.history.replaceState({ modal: 'form' }, ''); } catch(e) {} 
+    setIsVoiceModalOpen(false);
+    const safeData = sanitizeExpenseData(data);
+    setPrefilledData(safeData);
+    setIsFormOpen(true);
   };
 
   const handleDeleteRequest = (id: string) => { setExpenseToDeleteId(id); setIsConfirmDeleteModalOpen(true); };
@@ -464,56 +363,46 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
       setImageForAnalysis(null);
   };
 
-  const fabStyle = (isHistoryScreenOpen && !isHistoryClosing) ? { bottom: `calc(90px + env(safe-area-inset-bottom, 0px))` } : undefined;
-
   return (
     <div className="h-full w-full bg-slate-100 flex flex-col font-sans" style={{ touchAction: 'pan-y' }}>
       <div className="flex-shrink-0 z-20">
         <Header 
             pendingSyncs={pendingImages.length} 
             isOnline={isOnline} 
-            onInstallClick={handleInstallClick} 
+            onInstallClick={() => { if (installPromptEvent) installPromptEvent.prompt(); else setIsInstallModalOpen(true); }} 
             installPromptEvent={installPromptEvent} 
             onLogout={onLogout} 
-            onShowQr={() => openModalWithHistory('qr', () => setIsQrModalOpen(true))} 
+            onShowQr={() => { window.history.pushState({ modal: 'qr' }, ''); setIsQrModalOpen(true); }} 
         />
       </div>
-
       <main className="flex-grow bg-slate-100">
         <div className="w-full h-full overflow-y-auto space-y-6" style={{ touchAction: 'pan-y' }}>
            <Dashboard 
               expenses={expenses || []} 
               recurringExpenses={recurringExpenses || []} 
-              onNavigateToRecurring={() => openModalWithHistory('recurring', () => setIsRecurringScreenOpen(true))}
-              onNavigateToHistory={() => openModalWithHistory('history', () => { setIsHistoryClosing(false); setIsHistoryScreenOpen(true); })}
+              onNavigateToRecurring={() => { window.history.pushState({ modal: 'recurring' }, ''); setIsRecurringScreenOpen(true); }}
+              onNavigateToHistory={() => { window.history.pushState({ modal: 'history' }, ''); setIsHistoryClosing(false); setIsHistoryScreenOpen(true); }}
               onReceiveSharedFile={handleSharedFile} 
               onImportFile={handleImportFile}
            />
            <PendingImages images={pendingImages} onAnalyze={handleAnalyzeImage} onDelete={async (id) => { await deleteImageFromQueue(id); refreshPendingImages(); }} isOnline={isOnline} syncingImageId={syncingImageId} />
         </div>
       </main>
-
       {!isCalculatorContainerOpen && !isHistoryFilterOpen && (
          <FloatingActionButton 
-            onAddManually={() => openModalWithHistory('calculator', () => setIsCalculatorContainerOpen(true))}
-            onAddFromImage={() => openModalWithHistory('source', () => setIsImageSourceModalOpen(true))}
-            onAddFromVoice={() => openModalWithHistory('voice', () => setIsVoiceModalOpen(true))}
-            style={fabStyle}
+            onAddManually={() => { window.history.pushState({ modal: 'calculator' }, ''); setIsCalculatorContainerOpen(true); }}
+            onAddFromImage={() => { window.history.pushState({ modal: 'source' }, ''); setIsImageSourceModalOpen(true); }}
+            onAddFromVoice={() => { window.history.pushState({ modal: 'voice' }, ''); setIsVoiceModalOpen(true); }}
+            style={(isHistoryScreenOpen && !isHistoryClosing) ? { bottom: `calc(90px + env(safe-area-inset-bottom, 0px))` } : undefined}
          />
       )}
-      
       <SuccessIndicator show={showSuccessIndicator} />
-
-      <CalculatorContainer isOpen={isCalculatorContainerOpen} onClose={closeModalWithHistory} onSubmit={handleAddExpense} accounts={safeAccounts} expenses={expenses} onEditExpense={(e) => { setEditingExpense(e); openModalWithHistory('form', () => setIsFormOpen(true)); }} onDeleteExpense={handleDeleteRequest} onMenuStateChange={() => {}} />
+      <CalculatorContainer isOpen={isCalculatorContainerOpen} onClose={closeModalWithHistory} onSubmit={handleAddExpense} accounts={safeAccounts} expenses={expenses} onEditExpense={(e) => { setEditingExpense(e); window.history.pushState({ modal: 'form' }, ''); setIsFormOpen(true); }} onDeleteExpense={(id) => { setExpenseToDeleteId(id); setIsConfirmDeleteModalOpen(true); }} onMenuStateChange={() => {}} />
       <ExpenseForm isOpen={isFormOpen} onClose={closeModalWithHistory} onSubmit={handleAddExpense} initialData={editingExpense || editingRecurringExpense} prefilledData={prefilledData} accounts={safeAccounts} isForRecurringTemplate={!!editingRecurringExpense} />
 
       {isImageSourceModalOpen && (
         <div className="fixed inset-0 z-[5200] flex justify-center items-center p-4 bg-slate-900/60 backdrop-blur-sm" onClick={closeModalWithHistory}>
           <div className="bg-slate-50 rounded-lg shadow-xl w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
-            <header className="flex justify-between items-center p-6 border-b border-slate-200">
-              <h2 className="text-xl font-bold text-slate-800">Aggiungi da Immagine</h2>
-              <button onClick={closeModalWithHistory} className="p-1 rounded-full hover:bg-slate-200"><XMarkIcon className="w-6 h-6"/></button>
-            </header>
             <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
               <ImageSourceCard icon={<CameraIcon className="w-8 h-8"/>} title="Scatta Foto" description="Usa la fotocamera." onClick={() => handleImagePick('camera')} />
               <ImageSourceCard icon={<ComputerDesktopIcon className="w-8 h-8"/>} title="Galleria" description="Carica da file." onClick={() => handleImagePick('gallery')} />
@@ -538,41 +427,12 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
 
       <MultipleExpensesModal isOpen={isMultipleExpensesModalOpen} onClose={closeModalWithHistory} expenses={multipleExpensesData} accounts={safeAccounts} onConfirm={(d) => { d.forEach(handleAddExpense); forceNavigateHome(); }} />
 
-      {isHistoryScreenOpen && (
-        <HistoryScreen 
-          expenses={expenses || []} accounts={safeAccounts} 
-          onClose={() => { closeModalWithHistory(); }} 
-          onCloseStart={() => setIsHistoryClosing(true)} 
-          onEditExpense={(e) => { setEditingExpense(e); openModalWithHistory('form', () => setIsFormOpen(true)); }} 
-          onDeleteExpense={handleDeleteRequest}
-          onDeleteExpenses={(ids) => { setExpenses(prev => (prev || []).filter(e => !ids.includes(e.id))); }}
-          isEditingOrDeleting={isFormOpen || isConfirmDeleteModalOpen}
-          isOverlayed={false}
-          onDateModalStateChange={() => {}} 
-          onFilterPanelOpenStateChange={setIsHistoryFilterOpen}
-        />
-      )}
-      
-      {isRecurringScreenOpen && (
-        <RecurringExpensesScreen 
-          recurringExpenses={recurringExpenses || []} expenses={expenses || []} accounts={safeAccounts}
-          onClose={closeModalWithHistory}
-          onEdit={(e) => { setEditingRecurringExpense(e); openModalWithHistory('form', () => setIsFormOpen(true)); }}
-          onDelete={(id) => setRecurringExpenses(prev => (prev || []).filter(e => e.id !== id))}
-          onDeleteRecurringExpenses={(ids) => setRecurringExpenses(prev => (prev || []).filter(e => !ids.includes(e.id)))}
-        />
-      )}
-
+      {isHistoryScreenOpen && <HistoryScreen expenses={expenses} accounts={safeAccounts} onClose={closeModalWithHistory} onCloseStart={() => setIsHistoryClosing(true)} onEditExpense={(e) => { setEditingExpense(e); window.history.pushState({ modal: 'form' }, ''); setIsFormOpen(true); }} onDeleteExpense={handleDeleteRequest} onDeleteExpenses={(ids) => setExpenses(p => p.filter(e => !ids.includes(e.id)))} isEditingOrDeleting={isFormOpen || isConfirmDeleteModalOpen} isOverlayed={false} onDateModalStateChange={() => {}} onFilterPanelOpenStateChange={setIsHistoryFilterOpen} />}
+      {isRecurringScreenOpen && <RecurringExpensesScreen recurringExpenses={recurringExpenses} expenses={expenses} accounts={safeAccounts} onClose={closeModalWithHistory} onEdit={(e) => { setEditingRecurringExpense(e); window.history.pushState({ modal: 'form' }, ''); setIsFormOpen(true); }} onDelete={(id) => setRecurringExpenses(p => p.filter(e => e.id !== id))} onDeleteRecurringExpenses={(ids) => setRecurringExpenses(p => p.filter(e => !ids.includes(e.id)))} />}
       <ShareQrModal isOpen={isQrModalOpen} onClose={closeModalWithHistory} />
       <InstallPwaModal isOpen={isInstallModalOpen} onClose={() => setIsInstallModalOpen(false)} />
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
-      
-      {isParsingImage && (
-        <div className="fixed inset-0 bg-white/80 backdrop-blur-md flex flex-col items-center justify-center z-[100]">
-           <SpinnerIcon className="w-12 h-12 text-indigo-600" />
-           <p className="mt-4 font-semibold text-slate-700">Analisi in corso...</p>
-        </div>
-      )}
+      {isParsingImage && <div className="fixed inset-0 bg-white/80 z-[100] flex items-center justify-center"><SpinnerIcon className="w-12 h-12 text-indigo-600"/></div>}
     </div>
   );
 };
