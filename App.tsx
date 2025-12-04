@@ -5,7 +5,6 @@ import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { getQueuedImages, deleteImageFromQueue, OfflineImage, addImageToQueue } from './utils/db';
 import { DEFAULT_ACCOUNTS } from './utils/defaults';
 import { processImageFile, pickImage } from './utils/fileHelper';
-// MODIFICA: Import per il cloud
 import { saveToCloud } from './utils/cloud';
 import { getUsers } from './utils/api';
 
@@ -54,11 +53,13 @@ const toISODate = (date: Date) => {
   return `${year}-${month}-${day}`;
 };
 
-// MODIFICA: Aggiunto currentEmail alle props
 const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogout, currentEmail }) => {
   const [expenses, setExpenses] = useLocalStorage<Expense[]>('expenses_v2', []);
   const [recurringExpenses, setRecurringExpenses] = useLocalStorage<Expense[]>('recurring_expenses_v1', []);
   const [accounts, setAccounts] = useLocalStorage<Account[]>('accounts_v1', DEFAULT_ACCOUNTS);
+
+  // --- CORREZIONE: Definizione di safeAccounts ---
+  const safeAccounts = accounts || [];
 
   // --- UI State ---
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -103,7 +104,8 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
   const isSharedStart = useRef(new URLSearchParams(window.location.search).get('shared') === 'true');
   const lastBackPressTime = useRef(0);
 
-  // --- FUNZIONI HELPER SPOSTATE IN ALTO (Per evitare ReferenceError) ---
+  // --- FUNZIONI HELPER ---
+
   const refreshPendingImages = useCallback(async () => {
     try {
       const images = await getQueuedImages();
@@ -115,7 +117,6 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
         else (navigator as any).clearAppBadge();
       }
     } catch (e) {
-      console.error("Failed to refresh pending images", e);
       setPendingImages([]);
     }
   }, []);
@@ -127,7 +128,6 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
     let amount = data.amount;
     if (typeof amount === 'string') amount = parseFloat(amount.replace(',', '.'));
     if (typeof amount !== 'number' || isNaN(amount)) amount = 0;
-    const safeAccounts = accounts || [];
 
     return {
         description: data.description || '',
@@ -223,12 +223,11 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
     }
   };
 
-  // --- MODIFICA: CLOUD SYNC AUTOMATICO ---
+  // --- CLOUD SYNC ---
   useEffect(() => {
     if (!currentEmail || !isOnline) return;
 
     const timer = setTimeout(() => {
-        // Recuperiamo i dati di sicurezza dell'utente corrente
         const allUsers = getUsers();
         const currentUser = allUsers[currentEmail.toLowerCase()];
 
@@ -247,12 +246,12 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
                 if (ok) console.log("✅ Backup Cloud completato");
             });
         }
-    }, 5000); // 5 secondi di attesa dopo l'ultima modifica
+    }, 5000); 
 
     return () => clearTimeout(timer);
   }, [expenses, recurringExpenses, accounts, currentEmail, isOnline]);
 
-  // --- ALTRI EFFECTS ---
+  // --- SAFETY RESET ---
   useEffect(() => {
     if (!isHistoryScreenOpen) {
       setIsHistoryFilterOpen(false);
@@ -260,6 +259,7 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
     }
   }, [isHistoryScreenOpen]);
 
+  // --- INITIALIZATION ---
   useEffect(() => {
     if (!window.history.state || !window.history.state.modal) {
         window.history.replaceState({ modal: 'exit_guard' }, ''); 
@@ -299,9 +299,12 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
       setImageForAnalysis(null);
   };
 
+  // --- HISTORY MANAGEMENT ---
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
-      const modal = event.state?.modal;
+      const state = event.state;
+      const modal = state?.modal;
+
       if (modal === 'exit_guard') {
           const now = Date.now();
           if (now - lastBackPressTime.current < 2000) { window.history.back(); return; } 
@@ -313,11 +316,13 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
               return;
           }
       }
+
       if (modal !== 'form') setIsFormOpen(false);
       if (modal !== 'voice') setIsVoiceModalOpen(false);
       if (modal !== 'source') setIsImageSourceModalOpen(false);
       if (modal !== 'multiple') setIsMultipleExpensesModalOpen(false);
       if (modal !== 'qr') setIsQrModalOpen(false);
+
       if (modal !== 'calculator' && modal !== 'calculator_details') setIsCalculatorContainerOpen(false);
 
       if (!modal || modal === 'home') {
@@ -335,6 +340,7 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
         setIsHistoryScreenOpen(false);
       }
     };
+
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, [showToast, isHistoryClosing]);
@@ -431,14 +437,6 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
       forceNavigateHome();
   };
 
-  const handleVoiceParsed = (data: Partial<Omit<Expense, 'id'>>) => {
-    try { window.history.replaceState({ modal: 'form' }, ''); } catch(e) {} 
-    setIsVoiceModalOpen(false);
-    const safeData = sanitizeExpenseData(data);
-    setPrefilledData(safeData);
-    setIsFormOpen(true);
-  };
-
   const handleDeleteRequest = (id: string) => { setExpenseToDeleteId(id); setIsConfirmDeleteModalOpen(true); };
   const confirmDelete = () => {
     setExpenses(p => p.filter(e => e.id !== expenseToDeleteId));
@@ -506,22 +504,8 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
       
       <SuccessIndicator show={showSuccessIndicator} />
 
-      <CalculatorContainer 
-         isOpen={isCalculatorContainerOpen}
-         onClose={closeModalWithHistory}
-         onSubmit={(data) => { 
-             if('id' in data) updateExpense(data as Expense); 
-             else addExpense(data); 
-             forceNavigateHome();
-         }}
-         accounts={safeAccounts} 
-         expenses={expenses || []}
-         onEditExpense={(e) => { setEditingExpense(e); openModalWithHistory('form', () => setIsFormOpen(true)); }}
-         onDeleteExpense={handleDeleteRequest}
-         onMenuStateChange={() => {}}
-      />
-
-      <ExpenseForm isOpen={isFormOpen} onClose={closeModalWithHistory} onSubmit={handleAddExpense} initialData={editingExpense || editingRecurringExpense} prefilledData={prefilledData} accounts={accounts || []} isForRecurringTemplate={!!editingRecurringExpense} />
+      <CalculatorContainer isOpen={isCalculatorContainerOpen} onClose={closeModalWithHistory} onSubmit={handleAddExpense} accounts={safeAccounts} expenses={expenses} onEditExpense={(e) => { setEditingExpense(e); openModalWithHistory('form', () => setIsFormOpen(true)); }} onDeleteExpense={handleDeleteRequest} onMenuStateChange={() => {}} />
+      <ExpenseForm isOpen={isFormOpen} onClose={closeModalWithHistory} onSubmit={handleAddExpense} initialData={editingExpense || editingRecurringExpense} prefilledData={prefilledData} accounts={safeAccounts} isForRecurringTemplate={!!editingRecurringExpense} />
 
       {isImageSourceModalOpen && (
         <div className="fixed inset-0 z-[5200] flex justify-center items-center p-4 bg-slate-900/60 backdrop-blur-sm" onClick={closeModalWithHistory}>
@@ -552,7 +536,7 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
         cancelButtonText="No, in coda"
       />
 
-      <MultipleExpensesModal isOpen={isMultipleExpensesModalOpen} onClose={closeModalWithHistory} expenses={multipleExpensesData} accounts={accounts || []} onConfirm={(d) => { d.forEach(handleAddExpense); forceNavigateHome(); }} />
+      <MultipleExpensesModal isOpen={isMultipleExpensesModalOpen} onClose={closeModalWithHistory} expenses={multipleExpensesData} accounts={safeAccounts} onConfirm={(d) => { d.forEach(handleAddExpense); forceNavigateHome(); }} />
 
       {isHistoryScreenOpen && (
         <HistoryScreen 
