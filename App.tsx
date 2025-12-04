@@ -5,6 +5,7 @@ import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { getQueuedImages, deleteImageFromQueue, OfflineImage, addImageToQueue } from './utils/db';
 import { DEFAULT_ACCOUNTS } from './utils/defaults';
 import { processImageFile, pickImage } from './utils/fileHelper';
+// MODIFICA: Nuovi import per il cloud
 import { saveToCloud } from './utils/cloud';
 import { getUsers } from './utils/api';
 
@@ -34,6 +35,8 @@ type ToastMessage = { message: string; type: 'success' | 'info' | 'error' };
 type ExtendedOfflineImage = OfflineImage & { _isShared?: boolean };
 
 // --- HELPER FUNCTIONS ---
+// Spostate in utils/fileHelper.ts
+
 const calculateNextDueDate = (template: Expense, fromDate: Date): Date | null => {
   if (template.frequency !== 'recurring' || !template.recurrence) return null;
   const interval = template.recurrenceInterval || 1;
@@ -59,8 +62,6 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
   const [expenses, setExpenses] = useLocalStorage<Expense[]>('expenses_v2', []);
   const [recurringExpenses, setRecurringExpenses] = useLocalStorage<Expense[]>('recurring_expenses_v1', []);
   const [accounts, setAccounts] = useLocalStorage<Account[]>('accounts_v1', DEFAULT_ACCOUNTS);
-  
-  // MODIFICA: Rimosso useLocalStorage per 'last_active_user_email' qui, usiamo la prop currentEmail
 
   // --- UI State ---
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -109,15 +110,12 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
   // --- EXIT GUARD REF ---
   const lastBackPressTime = useRef(0);
 
-  // --- CLOUD SYNC AUTOMATICO (CORRETTO) ---
+  // --- MODIFICA: CLOUD SYNC AUTOMATICO ---
   useEffect(() => {
-    // Usiamo currentEmail dalla prop invece che activeUserEmail dallo state locale
-    if (!currentEmail || !isOnline) {
-        // console.log("Saltato salvataggio cloud: Offline o No Email", { currentEmail, isOnline });
-        return;
-    }
+    if (!currentEmail || !isOnline) return;
 
     const timer = setTimeout(() => {
+        // Recuperiamo i dati di sicurezza dell'utente corrente
         const allUsers = getUsers();
         const currentUser = allUsers[currentEmail.toLowerCase()];
 
@@ -130,21 +128,19 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
                     recurringExpenses: recurringExpenses,
                     accounts: accounts
                 },
-                currentUser.pinHash, 
-                currentUser.pinSalt
+                currentUser.pinHash, // Inviamo l'hash attuale
+                currentUser.pinSalt  // Inviamo il sale attuale
             ).then(ok => {
-                if(ok) console.log("✅ Cloud Sync completato");
-                else console.warn("⚠️ Cloud Sync fallito");
+                if (ok) console.log("✅ Backup Cloud completato");
             });
-        } else {
-            console.warn("⚠️ Utente non trovato in locale per il sync:", currentEmail);
         }
-    }, 5000);
+    }, 5000); // 5 secondi di attesa dopo l'ultima modifica
 
     return () => clearTimeout(timer);
   }, [expenses, recurringExpenses, accounts, currentEmail, isOnline]);
 
   // --- SAFETY RESET ---
+  // Questo effect forza il reset dello stato quando history non è attiva
   useEffect(() => {
     if (!isHistoryScreenOpen) {
       setIsHistoryFilterOpen(false);
@@ -164,7 +160,9 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
             const newUrl = window.location.pathname;
             window.history.replaceState({ modal: 'home' }, '', newUrl);
         } catch (e) {
-            try { window.history.replaceState({ modal: 'home' }, ''); } catch(e) {}
+            try {
+              window.history.replaceState({ modal: 'home' }, '');
+            } catch (e) {}
         } 
         setTimeout(() => setIsInstallModalOpen(true), 500);
     }
@@ -223,16 +221,19 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
           }
       }
 
+      // Chiudi modali semplici
       if (modal !== 'form') setIsFormOpen(false);
       if (modal !== 'voice') setIsVoiceModalOpen(false);
       if (modal !== 'source') setIsImageSourceModalOpen(false);
       if (modal !== 'multiple') setIsMultipleExpensesModalOpen(false);
       if (modal !== 'qr') setIsQrModalOpen(false);
 
+      // Gestione Calcolatrice
       if (modal !== 'calculator' && modal !== 'calculator_details') {
           setIsCalculatorContainerOpen(false);
       }
 
+      // Gestione Schermate Principali
       if (!modal || modal === 'home') {
         setIsHistoryScreenOpen(false);
         setIsHistoryClosing(false); 
@@ -241,6 +242,8 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
         setImageForAnalysis(null);
       } else if (modal === 'history') {
         setIsHistoryScreenOpen(true);
+        // NON resettiamo isHistoryClosing qui se stiamo aprendo, 
+        // lo facciamo solo se era true per errore (reset difensivo)
         if (isHistoryClosing) setIsHistoryClosing(false);
         setIsRecurringScreenOpen(false);
       } else if (modal === 'recurring') {
@@ -258,20 +261,25 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
       opener();
   };
 
+  // FIX: Force reset to home state. 
   const forceNavigateHome = () => {
       try {
           window.history.replaceState({ modal: 'home' }, '', window.location.pathname);
       } catch (e) {
-          try { window.history.replaceState({ modal: 'home' }, ''); } catch(e) {}
+          try {
+            window.history.replaceState({ modal: 'home' }, '');
+          } catch(e) {}
       }
       window.dispatchEvent(new PopStateEvent('popstate', { state: { modal: 'home' } }));
   };
 
   const closeModalWithHistory = () => {
+      // Direct state management fallback if navigating from 'history' to handle potential popstate misses
       if (window.history.state?.modal === 'history') {
           setIsHistoryScreenOpen(false);
           setIsHistoryClosing(false);
       }
+
       if (window.history.state && window.history.state.modal && window.history.state.modal !== 'home' && window.history.state.modal !== 'exit_guard') {
           window.history.back();
       } else {
@@ -303,7 +311,13 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
     const checkForSharedFile = async () => {
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.get('shared') === 'true' || isSharedStart.current) {
-        try { window.history.replaceState({ modal: 'home' }, '', window.location.pathname); } catch (e) { try { window.history.replaceState({ modal: 'home' }, ''); } catch(e) {} }
+        try {
+            window.history.replaceState({ modal: 'home' }, '', window.location.pathname);
+        } catch (e) {
+            try {
+              window.history.replaceState({ modal: 'home' }, '');
+            } catch(e) {}
+        }
         try {
             const images = await getQueuedImages();
             const safeImages = Array.isArray(images) ? images : [];
@@ -421,7 +435,9 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
   };
 
   const handleVoiceParsed = (data: Partial<Omit<Expense, 'id'>>) => {
-    try { window.history.replaceState({ modal: 'form' }, ''); } catch(e) {} 
+    try {
+      window.history.replaceState({ modal: 'form' }, '');
+    } catch(e) {} // ignore security error
     setIsVoiceModalOpen(false);
     const safeData = sanitizeExpenseData(data);
     setPrefilledData(safeData);
@@ -473,7 +489,9 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
   };
 
   const handleImagePick = async (source: 'camera' | 'gallery') => {
-    try { window.history.replaceState({ modal: 'home' }, ''); } catch(e) {}
+    try {
+        window.history.replaceState({ modal: 'home' }, '');
+    } catch(e) {}
     setIsImageSourceModalOpen(false);
     sessionStorage.setItem('preventAutoLock', 'true');
     try {
@@ -545,10 +563,13 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
       setImageForAnalysis(null);
   };
 
+  // --- CALCOLA BOTTOM POSITION PER FAB ---
+  // Solo se siamo nello storico E non stiamo chiudendo
   const fabStyle = (isHistoryScreenOpen && !isHistoryClosing) 
       ? { bottom: `calc(90px + env(safe-area-inset-bottom, 0px))` } 
       : undefined;
 
+  // --- RENDER ---
   return (
     <div className="h-full w-full bg-slate-100 flex flex-col font-sans" style={{ touchAction: 'pan-y' }}>
       <div className="flex-shrink-0 z-20">
@@ -569,7 +590,7 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
               recurringExpenses={recurringExpenses || []} 
               onNavigateToRecurring={() => openModalWithHistory('recurring', () => setIsRecurringScreenOpen(true))}
               onNavigateToHistory={() => openModalWithHistory('history', () => {
-                  setIsHistoryClosing(false); 
+                  setIsHistoryClosing(false); // Reset stato per sicurezza
                   setIsHistoryScreenOpen(true);
               })}
               onReceiveSharedFile={handleSharedFile} 
@@ -603,6 +624,7 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
          onSubmit={(data) => { 
              if('id' in data) updateExpense(data as Expense); 
              else addExpense(data); 
+             // FIX: Force navigation to home to clear history stack and UI state
              forceNavigateHome();
          }}
          accounts={safeAccounts} 
@@ -618,6 +640,7 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
         onSubmit={(data) => { 
             if('id' in data) { updateExpense(data as Expense); } 
             else { addExpense(data); } 
+            // FIX: Force navigation to home
             forceNavigateHome();
         }}
         initialData={editingExpense || editingRecurringExpense}
@@ -678,6 +701,7 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
           expenses={expenses || []} accounts={safeAccounts} 
           onClose={() => { 
               closeModalWithHistory(); 
+              // Lasciamo isHistoryClosing attivo finché handlePopState non smonta la pagina
           }} 
           onCloseStart={() => setIsHistoryClosing(true)} 
           onEditExpense={(e) => { setEditingExpense(e); openModalWithHistory('form', () => setIsFormOpen(true)); }} 
