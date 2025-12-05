@@ -1,6 +1,5 @@
-
-// TransactionDetailPage.tsx
 import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
+import { createPortal } from 'react-dom';
 import { Expense, Account } from '../types';
 import { ArrowLeftIcon } from './icons/ArrowLeftIcon';
 import { DocumentTextIcon } from './icons/DocumentTextIcon';
@@ -80,7 +79,6 @@ const Modal = memo<{
         e.stopPropagation();
         onClose();
       }}
-      // Stop bubbling per isolare il modal dal TapBridge sottostante
       onPointerDown={(e) => e.stopPropagation()}
       onPointerUp={(e) => e.stopPropagation()}
       onPointerMove={(e) => e.stopPropagation()}
@@ -115,7 +113,6 @@ const daysOfWeekForPicker = [
   { label: 'Dom', value: 0 },
 ];
 
-// Utility spostata fuori per coerenza
 const getRecurrenceSummary = (e: Partial<Expense>) => {
   if (e.frequency !== 'recurring' || !e.recurrence) return 'Imposta ricorrenza';
 
@@ -195,7 +192,6 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
   const rootRef = useRef<HTMLDivElement | null>(null);
   const descriptionInputRef = useRef<HTMLInputElement>(null);
   
-  // Use tap bridge locally for this screen to ensure responsiveness
   const tapBridgeHandlers = useTapBridge();
 
   const [activeMenu, setActiveMenu] = useState<'account' | null>(null);
@@ -208,19 +204,19 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
   const [isRecurrenceOptionsOpen, setIsRecurrenceOptionsOpen] = useState(false);
   const [isRecurrenceEndOptionsOpen, setIsRecurrenceEndOptionsOpen] = useState(false);
   
-  // Receipt Menu
   const [isReceiptMenuOpen, setIsReceiptMenuOpen] = useState(false);
   const [isReceiptMenuAnimating, setIsReceiptMenuAnimating] = useState(false);
   
-  // Ghost click protection for receipt menu
   const receiptMenuCloseTimeRef = useRef(0);
+
+  // --- NUOVO: Stato per immagine a schermo intero ---
+  const [viewingImage, setViewingImage] = useState<string | null>(null);
 
   const [tempRecurrence, setTempRecurrence] = useState(formData.recurrence);
   const [tempRecurrenceInterval, setTempRecurrenceInterval] = useState<number | undefined>(formData.recurrenceInterval);
   const [tempRecurrenceDays, setTempRecurrenceDays] = useState<number[] | undefined>(formData.recurrenceDays);
   const [tempMonthlyRecurrenceType, setTempMonthlyRecurrenceType] = useState(formData.monthlyRecurrenceType);
 
-  // Keep ref up to date for async callbacks
   const formDataRef = useRef(formData);
   useEffect(() => { formDataRef.current = formData; }, [formData]);
 
@@ -229,15 +225,13 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     formData.recurrenceEndType === 'count' &&
     formData.recurrenceCount === 1;
 
-  // Inizializza time in useEffect per evitare hydration mismatch
   useEffect(() => {
     if (!formData.time && !formData.frequency) {
       const time = new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
       onFormChange({ time });
     }
-  }, []); // Solo al mount
+  }, []);
 
-  // Debounced keyboard close handler
   const handleKeyboardClose = useRef<(() => void) | null>(null);
   
   useEffect(() => {
@@ -266,13 +260,11 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     return () => vv.removeEventListener('resize', handleResize);
   }, []);
 
-  // blocca swipe container quando modali/menu aperti
   useEffect(() => {
     const anyOpen = !!(activeMenu || isFrequencyModalOpen || isRecurrenceModalOpen || isReceiptMenuOpen);
     onMenuStateChange(anyOpen);
   }, [activeMenu, isFrequencyModalOpen, isRecurrenceModalOpen, isReceiptMenuOpen, onMenuStateChange]);
 
-  // animazioni modali
   useEffect(() => {
     if (isFrequencyModalOpen) {
       const t = setTimeout(() => setIsFrequencyModalAnimating(true), 10);
@@ -355,7 +347,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
         up.recurrenceEndType = 'count';
         up.recurrenceCount = 1;
         up.recurrenceEndDate = undefined;
-    } else { // recurring
+    } else { 
       up.frequency = 'recurring';
       up.time = undefined;
       if (!formData.recurrence) up.recurrence = 'monthly';
@@ -379,7 +371,6 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     setIsRecurrenceModalAnimating(false);
   };
   
-  // Safe helper to close Receipt Menu and update timestamp for cooldown
   const handleCloseReceiptMenu = useCallback(() => {
       setIsReceiptMenuOpen(false);
       setIsReceiptMenuAnimating(false);
@@ -390,34 +381,28 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
       e.stopPropagation();
       e.preventDefault();
       
-      // Trigger file picker immediately to satisfy browser security requirements
       const filePromise = pickImage(source);
       
-      // Delay closing the modal to allow any pending click events (ghost clicks) to resolve
-      // targeting the modal overlay/buttons instead of elements underneath.
-      // We also update the timestamp to trigger the cooldown.
       setTimeout(() => {
           handleCloseReceiptMenu();
-      }, 500); // 500ms safety margin
+      }, 500);
       
       filePromise
           .then(async (file) => {
               const { base64 } = await processImageFile(file);
-              // Use ref to ensure we append to the latest state
               const currentReceipts = formDataRef.current.receipts || [];
               onFormChange({ receipts: [...currentReceipts, base64] });
           })
-          .catch(e => {
-              // User cancelled or error
-              // console.error("Receipt pick error", e);
-          });
+          .catch(e => {});
   };
   
+  // --- FUNZIONE MANCANTE AGGIUNTA ---
   const handleRemoveReceipt = (index: number) => {
       const currentReceipts = formData.receipts || [];
       const newReceipts = currentReceipts.filter((_, i) => i !== index);
       onFormChange({ receipts: newReceipts });
   };
+  // ---------------------------------
 
   const dynamicMonthlyDayOfWeekLabel = useMemo(() => {
     const ds = formData.date;
@@ -436,6 +421,31 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     if (t === 'date') return 'Fino a...';
     if (t === 'count') return 'Numero di volte';
     return 'Per sempre';
+  };
+  
+  // --- VIEWER A SCHERMO INTERO ---
+  const renderImageViewer = () => {
+      if (!viewingImage) return null;
+      return createPortal(
+        <div 
+            className="fixed inset-0 z-[6000] bg-black/95 flex items-center justify-center p-4 animate-fade-in-up"
+            onClick={() => setViewingImage(null)}
+        >
+            <button 
+                className="absolute top-4 right-4 text-white/80 hover:text-white p-2 transition-colors z-50"
+                onClick={() => setViewingImage(null)}
+            >
+                <XMarkIcon className="w-8 h-8" />
+            </button>
+            <img 
+                src={`data:image/png;base64,${viewingImage}`} 
+                className="max-w-full max-h-full object-contain rounded-sm shadow-2xl"
+                alt="Ricevuta Full Screen"
+                onClick={(e) => e.stopPropagation()} 
+            />
+        </div>,
+        document.body
+      );
   };
 
   if (typeof formData.amount !== 'number') {
@@ -515,7 +525,6 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     </div>
   ), [formData.frequency, formData.date, dateError, formData.time, isSingleRecurring]);
 
-  // Sezione Ricevuta - attiva SEMPRE
   const canAttachReceipt = true;
 
   return (
@@ -540,7 +549,6 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
 
       <main className="flex-1 p-4 flex flex-col overflow-y-auto" style={{ touchAction: 'pan-y' }}>
         <div className="space-y-2">
-          {/* Importo Display */}
           <div className="flex justify-center items-center py-0">
             <div className="relative flex items-baseline justify-center text-indigo-600">
                 <span className="text-[2.6rem] leading-none font-bold tracking-tighter relative z-10">
@@ -552,7 +560,6 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
             </div>
           </div>
 
-          {/* Descrizione */}
           <div>
             <label htmlFor="description" className="block text-base font-medium text-slate-700 mb-1">Descrizione</label>
             <div className="relative">
@@ -589,44 +596,42 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
 
           {!isFrequencySet && DateTimeInputs}
           
-          {/* Sezione Ricevuta */}
+          {/* Sezione Ricevuta - CORRETTA */}
           {canAttachReceipt && (
               <div>
                   <label className="block text-base font-medium text-slate-700 mb-1">Ricevuta</label>
                   
-                  {formData.receipts && formData.receipts.length > 0 ? (
+                  {formData.receipts && formData.receipts.length > 0 && (
                       <div className="grid grid-cols-2 gap-2 mb-2">
                           {formData.receipts.map((receipt, index) => (
-                              <div key={index} className="relative group rounded-lg overflow-hidden border border-slate-200 shadow-sm aspect-video bg-slate-50">
+                              <div 
+                                key={index} 
+                                className="relative group rounded-lg overflow-hidden border border-slate-200 shadow-sm aspect-video bg-slate-50 cursor-pointer"
+                                onClick={() => setViewingImage(receipt)}
+                              >
                                   <img 
                                       src={`data:image/png;base64,${receipt}`} 
                                       alt="Ricevuta" 
                                       className="w-full h-full object-cover"
                                   />
-                                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                      <button 
-                                          onClick={() => handleRemoveReceipt(index)}
-                                          className="p-2 bg-red-600 text-white rounded-full hover:bg-red-700"
-                                      >
-                                          <TrashIcon className="w-5 h-5" />
-                                      </button>
-                                  </div>
-                                  {/* Mobile always visible delete button */}
+                                  {/* SOLO TASTO X - SEMPRE VISIBILE */}
                                   <button 
-                                      onClick={() => handleRemoveReceipt(index)}
-                                      className="md:hidden absolute top-1 right-1 p-1 bg-white/90 text-red-600 rounded-full shadow-sm"
+                                      onClick={(e) => { 
+                                          e.stopPropagation(); 
+                                          handleRemoveReceipt(index); 
+                                      }}
+                                      className="absolute top-1 right-1 p-1 bg-white/90 text-red-600 rounded-full shadow-sm hover:bg-red-50 hover:text-red-700 transition-colors z-10"
                                   >
-                                      <XMarkIcon className="w-4 h-4" />
+                                      <XMarkIcon className="w-5 h-5" />
                                   </button>
                               </div>
                           ))}
                       </div>
-                  ) : null}
+                  )}
 
                   <button
                       type="button"
                       onClick={() => {
-                          // Prevent ghost click immediate reopen
                           if (Date.now() - receiptMenuCloseTimeRef.current < 500) return;
                           setIsReceiptMenuOpen(true);
                       }}
@@ -696,7 +701,6 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
         onSelect={handleAccountSelect}
       />
 
-      {/* Modal Frequenza */}
       <Modal
         isOpen={isFrequencyModalOpen}
         isAnimating={isFrequencyModalAnimating}
@@ -710,7 +714,6 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
         </div>
       </Modal>
       
-      {/* Modal Scelta Ricevuta */}
       <Modal
         isOpen={isReceiptMenuOpen}
         isAnimating={isReceiptMenuAnimating}
@@ -739,7 +742,6 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
         </div>
       </Modal>
 
-      {/* Modal Ricorrenza */}
       <Modal
         isOpen={isRecurrenceModalOpen}
         isAnimating={isRecurrenceModalAnimating}
@@ -927,6 +929,10 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
           </button>
         </footer>
       </Modal>
+      
+      {/* RENDER VIEWER A SCHERMO INTERO (Fuori dal DOM principale del form) */}
+      {renderImageViewer()}
+
     </div>
   );
 };
