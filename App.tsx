@@ -103,6 +103,7 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
         category: category,
         date: data.date || new Date().toISOString().split('T')[0],
         tags: Array.isArray(data.tags) ? data.tags : [],
+        // Se imageBase64 è undefined, receipts sarà vuoto (corretto per spese multiple)
         receipts: Array.isArray(data.receipts) ? data.receipts : (imageBase64 ? [imageBase64] : []),
         accountId: data.accountId || (safeAccounts.length > 0 ? safeAccounts[0].id : '')
     };
@@ -169,12 +170,15 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
     try {
       const { parseExpensesFromImage } = await import('./utils/ai');
       const parsedData = await parseExpensesFromImage(image.base64Image, image.mimeType);
+      
       if (parsedData?.length === 1) {
+        // SPESA SINGOLA: Passiamo l'immagine così viene allegata
         setPrefilledData(sanitizeExpenseData(parsedData[0], image.base64Image));
         window.history.replaceState({ modal: 'form' }, ''); 
         setIsFormOpen(true);
       } else if (parsedData?.length > 1) {
-        setMultipleExpensesData(parsedData.map(item => sanitizeExpenseData(item, image.base64Image)));
+        // SPESE MULTIPLE: Passiamo undefined come immagine, così le ricevute vengono tolte
+        setMultipleExpensesData(parsedData.map(item => sanitizeExpenseData(item, undefined)));
         window.history.replaceState({ modal: 'multiple' }, ''); 
         setIsMultipleExpensesModalOpen(true);
       } else {
@@ -226,7 +230,7 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
     const checkForSharedFile = async () => {
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.get('shared') === 'true' || isSharedStart.current) {
-        try { window.history.replaceState({ modal: 'home' }, '', window.location.pathname); } catch (e) {}
+        try { window.history.replaceState({ modal: 'home' }, '', window.location.pathname); } catch (e) { try { window.history.replaceState({ modal: 'home' }, ''); } catch(e) {} }
         try {
             const images = await getQueuedImages();
             const safeImages = Array.isArray(images) ? images : [];
@@ -309,10 +313,26 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
           return;
       }
       if (modal !== 'form') setIsFormOpen(false);
+      if (modal !== 'voice') setIsVoiceModalOpen(false);
+      if (modal !== 'source') setIsImageSourceModalOpen(false);
+      if (modal !== 'multiple') setIsMultipleExpensesModalOpen(false);
+      if (modal !== 'qr') setIsQrModalOpen(false);
       if (modal !== 'calculator' && modal !== 'calculator_details') setIsCalculatorContainerOpen(false);
-      if (!modal || modal === 'home') closeAllModals();
-      else if (modal === 'history') { setIsHistoryScreenOpen(true); if (isHistoryClosing) setIsHistoryClosing(false); }
-      else if (modal === 'recurring') setIsRecurringScreenOpen(true);
+
+      if (!modal || modal === 'home') {
+        setIsHistoryScreenOpen(false);
+        setIsHistoryClosing(false); 
+        setIsHistoryFilterOpen(false); 
+        setIsRecurringScreenOpen(false);
+        setImageForAnalysis(null);
+      } else if (modal === 'history') {
+        setIsHistoryScreenOpen(true);
+        if (isHistoryClosing) setIsHistoryClosing(false);
+        setIsRecurringScreenOpen(false);
+      } else if (modal === 'recurring') {
+        setIsRecurringScreenOpen(true);
+        setIsHistoryScreenOpen(false);
+      }
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
@@ -328,9 +348,9 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
           else setExpenses(p => [newItem, ...p]);
       }
       setShowSuccessIndicator(true); setTimeout(() => setShowSuccessIndicator(false), 2000);
-      // FIX NAVIGAZIONE: Se stiamo chiudendo un modale, non forzare la home ma torna indietro
-      // A meno che non sia una nuova spesa dal pulsante principale (calcolatrice)
-      if (isFormOpen && (isHistoryScreenOpen || isRecurringScreenOpen)) {
+      
+      // FIX NAVIGAZIONE: Se il form era aperto (es. da storico), torna indietro invece di andare alla home
+      if (isFormOpen) {
           closeModalWithHistory();
       } else {
           forceNavigateHome();
@@ -434,8 +454,8 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
 
       <MultipleExpensesModal isOpen={isMultipleExpensesModalOpen} onClose={closeModalWithHistory} expenses={multipleExpensesData} accounts={safeAccounts} onConfirm={(d) => { d.forEach(handleAddExpense); forceNavigateHome(); }} />
 
-      {isHistoryScreenOpen && <HistoryScreen expenses={expenses} accounts={safeAccounts} onClose={closeModalWithHistory} onCloseStart={() => setIsHistoryClosing(true)} onEditExpense={(e) => { setEditingExpense(e); window.history.pushState({ modal: 'form' }, ''); setIsFormOpen(true); }} onDeleteExpense={handleDeleteRequest} onDeleteExpenses={(ids) => setExpenses(p => p.filter(e => !ids.includes(e.id)))} isEditingOrDeleting={isFormOpen || isConfirmDeleteModalOpen} isOverlayed={false} onDateModalStateChange={() => {}} onFilterPanelOpenStateChange={setIsHistoryFilterOpen} />}
-      {isRecurringScreenOpen && <RecurringExpensesScreen recurringExpenses={recurringExpenses} expenses={expenses} accounts={safeAccounts} onClose={closeModalWithHistory} onEdit={(e) => { setEditingRecurringExpense(e); window.history.pushState({ modal: 'form' }, ''); setIsFormOpen(true); }} onDelete={(id) => setRecurringExpenses(p => p.filter(e => e.id !== id))} onDeleteRecurringExpenses={(ids) => setRecurringExpenses(p => p.filter(e => !ids.includes(e.id)))} />}
+      {isHistoryScreenOpen && <HistoryScreen expenses={expenses} accounts={safeAccounts} onClose={closeModalWithHistory} onCloseStart={() => setIsHistoryClosing(true)} onEditExpense={(e) => { setEditingExpense(e); window.history.pushState({ modal: 'form' }, ''); setIsFormOpen(true); }} onDeleteExpense={handleDeleteRequest} onDeleteExpenses={(ids) => { setExpenses(prev => (prev || []).filter(e => !ids.includes(e.id))); }} isEditingOrDeleting={isFormOpen || isConfirmDeleteModalOpen} isOverlayed={false} onDateModalStateChange={() => {}} onFilterPanelOpenStateChange={setIsHistoryFilterOpen} />}
+      {isRecurringScreenOpen && <RecurringExpensesScreen recurringExpenses={recurringExpenses} expenses={expenses} accounts={safeAccounts} onClose={closeModalWithHistory} onEdit={(e) => { setEditingRecurringExpense(e); window.history.pushState({ modal: 'form' }, ''); setIsFormOpen(true); }} onDelete={(id) => setRecurringExpenses(prev => (prev || []).filter(e => e.id !== id))} onDeleteRecurringExpenses={(ids) => setRecurringExpenses(prev => (prev || []).filter(e => !ids.includes(e.id)))} />}
       <ShareQrModal isOpen={isQrModalOpen} onClose={closeModalWithHistory} />
       <InstallPwaModal isOpen={isInstallModalOpen} onClose={() => setIsInstallModalOpen(false)} />
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
