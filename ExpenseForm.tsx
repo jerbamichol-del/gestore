@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Expense, Account, CATEGORIES } from '../types';
 import { XMarkIcon } from './icons/XMarkIcon';
@@ -140,16 +139,11 @@ const getIntervalLabel = (recurrence?: 'daily' | 'weekly' | 'monthly' | 'yearly'
 const daysOfWeekForPicker = [ { label: 'Lun', value: 1 }, { label: 'Mar', value: 2 }, { label: 'Mer', value: 3 }, { label: 'Gio', value: 4 }, { label: 'Ven', value: 5 }, { label: 'Sab', value: 6 }, { label: 'Dom', value: 0 }];
 
 const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, initialData, prefilledData, accounts, isForRecurringTemplate = false }) => {
-  // --- PROTEZIONE CRASH: array sicuro ---
-  // Se 'accounts' è undefined (può capitare al caricamento), usiamo un array vuoto
-  // Questo risolve l'errore "Cannot read properties of undefined (reading 'length')"
   const safeAccounts = accounts || [];
-  // -------------------------------------
 
   const [isAnimating, setIsAnimating] = useState(false);
   const [isClosableByBackdrop, setIsClosableByBackdrop] = useState(false);
   
-  // FIX 2: Inizializza con i tipi corretti per evitare perdita dati
   const [formData, setFormData] = useState<Partial<Omit<Expense, 'id' | 'amount'>> & { amount?: number | string }>({});
   
   const [error, setError] = useState<string | null>(null);
@@ -160,7 +154,6 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
   const [hasChanges, setHasChanges] = useState(false);
   const [isConfirmCloseOpen, setIsConfirmCloseOpen] = useState(false);
   
-  // Recurrence Modal State
   const [isRecurrenceModalOpen, setIsRecurrenceModalOpen] = useState(false);
   const [isRecurrenceModalAnimating, setIsRecurrenceModalAnimating] = useState(false);
   const [isRecurrenceOptionsOpen, setIsRecurrenceOptionsOpen] = useState(false);
@@ -188,7 +181,6 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
   }, [formData.date]);
 
   const resetForm = useCallback(() => {
-    // FIX: Usa safeAccounts invece di accounts per evitare crash su .length
     const defaultAccountId = safeAccounts.length > 0 ? safeAccounts[0].id : '';
     setFormData({
       description: '',
@@ -199,8 +191,8 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
       subcategory: '',
       accountId: defaultAccountId,
       frequency: 'single',
-      tags: [],     // Inizializza array vuoto
-      receipts: [], // Inizializza array vuoto
+      tags: [], 
+      receipts: [],
     });
     setError(null);
     setOriginalExpenseState(null);
@@ -236,7 +228,6 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
         setFormData(dataWithTime);
         setOriginalExpenseState(dataWithTime);
       } else if (prefilledData) {
-        // FIX: Usa safeAccounts anche qui
         const defaultAccountId = safeAccounts.length > 0 ? safeAccounts[0].id : '';
         setFormData({
           description: prefilledData.description || '',
@@ -247,8 +238,8 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
           subcategory: prefilledData.subcategory || '',
           accountId: prefilledData.accountId || defaultAccountId,
           frequency: 'single',
-          tags: prefilledData.tags || [],         // Assicura che non sia undefined
-          receipts: prefilledData.receipts || [], // Assicura che non sia undefined
+          tags: prefilledData.tags || [], 
+          receipts: prefilledData.receipts || [],
         });
         setOriginalExpenseState(null);
       } else {
@@ -314,7 +305,8 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                               formData.recurrenceEndType !== originalExpenseState.recurrenceEndType ||
                               formData.recurrenceEndDate !== originalExpenseState.recurrenceEndDate ||
                               formData.recurrenceCount !== originalExpenseState.recurrenceCount;
-                              
+    
+    // Check if receipts changed
     const receiptsChanged = JSON.stringify(formData.receipts) !== JSON.stringify(originalExpenseState.receipts);
 
     const changed = amountChanged || descriptionChanged || dateChanged || timeChanged || categoryChanged || subcategoryChanged || accountIdChanged || frequencyChanged || recurrenceChanged || receiptsChanged;
@@ -421,6 +413,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
         });
     };
     
+    // --- MODIFICA: Funzione per rimuovere le ricevute ---
     const handleRemoveReceipt = (index: number) => {
         setFormData(prev => {
             const currentReceipts = prev.receipts || [];
@@ -428,6 +421,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
             return { ...prev, receipts: newReceipts };
         });
     };
+    // ---------------------------------------------------
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -456,7 +450,6 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
       description: formData.description || '',
       category: formData.category || '',
       subcategory: formData.subcategory || undefined,
-      // FIX: Salva array vuoti se undefined per sicurezza
       tags: formData.tags || [],
       receipts: formData.receipts || [],
     };
@@ -496,7 +489,6 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
     ? CATEGORIES[formData.category].map(sub => ({ value: sub, label: sub }))
     : [];
     
-  // FIX: Usa safeAccounts anche qui per il map
   const accountOptions = safeAccounts.map(acc => ({
       value: acc.id,
       label: acc.name,
@@ -668,11 +660,11 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                 />
               </div>
               
-              {/* Ricevute in modalità Modifica */}
+              {/* --- MODIFICA: Sezione Ricevute --- */}
               {formData.receipts && formData.receipts.length > 0 && (
-                  <div>
+                  <div className="animate-fade-in-up">
                       <label className="block text-base font-medium text-slate-700 mb-1">Ricevute</label>
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid grid-cols-2 gap-3">
                           {formData.receipts.map((receipt, index) => (
                               <div key={index} className="relative group rounded-lg overflow-hidden border border-slate-200 shadow-sm aspect-video bg-slate-50">
                                   <img 
@@ -684,7 +676,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                                       <button 
                                           type="button"
                                           onClick={() => handleRemoveReceipt(index)}
-                                          className="p-2 bg-red-600 text-white rounded-full hover:bg-red-700"
+                                          className="p-2 bg-red-600 text-white rounded-full hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
                                       >
                                           <TrashIcon className="w-5 h-5" />
                                       </button>
@@ -702,6 +694,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                       </div>
                   </div>
               )}
+              {/* ---------------------------------- */}
               
               {isForRecurringTemplate && (
                  <div className="bg-white p-4 rounded-lg border border-slate-200 space-y-4">
