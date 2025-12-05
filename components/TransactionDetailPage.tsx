@@ -606,7 +606,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
                           {formData.receipts.map((receipt, index) => (
                               <div 
                                 key={index} 
-                                className="relative group rounded-lg overflow-hidden border border-slate-200 shadow-sm aspect-video bg-slate-50 cursor-pointer"
+                                className="relative group rounded-lg overflow-hidden border border-slate-200 shadow-sm aspect-video bg-slate-50 cursor-pointer hover:border-indigo-300 transition-colors"
                                 onClick={() => setViewingImage(receipt)}
                               >
                                   <img 
@@ -701,6 +701,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
         onSelect={handleAccountSelect}
       />
 
+      {/* Modal Frequenza */}
       <Modal
         isOpen={isFrequencyModalOpen}
         isAnimating={isFrequencyModalAnimating}
@@ -714,6 +715,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
         </div>
       </Modal>
       
+      {/* Modal Scelta Ricevuta */}
       <Modal
         isOpen={isReceiptMenuOpen}
         isAnimating={isReceiptMenuAnimating}
@@ -742,6 +744,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
         </div>
       </Modal>
 
+      {/* Modal Ricorrenza */}
       <Modal
         isOpen={isRecurrenceModalOpen}
         isAnimating={isRecurrenceModalAnimating}
