@@ -7,6 +7,7 @@ import { CurrencyEuroIcon } from './icons/CurrencyEuroIcon';
 import { CalendarIcon } from './icons/CalendarIcon';
 import { TagIcon } from './icons/TagIcon';
 import { CreditCardIcon } from './icons/CreditCardIcon';
+// Rimosso TrashIcon
 import SelectionMenu from './SelectionMenu';
 import { getCategoryStyle } from '../utils/categoryStyles';
 import { ClockIcon } from './icons/ClockIcon';
@@ -733,6 +734,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                           ))}
                       </div>
                   )}
+                  {/* Tasto Allega Ricevuta */}
                   <button
                       type="button"
                       onClick={() => {
