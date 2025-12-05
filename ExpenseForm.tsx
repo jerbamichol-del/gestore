@@ -7,7 +7,7 @@ import { CurrencyEuroIcon } from './icons/CurrencyEuroIcon';
 import { CalendarIcon } from './icons/CalendarIcon';
 import { TagIcon } from './icons/TagIcon';
 import { CreditCardIcon } from './icons/CreditCardIcon';
-import { TrashIcon } from './icons/TrashIcon';
+import { TrashIcon } from './icons/TrashIcon'; // Import mantenuto se servisse altrove, ma rimosso dalla UI ricevute
 import SelectionMenu from './SelectionMenu';
 import { getCategoryStyle } from '../utils/categoryStyles';
 import { ClockIcon } from './icons/ClockIcon';
@@ -487,7 +487,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
     el.blur();
   }, []);
 
-  // --- FULL SCREEN IMAGE VIEWER (PORTAL) ---
+  // --- RENDER VIEWER A SCHERMO INTERO ---
   const renderImageViewer = () => {
       if (!viewingImage) return null;
       return createPortal(
@@ -701,7 +701,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                 />
               </div>
               
-              {/* Ricevute Section - CORRETTO: Solo Immagine e X, niente cestino */}
+              {/* Ricevute Section - PULITO: Solo immagine e tasto X */}
               <div className="animate-fade-in-up">
                   <label className="block text-base font-medium text-slate-700 mb-1">Ricevute</label>
                   {formData.receipts && formData.receipts.length > 0 && (
@@ -718,7 +718,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                                       className="w-full h-full object-cover"
                                   />
                                   
-                                  {/* Tasto X in alto a destra */}
+                                  {/* Pulsante "X" per eliminare */}
                                   <button 
                                       type="button"
                                       onClick={(e) => { 
@@ -734,7 +734,6 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                           ))}
                       </div>
                   )}
-                  {/* Tasto Allega Ricevuta */}
                   <button
                       type="button"
                       onClick={() => {
