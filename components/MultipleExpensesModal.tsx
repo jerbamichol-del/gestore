@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Expense, Account, CATEGORIES } from '../types';
 import { XMarkIcon } from './icons/XMarkIcon';
@@ -27,7 +26,6 @@ const toYYYYMMDD = (date: Date) => {
 
 const getCurrentTime = () => new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
 
-// A custom styled checkbox component
 const CustomCheckbox = ({ checked, onChange, id, label }: { checked: boolean, onChange: () => void, id: string, label: string }) => (
     <div className="flex items-center">
         <input
@@ -161,6 +159,8 @@ const MultipleExpensesModal: React.FC<MultipleExpensesModalProps> = ({ isOpen, o
         category: exp.category || 'Altro',
         subcategory: exp.subcategory || undefined,
         accountId: exp.accountId,
+        tags: exp.tags || [],
+        receipts: exp.receipts || []
       }))
       .filter(exp => exp.amount > 0); 
 
@@ -238,11 +238,14 @@ const MultipleExpensesModal: React.FC<MultipleExpensesModalProps> = ({ isOpen, o
                     const isSelected = selectedIndices.has(index);
                     const isExpanded = expandedIndex === index;
                     
-                    // Safe access to subcategories
                     const subcategoriesForCategory = (expense.category && CATEGORIES[expense.category as keyof typeof CATEGORIES]) || [];
                     
                     const selectedAccountLabel = accounts.find(a => a.id === expense.accountId)?.name;
                     const selectedCategoryLabel = expense.category ? getCategoryStyle(expense.category).label : undefined;
+
+                    // --- MODIFICA: Estrazione anteprima ricevuta ---
+                    const firstReceipt = expense.receipts && expense.receipts.length > 0 ? expense.receipts[0] : null;
+                    // -----------------------------------------------
 
                     return (
                     <div 
@@ -257,6 +260,17 @@ const MultipleExpensesModal: React.FC<MultipleExpensesModalProps> = ({ isOpen, o
                                 onChange={() => handleToggleSelection(index)}
                                 label={`Seleziona spesa ${expense.description}`}
                             />
+                            
+                            {/* --- MODIFICA: Visualizzazione miniatura --- */}
+                            {firstReceipt && (
+                                <img 
+                                    src={`data:image/png;base64,${firstReceipt}`} 
+                                    alt="Anteprima ricevuta" 
+                                    className="w-10 h-10 object-cover rounded-md border border-slate-200 shrink-0"
+                                />
+                            )}
+                            {/* ------------------------------------------- */}
+                            
                             <input 
                                 type="date"
                                 value={expense.date || ''}
