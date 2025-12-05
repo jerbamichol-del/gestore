@@ -36,8 +36,6 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
   const [expenses, setExpenses] = useLocalStorage<Expense[]>('expenses_v2', []);
   const [recurringExpenses, setRecurringExpenses] = useLocalStorage<Expense[]>('recurring_expenses_v1', []);
   const [accounts, setAccounts] = useLocalStorage<Account[]>('accounts_v1', DEFAULT_ACCOUNTS);
-
-  // DEFINTIZIONE safeAccounts
   const safeAccounts = accounts || [];
 
   // --- UI State ---
@@ -55,134 +53,30 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
   const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
   const [isHistoryFilterOpen, setIsHistoryFilterOpen] = useState(false);
 
-  // --- Data & Sync ---
+  // --- Data ---
   const [editingExpense, setEditingExpense] = useState<Expense | undefined>(undefined);
   const [editingRecurringExpense, setEditingRecurringExpense] = useState<Expense | undefined>(undefined);
   const [prefilledData, setPrefilledData] = useState<Partial<Omit<Expense, 'id'>> | undefined>(undefined);
   const [expenseToDeleteId, setExpenseToDeleteId] = useState<string | null>(null);
   const [multipleExpensesData, setMultipleExpensesData] = useState<Partial<Omit<Expense, 'id'>>[]>([]);
   const [imageForAnalysis, setImageForAnalysis] = useState<ExtendedOfflineImage | null>(null);
+
+  // --- Sync ---
+  const isOnline = useOnlineStatus();
   const [pendingImages, setPendingImages] = useState<OfflineImage[]>([]);
   const [syncingImageId, setSyncingImageId] = useState<string | null>(null);
+  
+  // --- Toast & Install ---
   const [toast, setToast] = useState<ToastMessage | null>(null);
+  const showToast = useCallback((msg: ToastMessage) => setToast(msg), []);
   const [showSuccessIndicator, setShowSuccessIndicator] = useState(false);
   const [installPromptEvent, setInstallPromptEvent] = useState<any>(null);
-  
-  const isOnline = useOnlineStatus();
   const pendingImagesCountRef = useRef(0);
+  
+  // --- Shared Logic ---
   const sharedImageIdRef = useRef<string | null>(null);
   const isSharedStart = useRef(new URLSearchParams(window.location.search).get('shared') === 'true');
   const lastBackPressTime = useRef(0);
-
-  const showToast = useCallback((msg: ToastMessage) => setToast(msg), []);
-
-  // --- AUTOMATIC RECURRING EXPENSE PROCESSING ---
-  useEffect(() => {
-    if (!recurringExpenses || recurringExpenses.length === 0) return;
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    let updatedExpenses = [...(expenses || [])];
-    // Deep clone to safely mutate in logic before setting state
-    let updatedRecurring = recurringExpenses.map(e => ({ ...e }));
-    let hasChanges = false;
-    let generatedCount = 0;
-
-    const parseDate = (str: string) => {
-        const p = str.split('-').map(Number);
-        return new Date(p[0], p[1] - 1, p[2]);
-    };
-
-    const toDateStr = (d: Date) => {
-        const year = d.getFullYear();
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-    };
-
-    const getNextDueDate = (template: Expense, lastDate: Date) => {
-        const d = new Date(lastDate);
-        const interval = template.recurrenceInterval || 1;
-        
-        if (template.recurrence === 'daily') d.setDate(d.getDate() + interval);
-        else if (template.recurrence === 'weekly') d.setDate(d.getDate() + 7 * interval);
-        else if (template.recurrence === 'monthly') d.setMonth(d.getMonth() + interval);
-        else if (template.recurrence === 'yearly') d.setFullYear(d.getFullYear() + interval);
-        
-        return d;
-    };
-
-    const finalRecurring = updatedRecurring.filter(template => {
-        if (template.frequency !== 'recurring') return true;
-
-        // Start checking from either the last generation or the start date
-        let nextDue = template.lastGeneratedDate 
-            ? getNextDueDate(template, parseDate(template.lastGeneratedDate)) 
-            : parseDate(template.date);
-
-        let keep = true;
-        let modified = false;
-
-        // Iterate to catch up if multiple periods passed
-        // Limit loops to prevent hangs (max 100 iterations)
-        for (let i = 0; i < 100; i++) {
-            if (nextDue > today) break;
-
-            // Check Date Expiry
-            if (template.recurrenceEndType === 'date' && template.recurrenceEndDate) {
-                if (nextDue > parseDate(template.recurrenceEndDate)) {
-                    keep = false;
-                    hasChanges = true; // Mark as changed to remove it
-                    break;
-                }
-            }
-
-            // Generate Instance
-            const newExpense: Expense = {
-                ...template,
-                id: crypto.randomUUID(),
-                date: toDateStr(nextDue),
-                frequency: 'single',
-                recurringExpenseId: template.id,
-                // Clear template fields
-                recurrence: undefined, recurrenceInterval: undefined, recurrenceDays: undefined,
-                recurrenceEndType: undefined, recurrenceEndDate: undefined, recurrenceCount: undefined,
-                monthlyRecurrenceType: undefined, lastGeneratedDate: undefined
-            };
-            
-            updatedExpenses.unshift(newExpense);
-            template.lastGeneratedDate = toDateStr(nextDue);
-            hasChanges = true;
-            modified = true;
-            generatedCount++;
-
-            // Check Count Expiry
-            if (template.recurrenceEndType === 'count' && template.recurrenceCount !== undefined) {
-                template.recurrenceCount--;
-                if (template.recurrenceCount <= 0) {
-                    keep = false;
-                    break;
-                }
-            }
-
-            // Calculate next
-            nextDue = getNextDueDate(template, nextDue);
-        }
-
-        return keep;
-    });
-
-    if (hasChanges) {
-        setExpenses(updatedExpenses);
-        setRecurringExpenses(finalRecurring);
-        if (generatedCount > 0) {
-            setToast({ message: `${generatedCount} spese programmate generate.`, type: 'success' });
-        }
-    }
-  }, [recurringExpenses, expenses, setExpenses, setRecurringExpenses]);
-
-  // --- HANDLERS (Spostati in alto) ---
 
   const refreshPendingImages = useCallback(async () => {
     try {
@@ -201,6 +95,7 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
     let amount = data.amount;
     if (typeof amount === 'string') amount = parseFloat(amount.replace(',', '.'));
     if (typeof amount !== 'number' || isNaN(amount)) amount = 0;
+    const safeAccounts = accounts || [];
 
     return {
         description: data.description || '',
@@ -295,14 +190,19 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
     }
   };
 
-  // --- CLOUD SYNC ---
+  const handleVoiceParsed = (data: Partial<Omit<Expense, 'id'>>) => {
+    try { window.history.replaceState({ modal: 'form' }, ''); } catch(e) {} 
+    setIsVoiceModalOpen(false);
+    const safeData = sanitizeExpenseData(data);
+    setPrefilledData(safeData);
+    setIsFormOpen(true);
+  };
+
   useEffect(() => {
     if (!currentEmail || !isOnline) return;
-
     const timer = setTimeout(() => {
         const allUsers = getUsers();
         const currentUser = allUsers[currentEmail.toLowerCase()];
-
         if (currentUser) {
             console.log("☁️ Backup Cloud per:", currentEmail);
             saveToCloud(
@@ -318,7 +218,6 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
     return () => clearTimeout(timer);
   }, [expenses, recurringExpenses, accounts, currentEmail, isOnline]);
 
-  // --- EFFECTS ---
   useEffect(() => {
     if (!isSharedStart.current) refreshPendingImages();
   }, [refreshPendingImages]);
@@ -351,7 +250,6 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
       hasRunMigrationRef.current = true;
   }, []);
 
-  // --- INIT UI ---
   useEffect(() => {
     if (!window.history.state?.modal) {
         window.history.replaceState({ modal: 'exit_guard' }, ''); 
@@ -430,16 +328,13 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
           else setExpenses(p => [newItem, ...p]);
       }
       setShowSuccessIndicator(true); setTimeout(() => setShowSuccessIndicator(false), 2000);
-      forceNavigateHome();
-  };
-
-  // --- REINSERITA LA FUNZIONE CHE MANCAVA ---
-  const handleVoiceParsed = (data: Partial<Omit<Expense, 'id'>>) => {
-    try { window.history.replaceState({ modal: 'form' }, ''); } catch(e) {} 
-    setIsVoiceModalOpen(false);
-    const safeData = sanitizeExpenseData(data);
-    setPrefilledData(safeData);
-    setIsFormOpen(true);
+      // FIX NAVIGAZIONE: Se stiamo chiudendo un modale, non forzare la home ma torna indietro
+      // A meno che non sia una nuova spesa dal pulsante principale (calcolatrice)
+      if (isFormOpen && (isHistoryScreenOpen || isRecurringScreenOpen)) {
+          closeModalWithHistory();
+      } else {
+          forceNavigateHome();
+      }
   };
 
   const handleDeleteRequest = (id: string) => { setExpenseToDeleteId(id); setIsConfirmDeleteModalOpen(true); };
@@ -469,18 +364,21 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
       setImageForAnalysis(null);
   };
 
+  const fabStyle = (isHistoryScreenOpen && !isHistoryClosing) ? { bottom: `calc(90px + env(safe-area-inset-bottom, 0px))` } : undefined;
+
   return (
     <div className="h-full w-full bg-slate-100 flex flex-col font-sans" style={{ touchAction: 'pan-y' }}>
       <div className="flex-shrink-0 z-20">
         <Header 
             pendingSyncs={pendingImages.length} 
             isOnline={isOnline} 
-            onInstallClick={() => { if (installPromptEvent) installPromptEvent.prompt(); else setIsInstallModalOpen(true); }} 
+            onInstallClick={handleInstallClick} 
             installPromptEvent={installPromptEvent} 
             onLogout={onLogout} 
             onShowQr={() => { window.history.pushState({ modal: 'qr' }, ''); setIsQrModalOpen(true); }} 
         />
       </div>
+
       <main className="flex-grow bg-slate-100">
         <div className="w-full h-full overflow-y-auto space-y-6" style={{ touchAction: 'pan-y' }}>
            <Dashboard 
@@ -494,15 +392,18 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
            <PendingImages images={pendingImages} onAnalyze={handleAnalyzeImage} onDelete={async (id) => { await deleteImageFromQueue(id); refreshPendingImages(); }} isOnline={isOnline} syncingImageId={syncingImageId} />
         </div>
       </main>
+
       {!isCalculatorContainerOpen && !isHistoryFilterOpen && (
          <FloatingActionButton 
             onAddManually={() => { window.history.pushState({ modal: 'calculator' }, ''); setIsCalculatorContainerOpen(true); }}
             onAddFromImage={() => { window.history.pushState({ modal: 'source' }, ''); setIsImageSourceModalOpen(true); }}
             onAddFromVoice={() => { window.history.pushState({ modal: 'voice' }, ''); setIsVoiceModalOpen(true); }}
-            style={(isHistoryScreenOpen && !isHistoryClosing) ? { bottom: `calc(90px + env(safe-area-inset-bottom, 0px))` } : undefined}
+            style={fabStyle}
          />
       )}
+      
       <SuccessIndicator show={showSuccessIndicator} />
+
       <CalculatorContainer isOpen={isCalculatorContainerOpen} onClose={closeModalWithHistory} onSubmit={handleAddExpense} accounts={safeAccounts} expenses={expenses} onEditExpense={(e) => { setEditingExpense(e); window.history.pushState({ modal: 'form' }, ''); setIsFormOpen(true); }} onDeleteExpense={(id) => { setExpenseToDeleteId(id); setIsConfirmDeleteModalOpen(true); }} onMenuStateChange={() => {}} />
       <ExpenseForm isOpen={isFormOpen} onClose={closeModalWithHistory} onSubmit={handleAddExpense} initialData={editingExpense || editingRecurringExpense} prefilledData={prefilledData} accounts={safeAccounts} isForRecurringTemplate={!!editingRecurringExpense} />
 
