@@ -7,6 +7,7 @@ import { CurrencyEuroIcon } from './icons/CurrencyEuroIcon';
 import { CalendarIcon } from './icons/CalendarIcon';
 import { TagIcon } from './icons/TagIcon';
 import { CreditCardIcon } from './icons/CreditCardIcon';
+import { TrashIcon } from './icons/TrashIcon';
 import SelectionMenu from './SelectionMenu';
 import { getCategoryStyle } from '../utils/categoryStyles';
 import { ClockIcon } from './icons/ClockIcon';
@@ -700,7 +701,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                 />
               </div>
               
-              {/* Ricevute Section - SOLO IMMAGINE E TASTO X */}
+              {/* Ricevute Section - CORRETTO: Solo Immagine e X, niente cestino */}
               <div className="animate-fade-in-up">
                   <label className="block text-base font-medium text-slate-700 mb-1">Ricevute</label>
                   {formData.receipts && formData.receipts.length > 0 && (
@@ -717,11 +718,11 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                                       className="w-full h-full object-cover"
                                   />
                                   
-                                  {/* Tasto X per eliminare - SENZA OVERLAY E SENZA CESTINO */}
+                                  {/* Tasto X in alto a destra */}
                                   <button 
                                       type="button"
                                       onClick={(e) => { 
-                                          e.stopPropagation(); // Importante: ferma il click per non aprire l'immagine
+                                          e.stopPropagation(); 
                                           handleRemoveReceipt(index); 
                                       }}
                                       className="absolute top-1 right-1 p-1 bg-white/90 text-red-600 rounded-full shadow-md hover:bg-red-50 hover:text-red-700 transition-colors z-10 flex items-center justify-center"
