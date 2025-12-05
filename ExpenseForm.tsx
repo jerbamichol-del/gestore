@@ -7,7 +7,6 @@ import { CurrencyEuroIcon } from './icons/CurrencyEuroIcon';
 import { CalendarIcon } from './icons/CalendarIcon';
 import { TagIcon } from './icons/TagIcon';
 import { CreditCardIcon } from './icons/CreditCardIcon';
-import { TrashIcon } from './icons/TrashIcon';
 import SelectionMenu from './SelectionMenu';
 import { getCategoryStyle } from '../utils/categoryStyles';
 import { ClockIcon } from './icons/ClockIcon';
@@ -701,7 +700,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                 />
               </div>
               
-              {/* Ricevute Section - VISUALIZZAZIONE SENZA CESTINO CENTRALE */}
+              {/* Ricevute Section - CORRETTA: SENZA CESTINO CENTRALE */}
               <div className="animate-fade-in-up">
                   <label className="block text-base font-medium text-slate-700 mb-1">Ricevute</label>
                   {formData.receipts && formData.receipts.length > 0 && (
@@ -709,7 +708,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                           {formData.receipts.map((receipt, index) => (
                               <div 
                                 key={index} 
-                                className="relative rounded-lg overflow-hidden border border-slate-200 shadow-sm aspect-video bg-slate-50 cursor-pointer hover:border-indigo-300 transition-colors"
+                                className="relative rounded-lg overflow-hidden border border-slate-200 shadow-sm aspect-video bg-slate-50 cursor-pointer"
                                 onClick={() => setViewingImage(receipt)}
                               >
                                   <img 
@@ -717,14 +716,14 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                                       alt="Ricevuta" 
                                       className="w-full h-full object-cover"
                                   />
-                                  {/* Pulsante di eliminazione in alto a destra */}
+                                  {/* Pulsante "X" per eliminare in alto a destra */}
                                   <button 
                                       type="button"
                                       onClick={(e) => { 
-                                          e.stopPropagation(); 
+                                          e.stopPropagation(); // Evita di aprire l'immagine quando si cancella
                                           handleRemoveReceipt(index); 
                                       }}
-                                      className="absolute top-1 right-1 p-1.5 bg-white/90 text-red-600 rounded-full shadow-sm hover:bg-red-50 hover:text-red-700 transition-colors z-10"
+                                      className="absolute top-1 right-1 p-1 bg-white/90 text-red-600 rounded-full shadow-sm hover:bg-white transition-colors z-10"
                                       aria-label="Rimuovi ricevuta"
                                   >
                                       <XMarkIcon className="w-5 h-5" />
