@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Expense, Account, CATEGORIES } from '../types';
 import { XMarkIcon } from './icons/XMarkIcon';
@@ -7,12 +6,17 @@ import { CurrencyEuroIcon } from './icons/CurrencyEuroIcon';
 import { CalendarIcon } from './icons/CalendarIcon';
 import { TagIcon } from './icons/TagIcon';
 import { CreditCardIcon } from './icons/CreditCardIcon';
+import { TrashIcon } from './icons/TrashIcon';
 import SelectionMenu from './SelectionMenu';
 import { getCategoryStyle } from '../utils/categoryStyles';
 import { ClockIcon } from './icons/ClockIcon';
 import { ChevronDownIcon } from './icons/ChevronDownIcon';
 import { formatDate } from './icons/formatters';
 import ConfirmationModal from './ConfirmationModal';
+import { PaperClipIcon } from './icons/PaperClipIcon';
+import { CameraIcon } from './icons/CameraIcon';
+import { PhotoIcon } from './icons/PhotoIcon';
+import { pickImage, processImageFile } from '../utils/fileHelper';
 
 interface ExpenseFormProps {
   isOpen: boolean;
@@ -139,16 +143,11 @@ const getIntervalLabel = (recurrence?: 'daily' | 'weekly' | 'monthly' | 'yearly'
 const daysOfWeekForPicker = [ { label: 'Lun', value: 1 }, { label: 'Mar', value: 2 }, { label: 'Mer', value: 3 }, { label: 'Gio', value: 4 }, { label: 'Ven', value: 5 }, { label: 'Sab', value: 6 }, { label: 'Dom', value: 0 }];
 
 const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, initialData, prefilledData, accounts, isForRecurringTemplate = false }) => {
-  // --- PROTEZIONE CRASH: array sicuro ---
-  // Se 'accounts' è undefined (può capitare al caricamento), usiamo un array vuoto
-  // Questo risolve l'errore "Cannot read properties of undefined (reading 'length')"
   const safeAccounts = accounts || [];
-  // -------------------------------------
 
   const [isAnimating, setIsAnimating] = useState(false);
   const [isClosableByBackdrop, setIsClosableByBackdrop] = useState(false);
   
-  // FIX 2: Inizializza con i tipi corretti per evitare perdita dati
   const [formData, setFormData] = useState<Partial<Omit<Expense, 'id' | 'amount'>> & { amount?: number | string }>({});
   
   const [error, setError] = useState<string | null>(null);
@@ -159,7 +158,6 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
   const [hasChanges, setHasChanges] = useState(false);
   const [isConfirmCloseOpen, setIsConfirmCloseOpen] = useState(false);
   
-  // Recurrence Modal State
   const [isRecurrenceModalOpen, setIsRecurrenceModalOpen] = useState(false);
   const [isRecurrenceModalAnimating, setIsRecurrenceModalAnimating] = useState(false);
   const [isRecurrenceOptionsOpen, setIsRecurrenceOptionsOpen] = useState(false);
@@ -168,6 +166,11 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
   const [tempRecurrenceInterval, setTempRecurrenceInterval] = useState<number | undefined>(formData.recurrenceInterval);
   const [tempRecurrenceDays, setTempRecurrenceDays] = useState<number[] | undefined>(formData.recurrenceDays);
   const [tempMonthlyRecurrenceType, setTempMonthlyRecurrenceType] = useState(formData.monthlyRecurrenceType);
+
+  // Receipt Modal
+  const [isReceiptMenuOpen, setIsReceiptMenuOpen] = useState(false);
+  const [isReceiptMenuAnimating, setIsReceiptMenuAnimating] = useState(false);
+  const receiptMenuCloseTimeRef = useRef(0);
 
   const amountInputRef = useRef<HTMLInputElement>(null);
   const descriptionInputRef = useRef<HTMLInputElement>(null);
@@ -187,20 +190,8 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
   }, [formData.date]);
 
   const resetForm = useCallback(() => {
-    // FIX: Usa safeAccounts invece di accounts per evitare crash su .length
     const defaultAccountId = safeAccounts.length > 0 ? safeAccounts[0].id : '';
-    setFormData({
-      description: '',
-      amount: '',
-      date: getTodayString(),
-      time: getCurrentTime(),
-      category: '',
-      subcategory: '',
-      accountId: defaultAccountId,
-      frequency: 'single',
-      tags: [],     // Inizializza array vuoto
-      receipts: [], // Inizializza array vuoto
-    });
+    setFormData({ description: '', amount: '', date: getTodayString(), time: getCurrentTime(), category: '', subcategory: '', accountId: defaultAccountId, frequency: 'single', tags: [], receipts: [] });
     setError(null);
     setOriginalExpenseState(null);
   }, [safeAccounts]);
@@ -235,7 +226,6 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
         setFormData(dataWithTime);
         setOriginalExpenseState(dataWithTime);
       } else if (prefilledData) {
-        // FIX: Usa safeAccounts anche qui
         const defaultAccountId = safeAccounts.length > 0 ? safeAccounts[0].id : '';
         setFormData({
           description: prefilledData.description || '',
@@ -246,8 +236,8 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
           subcategory: prefilledData.subcategory || '',
           accountId: prefilledData.accountId || defaultAccountId,
           frequency: 'single',
-          tags: prefilledData.tags || [],         // Assicura che non sia undefined
-          receipts: prefilledData.receipts || [], // Assicura che non sia undefined
+          tags: prefilledData.tags || [], 
+          receipts: prefilledData.receipts || [],
         });
         setOriginalExpenseState(null);
       } else {
@@ -290,6 +280,15 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
   }, [isRecurrenceModalOpen, formData.recurrence, formData.recurrenceInterval, formData.recurrenceDays, formData.monthlyRecurrenceType]);
 
   useEffect(() => {
+    if (isReceiptMenuOpen) {
+      const timer = setTimeout(() => setIsReceiptMenuAnimating(true), 10);
+      return () => clearTimeout(timer);
+    } else {
+      setIsReceiptMenuAnimating(false);
+    }
+  }, [isReceiptMenuOpen]);
+
+  useEffect(() => {
     if (!isEditing || !originalExpenseState) {
         setHasChanges(false);
         return;
@@ -305,7 +304,6 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
     const subcategoryChanged = (formData.subcategory || '') !== (originalExpenseState.subcategory || '');
     const accountIdChanged = formData.accountId !== originalExpenseState.accountId;
     const frequencyChanged = formData.frequency !== originalExpenseState.frequency;
-    
     const recurrenceChanged = formData.recurrence !== originalExpenseState.recurrence ||
                               formData.recurrenceInterval !== originalExpenseState.recurrenceInterval ||
                               JSON.stringify(formData.recurrenceDays) !== JSON.stringify(originalExpenseState.recurrenceDays) ||
@@ -313,8 +311,9 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                               formData.recurrenceEndType !== originalExpenseState.recurrenceEndType ||
                               formData.recurrenceEndDate !== originalExpenseState.recurrenceEndDate ||
                               formData.recurrenceCount !== originalExpenseState.recurrenceCount;
+    const receiptsChanged = JSON.stringify(formData.receipts) !== JSON.stringify(originalExpenseState.receipts);
 
-    const changed = amountChanged || descriptionChanged || dateChanged || timeChanged || categoryChanged || subcategoryChanged || accountIdChanged || frequencyChanged || recurrenceChanged;
+    const changed = amountChanged || descriptionChanged || dateChanged || timeChanged || categoryChanged || subcategoryChanged || accountIdChanged || frequencyChanged || recurrenceChanged || receiptsChanged;
     
     setHasChanges(changed);
 
@@ -417,6 +416,32 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
             return newDays.sort((a, b) => (a === 0 ? 7 : a) - (b === 0 ? 7 : b));
         });
     };
+    
+    // Receipt Logic
+    const handleCloseReceiptMenu = () => {
+        setIsReceiptMenuOpen(false);
+        setIsReceiptMenuAnimating(false);
+        receiptMenuCloseTimeRef.current = Date.now();
+    };
+
+    const handlePickReceipt = async (source: 'camera' | 'gallery') => {
+        try {
+            const file = await pickImage(source);
+            const { base64 } = await processImageFile(file);
+            setFormData(prev => ({ ...prev, receipts: [...(prev.receipts || []), base64] }));
+            setTimeout(handleCloseReceiptMenu, 500);
+        } catch (e) {
+            console.error(e);
+        }
+    };
+    
+    const handleRemoveReceipt = (index: number) => {
+        setFormData(prev => {
+            const currentReceipts = prev.receipts || [];
+            const newReceipts = currentReceipts.filter((_, i) => i !== index);
+            return { ...prev, receipts: newReceipts };
+        });
+    };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -445,7 +470,6 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
       description: formData.description || '',
       category: formData.category || '',
       subcategory: formData.subcategory || undefined,
-      // FIX: Salva array vuoti se undefined per sicurezza
       tags: formData.tags || [],
       receipts: formData.receipts || [],
     };
@@ -485,7 +509,6 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
     ? CATEGORIES[formData.category].map(sub => ({ value: sub, label: sub }))
     : [];
     
-  // FIX: Usa safeAccounts anche qui per il map
   const accountOptions = safeAccounts.map(acc => ({
       value: acc.id,
       label: acc.name,
@@ -657,6 +680,53 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                 />
               </div>
               
+              {/* Ricevute Section */}
+              <div className="animate-fade-in-up">
+                  <label className="block text-base font-medium text-slate-700 mb-1">Ricevute</label>
+                  {formData.receipts && formData.receipts.length > 0 && (
+                      <div className="grid grid-cols-2 gap-3 mb-3">
+                          {formData.receipts.map((receipt, index) => (
+                              <div key={index} className="relative group rounded-lg overflow-hidden border border-slate-200 shadow-sm aspect-video bg-slate-50">
+                                  <img 
+                                      src={`data:image/png;base64,${receipt}`} 
+                                      alt="Ricevuta" 
+                                      className="w-full h-full object-cover"
+                                  />
+                                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                      <button 
+                                          type="button"
+                                          onClick={() => handleRemoveReceipt(index)}
+                                          className="p-2 bg-red-600 text-white rounded-full hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                                      >
+                                          <TrashIcon className="w-5 h-5" />
+                                      </button>
+                                  </div>
+                                  {/* Mobile always visible delete button */}
+                                  <button 
+                                      type="button"
+                                      onClick={() => handleRemoveReceipt(index)}
+                                      className="md:hidden absolute top-1 right-1 p-1 bg-white/90 text-red-600 rounded-full shadow-sm"
+                                  >
+                                      <XMarkIcon className="w-4 h-4" />
+                                  </button>
+                              </div>
+                          ))}
+                      </div>
+                  )}
+                  {/* Tasto Allega Ricevuta - Sempre visibile */}
+                  <button
+                      type="button"
+                      onClick={() => {
+                          if (Date.now() - receiptMenuCloseTimeRef.current < 500) return;
+                          setIsReceiptMenuOpen(true);
+                      }}
+                      className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-base rounded-lg border border-dashed border-indigo-300 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:border-indigo-400 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  >
+                      <PaperClipIcon className="w-5 h-5" />
+                      <span>{formData.receipts && formData.receipts.length > 0 ? 'Aggiungi un\'altra ricevuta' : 'Allega Ricevuta'}</span>
+                  </button>
+              </div>
+              
               {isForRecurringTemplate && (
                  <div className="bg-white p-4 rounded-lg border border-slate-200 space-y-4">
                    <div>
@@ -802,6 +872,19 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
               </div>
             </main>
             <footer className="p-4 bg-slate-100 border-t border-slate-200 flex justify-end"><button type="button" onClick={handleApplyRecurrence} className="px-4 py-2 text-sm font-semibold text-white bg-indigo-600 rounded-lg shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors">Applica</button></footer>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL PER SCELTA SORGENTE RICEVUTA */}
+      {isReceiptMenuOpen && (
+        <div className={`fixed inset-0 z-[5200] flex justify-center items-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity duration-300 ease-in-out ${isReceiptMenuAnimating ? 'opacity-100' : 'opacity-0'}`} onClick={handleCloseReceiptMenu}>
+          <div className="bg-slate-50 rounded-lg shadow-xl w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+            <header className="flex justify-between items-center p-4 border-b border-slate-200"><h2 className="text-lg font-bold text-slate-800">Allega Ricevuta</h2><button onClick={handleCloseReceiptMenu} className="p-1 rounded-full hover:bg-slate-200"><XMarkIcon className="w-6 h-6"/></button></header>
+            <div className="p-4 grid grid-cols-2 gap-4">
+              <button onClick={() => handlePickReceipt('camera')} className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-white border border-slate-200 hover:bg-indigo-50 hover:border-indigo-200 transition-colors"><div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600"><CameraIcon className="w-6 h-6" /></div><span className="font-semibold text-slate-700 text-sm">Fotocamera</span></button>
+              <button onClick={() => handlePickReceipt('gallery')} className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-white border border-slate-200 hover:bg-indigo-50 hover:border-indigo-200 transition-colors"><div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-purple-600"><PhotoIcon className="w-6 h-6" /></div><span className="font-semibold text-slate-700 text-sm">Galleria</span></button>
+            </div>
           </div>
         </div>
       )}
