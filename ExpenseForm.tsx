@@ -701,7 +701,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                 />
               </div>
               
-              {/* Ricevute Section */}
+              {/* Ricevute Section - VISUALIZZAZIONE SENZA CESTINO CENTRALE */}
               <div className="animate-fade-in-up">
                   <label className="block text-base font-medium text-slate-700 mb-1">Ricevute</label>
                   {formData.receipts && formData.receipts.length > 0 && (
@@ -710,21 +710,18 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                               <div 
                                 key={index} 
                                 className="relative rounded-lg overflow-hidden border border-slate-200 shadow-sm aspect-video bg-slate-50 cursor-pointer hover:border-indigo-300 transition-colors"
-                                onClick={(e) => { 
-                                    e.stopPropagation(); // Stop propagation to prevent form close or other events
-                                    setViewingImage(receipt); 
-                                }}
+                                onClick={() => setViewingImage(receipt)}
                               >
                                   <img 
                                       src={`data:image/png;base64,${receipt}`} 
                                       alt="Ricevuta" 
                                       className="w-full h-full object-cover"
                                   />
-                                  {/* Tasto X sempre visibile per eliminare */}
+                                  {/* Pulsante di eliminazione in alto a destra */}
                                   <button 
                                       type="button"
                                       onClick={(e) => { 
-                                          e.stopPropagation(); // Crucial: don't trigger the image click
+                                          e.stopPropagation(); 
                                           handleRemoveReceipt(index); 
                                       }}
                                       className="absolute top-1 right-1 p-1.5 bg-white/90 text-red-600 rounded-full shadow-sm hover:bg-red-50 hover:text-red-700 transition-colors z-10"
