@@ -362,7 +362,21 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
           </button>
           <h2 className="text-xl font-bold text-slate-800">Nuova Spesa</h2>
           <button
-            onClick={handleSubmit}
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              // FIX: Install a capture listener to swallow the "ghost click" that occurs after the modal closes.
+              const preventGhost = (ev: Event) => {
+                  ev.stopPropagation();
+                  ev.preventDefault();
+              };
+              window.addEventListener('click', preventGhost, { capture: true, once: true });
+              setTimeout(() => window.removeEventListener('click', preventGhost, { capture: true }), 600);
+              
+              handleSubmit();
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+            data-no-synthetic-click
             disabled={!canSubmit}
             aria-label="Conferma spesa"
             className={`w-11 h-11 flex items-center justify-center border rounded-full transition-colors
