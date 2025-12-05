@@ -700,7 +700,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                 />
               </div>
               
-              {/* Ricevute Section - CORRETTA: SENZA CESTINO CENTRALE */}
+              {/* Ricevute Section - SOLO IMMAGINE E TASTO X */}
               <div className="animate-fade-in-up">
                   <label className="block text-base font-medium text-slate-700 mb-1">Ricevute</label>
                   {formData.receipts && formData.receipts.length > 0 && (
@@ -708,7 +708,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                           {formData.receipts.map((receipt, index) => (
                               <div 
                                 key={index} 
-                                className="relative rounded-lg overflow-hidden border border-slate-200 shadow-sm aspect-video bg-slate-50 cursor-pointer"
+                                className="relative rounded-lg overflow-hidden border border-slate-200 shadow-sm aspect-video bg-slate-50 cursor-pointer hover:border-indigo-300 transition-colors"
                                 onClick={() => setViewingImage(receipt)}
                               >
                                   <img 
@@ -716,14 +716,15 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                                       alt="Ricevuta" 
                                       className="w-full h-full object-cover"
                                   />
-                                  {/* Pulsante "X" per eliminare in alto a destra */}
+                                  
+                                  {/* Tasto X per eliminare - SENZA OVERLAY E SENZA CESTINO */}
                                   <button 
                                       type="button"
                                       onClick={(e) => { 
-                                          e.stopPropagation(); // Evita di aprire l'immagine quando si cancella
+                                          e.stopPropagation(); // Importante: ferma il click per non aprire l'immagine
                                           handleRemoveReceipt(index); 
                                       }}
-                                      className="absolute top-1 right-1 p-1 bg-white/90 text-red-600 rounded-full shadow-sm hover:bg-white transition-colors z-10"
+                                      className="absolute top-1 right-1 p-1 bg-white/90 text-red-600 rounded-full shadow-md hover:bg-red-50 hover:text-red-700 transition-colors z-10 flex items-center justify-center"
                                       aria-label="Rimuovi ricevuta"
                                   >
                                       <XMarkIcon className="w-5 h-5" />
