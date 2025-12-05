@@ -1,8 +1,5 @@
-
-// CalculatorInputScreen.tsx
 import React, { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { Expense, Account, CATEGORIES } from '../types';
-import { ArrowLeftIcon } from './icons/ArrowLeftIcon';
 import { XMarkIcon } from './icons/XMarkIcon';
 import { CheckIcon } from './icons/CheckIcon';
 import { BackspaceIcon } from './icons/BackspaceIcon';
@@ -22,7 +19,6 @@ interface CalculatorInputScreenProps {
   onNavigateToDetails: () => void;
 }
 
-// Memoized formatter
 const formatAmountForDisplay = (numStr: string): string => {
   const sanitizedStr = String(numStr || '0').replace('.', ',');
   const [integerPart, decimalPart] = sanitizedStr.split(',');
@@ -39,7 +35,6 @@ const getAmountFontSize = (value: string): string => {
   return 'text-5xl';
 };
 
-// Optimized Keypad Button
 const KeypadButton: React.FC<React.HTMLAttributes<HTMLDivElement> & {
   children: React.ReactNode;
   onClick?: () => void;
@@ -52,8 +47,6 @@ const KeypadButton: React.FC<React.HTMLAttributes<HTMLDivElement> & {
     <div
       role="button"
       tabIndex={0}
-      aria-label={typeof children === 'string' ? `Tasto ${children}` : 'Tasto'}
-      aria-pressed="false"
       onClick={(e) => { onClick?.(); blurSelf(e.currentTarget); }}
       onKeyDown={(e) => {
         if ((e.key === 'Enter' || e.key === ' ') && onClick) {
@@ -87,8 +80,6 @@ const OperatorButton: React.FC<{ children: React.ReactNode; onClick: () => void 
     <div
       role="button"
       tabIndex={0}
-      aria-label={`Operatore ${children}`}
-      aria-pressed="false"
       onClick={(e) => { onClick(); blurSelf(e.currentTarget); }}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); blurSelf(e.currentTarget); } }}
       onPointerUp={(e) => blurSelf(e.currentTarget)}
@@ -115,7 +106,6 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
   const isSyncingFromParent = useRef(false);
   const typingSinceActivationRef = useRef(false);
 
-  // 🔧 SEMPLIFICATO: Rimosso tap bridge complesso che blocca eventi
   useEffect(() => {
     onMenuStateChange(activeMenu !== null);
   }, [activeMenu, onMenuStateChange]);
@@ -133,11 +123,9 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
     return () => window.removeEventListener('page-activated', onActivated as EventListener);
   }, []);
 
-  // Sync bidirezionale con debounce
   const syncTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
-    // Dal parent allo schermo
     const parentAmount = formData.amount ?? 0;
     const currentAmount = parseFloat(currentValue.replace(/\./g, '').replace(',', '.')) || 0;
     
@@ -195,7 +183,6 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
     });
   }, [justCalculated, shouldResetCurrentValue, handleClearAmount]);
 
-  // Long press su ⌫
   const delTimerRef = useRef<number | null>(null);
   const delDidLongRef = useRef(false);
   const delStartXRef = useRef(0);
@@ -352,9 +339,8 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
       <div className="flex-1 flex flex-col">
         <header className="flex items-center justify-between p-4 flex-shrink-0">
           <button
-            onClick={() => onClose()}
-            onPointerDown={(e) => e.stopPropagation()} // FIX: Stop propagation to prevent TapBridge from interfering
-            data-no-synthetic-click // FIX: Tell TapBridge to ignore this element
+            onClick={(e) => { e.stopPropagation(); onClose(); }}
+            onMouseDown={(e) => e.preventDefault()} // FIX: Previene il focus ghost
             aria-label="Chiudi calcolatrice"
             className="w-11 h-11 flex items-center justify-center border border-red-300 text-red-600 bg-red-50 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 rounded-full transition-colors cursor-pointer"
           >
@@ -362,7 +348,8 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
           </button>
           <h2 className="text-xl font-bold text-slate-800">Nuova Spesa</h2>
           <button
-            onClick={handleSubmit}
+            onClick={(e) => { e.stopPropagation(); handleSubmit(); }}
+            onMouseDown={(e) => e.preventDefault()} // FIX: Previene il focus ghost
             disabled={!canSubmit}
             aria-label="Conferma spesa"
             className={`w-11 h-11 flex items-center justify-center border rounded-full transition-colors
@@ -392,9 +379,7 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
             tabIndex={0}
             aria-label="Aggiungi dettagli alla spesa"
             aria-hidden={isDesktop}
-            // FIX: Use onNavigateToDetails prop.
             onClick={onNavigateToDetails}
-            // FIX: Use onNavigateToDetails prop.
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onNavigateToDetails(); }}
             className={`absolute top-1/2 -right-px w-8 h-[148px] flex items-center justify-center cursor-pointer ${isDesktop ? 'hidden' : ''}`}
             style={{ transform: 'translateY(calc(-50% + 2px))' }}
@@ -454,7 +439,6 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
             <KeypadButton className="text-slate-800" onClick={() => handleKeyPress(',')}>,</KeypadButton>
             <KeypadButton className="text-slate-800" onClick={() => handleKeyPress('0')}>0</KeypadButton>
             <KeypadButton
-              // FIX: Correctly type props for KeypadButton and remove invalid ones from the component's internal div.
               title="Tocca: cancella una cifra — Tieni premuto: cancella tutto"
               aria-label="Cancella"
               onPointerDownCapture={onDelPointerDownCapture}
@@ -463,7 +447,6 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
               onPointerCancelCapture={onDelPointerCancelCapture}
               onContextMenu={(e) => e.preventDefault()}
             >
-              {/* 🔧 FIX: Aggiunta classe colore esplicita */}
               <BackspaceIcon className="w-8 h-8 text-slate-800" />
             </KeypadButton>
           </div>
