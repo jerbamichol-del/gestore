@@ -489,7 +489,6 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
   // --- FULL SCREEN IMAGE VIEWER (PORTAL) ---
   const renderImageViewer = () => {
       if (!viewingImage) return null;
-      // Usiamo createPortal per renderizzare il visualizzatore direttamente nel body
       return createPortal(
         <div 
             className="fixed inset-0 z-[6000] bg-black/95 flex items-center justify-center p-4 animate-fade-in-up"
@@ -701,7 +700,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                 />
               </div>
               
-              {/* Ricevute Section */}
+              {/* Ricevute Section - VISUALIZZAZIONE E TASTO ALLEGA */}
               <div className="animate-fade-in-up">
                   <label className="block text-base font-medium text-slate-700 mb-1">Ricevute</label>
                   {formData.receipts && formData.receipts.length > 0 && (
@@ -710,38 +709,27 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                               <div 
                                 key={index} 
                                 className="relative group rounded-lg overflow-hidden border border-slate-200 shadow-sm aspect-video bg-slate-50 cursor-pointer"
-                                onClick={(e) => { 
-                                    e.stopPropagation(); 
-                                    setViewingImage(receipt); 
-                                }}
+                                onClick={() => setViewingImage(receipt)} // Apre a schermo intero
                               >
                                   <img 
                                       src={`data:image/png;base64,${receipt}`} 
                                       alt="Ricevuta" 
                                       className="w-full h-full object-cover"
                                   />
-                                  {/* --- FIX: Overlay trasparente ai click per permettere il passaggio all'immagine --- */}
-                                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
-                                      {/* --- FIX: Tasto cestino riattivato ai click --- */}
-                                      <button 
-                                          type="button"
-                                          onClick={(e) => { e.stopPropagation(); handleRemoveReceipt(index); }}
-                                          className="p-2 bg-red-600 text-white rounded-full hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 pointer-events-auto"
-                                      >
-                                          <TrashIcon className="w-5 h-5" />
-                                      </button>
-                                  </div>
+                                  {/* Tasto X per eliminare (in alto a destra) */}
                                   <button 
                                       type="button"
                                       onClick={(e) => { e.stopPropagation(); handleRemoveReceipt(index); }}
-                                      className="md:hidden absolute top-1 right-1 p-1 bg-white/90 text-red-600 rounded-full shadow-sm"
+                                      className="absolute top-1 right-1 p-1 bg-white/90 text-red-600 rounded-full shadow-sm hover:bg-white transition-colors"
+                                      aria-label="Rimuovi ricevuta"
                                   >
-                                      <XMarkIcon className="w-4 h-4" />
+                                      <XMarkIcon className="w-5 h-5" />
                                   </button>
                               </div>
                           ))}
                       </div>
                   )}
+                  {/* Tasto Allega Ricevuta */}
                   <button
                       type="button"
                       onClick={() => {
