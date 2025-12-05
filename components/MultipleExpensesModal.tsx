@@ -160,7 +160,7 @@ const MultipleExpensesModal: React.FC<MultipleExpensesModalProps> = ({ isOpen, o
         subcategory: exp.subcategory || undefined,
         accountId: exp.accountId,
         tags: exp.tags || [],
-        receipts: exp.receipts || []
+        receipts: [] // Assicuriamo che le ricevute siano vuote per l'inserimento multiplo
       }))
       .filter(exp => exp.amount > 0); 
 
@@ -243,10 +243,6 @@ const MultipleExpensesModal: React.FC<MultipleExpensesModalProps> = ({ isOpen, o
                     const selectedAccountLabel = accounts.find(a => a.id === expense.accountId)?.name;
                     const selectedCategoryLabel = expense.category ? getCategoryStyle(expense.category).label : undefined;
 
-                    // --- MODIFICA: Estrazione anteprima ricevuta ---
-                    const firstReceipt = expense.receipts && expense.receipts.length > 0 ? expense.receipts[0] : null;
-                    // -----------------------------------------------
-
                     return (
                     <div 
                         key={index} 
@@ -260,17 +256,6 @@ const MultipleExpensesModal: React.FC<MultipleExpensesModalProps> = ({ isOpen, o
                                 onChange={() => handleToggleSelection(index)}
                                 label={`Seleziona spesa ${expense.description}`}
                             />
-                            
-                            {/* --- MODIFICA: Visualizzazione miniatura --- */}
-                            {firstReceipt && (
-                                <img 
-                                    src={`data:image/png;base64,${firstReceipt}`} 
-                                    alt="Anteprima ricevuta" 
-                                    className="w-10 h-10 object-cover rounded-md border border-slate-200 shrink-0"
-                                />
-                            )}
-                            {/* ------------------------------------------- */}
-                            
                             <input 
                                 type="date"
                                 value={expense.date || ''}
