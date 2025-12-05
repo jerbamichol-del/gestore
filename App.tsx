@@ -76,6 +76,112 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
 
   const showToast = useCallback((msg: ToastMessage) => setToast(msg), []);
 
+  // --- AUTOMATIC RECURRING EXPENSE PROCESSING ---
+  useEffect(() => {
+    if (!recurringExpenses || recurringExpenses.length === 0) return;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    let updatedExpenses = [...(expenses || [])];
+    // Deep clone to safely mutate in logic before setting state
+    let updatedRecurring = recurringExpenses.map(e => ({ ...e }));
+    let hasChanges = false;
+    let generatedCount = 0;
+
+    const parseDate = (str: string) => {
+        const p = str.split('-').map(Number);
+        return new Date(p[0], p[1] - 1, p[2]);
+    };
+
+    const toDateStr = (d: Date) => {
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+
+    const getNextDueDate = (template: Expense, lastDate: Date) => {
+        const d = new Date(lastDate);
+        const interval = template.recurrenceInterval || 1;
+        
+        if (template.recurrence === 'daily') d.setDate(d.getDate() + interval);
+        else if (template.recurrence === 'weekly') d.setDate(d.getDate() + 7 * interval);
+        else if (template.recurrence === 'monthly') d.setMonth(d.getMonth() + interval);
+        else if (template.recurrence === 'yearly') d.setFullYear(d.getFullYear() + interval);
+        
+        return d;
+    };
+
+    const finalRecurring = updatedRecurring.filter(template => {
+        if (template.frequency !== 'recurring') return true;
+
+        // Start checking from either the last generation or the start date
+        let nextDue = template.lastGeneratedDate 
+            ? getNextDueDate(template, parseDate(template.lastGeneratedDate)) 
+            : parseDate(template.date);
+
+        let keep = true;
+        let modified = false;
+
+        // Iterate to catch up if multiple periods passed
+        // Limit loops to prevent hangs (max 100 iterations)
+        for (let i = 0; i < 100; i++) {
+            if (nextDue > today) break;
+
+            // Check Date Expiry
+            if (template.recurrenceEndType === 'date' && template.recurrenceEndDate) {
+                if (nextDue > parseDate(template.recurrenceEndDate)) {
+                    keep = false;
+                    hasChanges = true; // Mark as changed to remove it
+                    break;
+                }
+            }
+
+            // Generate Instance
+            const newExpense: Expense = {
+                ...template,
+                id: crypto.randomUUID(),
+                date: toDateStr(nextDue),
+                frequency: 'single',
+                recurringExpenseId: template.id,
+                // Clear template fields
+                recurrence: undefined, recurrenceInterval: undefined, recurrenceDays: undefined,
+                recurrenceEndType: undefined, recurrenceEndDate: undefined, recurrenceCount: undefined,
+                monthlyRecurrenceType: undefined, lastGeneratedDate: undefined
+            };
+            
+            updatedExpenses.unshift(newExpense);
+            template.lastGeneratedDate = toDateStr(nextDue);
+            hasChanges = true;
+            modified = true;
+            generatedCount++;
+
+            // Check Count Expiry
+            if (template.recurrenceEndType === 'count' && template.recurrenceCount !== undefined) {
+                template.recurrenceCount--;
+                if (template.recurrenceCount <= 0) {
+                    keep = false;
+                    break;
+                }
+            }
+
+            // Calculate next
+            nextDue = getNextDueDate(template, nextDue);
+        }
+
+        return keep;
+    });
+
+    if (hasChanges) {
+        setExpenses(updatedExpenses);
+        setRecurringExpenses(finalRecurring);
+        if (generatedCount > 0) {
+            setToast({ message: `${generatedCount} spese programmate generate.`, type: 'success' });
+        }
+    }
+  }, [recurringExpenses, expenses, setExpenses, setRecurringExpenses]);
+
   // --- HANDLERS (Spostati in alto) ---
 
   const refreshPendingImages = useCallback(async () => {
