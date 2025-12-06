@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Expense, Account, CATEGORIES } from './types';
 import { useLocalStorage } from './hooks/useLocalStorage';
@@ -31,6 +32,19 @@ import SuccessIndicator from './components/SuccessIndicator';
 
 type ToastMessage = { message: string; type: 'success' | 'info' | 'error' };
 type ExtendedOfflineImage = OfflineImage & { _isShared?: boolean };
+
+// Helper Date Functions
+const parseLocalYYYYMMDD = (s: string) => {
+  const p = s.split('-').map(Number);
+  return new Date(p[0], p[1] - 1, p[2]);
+};
+
+const toYYYYMMDD = (date: Date) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
 
 const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogout, currentEmail }) => {
   const [expenses, setExpenses] = useLocalStorage<Expense[]>('expenses_v2', []);
@@ -78,45 +92,6 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
   const isSharedStart = useRef(new URLSearchParams(window.location.search).get('shared') === 'true');
   const lastBackPressTime = useRef(0);
 
-  // --- JSON EXPORT ---
-  const handleExportJSON = () => {
-    const data = {
-      expenses,
-      recurringExpenses,
-      accounts,
-      exportDate: new Date().toISOString(),
-      version: '1.0'
-    };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `backup_spese_${new Date().toISOString().slice(0,10)}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    showToast({ message: 'Backup JSON scaricato!', type: 'success' });
-  };
-
-  // --- JSON IMPORT ---
-  const handleImportJSON = (file: File) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const json = JSON.parse(e.target?.result as string);
-        if (json.expenses) setExpenses(json.expenses);
-        if (json.recurringExpenses) setRecurringExpenses(json.recurringExpenses);
-        if (json.accounts) setAccounts(json.accounts);
-        showToast({ message: 'Backup JSON ripristinato!', type: 'success' });
-        setTimeout(() => window.location.reload(), 1500); // Ricarica per applicare bene
-      } catch (err) {
-        showToast({ message: 'Errore file JSON', type: 'error' });
-      }
-    };
-    reader.readAsText(file);
-  };
-
   const refreshPendingImages = useCallback(async () => {
     try {
       const images = await getQueuedImages();
@@ -127,7 +102,135 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
     }
   }, []);
 
-  // ... (rest of helper functions remain the same: sanitizeExpenseData, handlers) ...
+  // --- AUTOMATIC RECURRING EXPENSE GENERATION ---
+  useEffect(() => {
+    // Process recurring expenses inside a timer to debounce updates
+    const timer = setTimeout(() => {
+        if (!recurringExpenses || recurringExpenses.length === 0) return;
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        let expensesChanged = false;
+        let recurringChanged = false;
+        
+        const newExpenses = [...(expenses || [])];
+        const activeTemplates: Expense[] = [];
+
+        recurringExpenses.forEach(template => {
+            let currentTemplate = { ...template };
+            let templateChanged = false;
+            
+            // 1. Determine starting point for check
+            let nextDate: Date;
+            if (currentTemplate.lastGeneratedDate) {
+                // Next is based on last generated + interval
+                nextDate = parseLocalYYYYMMDD(currentTemplate.lastGeneratedDate);
+                const interval = currentTemplate.recurrenceInterval || 1;
+                switch(currentTemplate.recurrence) {
+                    case 'daily': nextDate.setDate(nextDate.getDate() + interval); break;
+                    case 'weekly': nextDate.setDate(nextDate.getDate() + 7 * interval); break;
+                    case 'monthly': nextDate.setMonth(nextDate.getMonth() + interval); break;
+                    case 'yearly': nextDate.setFullYear(nextDate.getFullYear() + interval); break;
+                    default: break;
+                }
+            } else {
+                // First time ever
+                nextDate = parseLocalYYYYMMDD(currentTemplate.date);
+            }
+
+            // 2. Loop to "catch up" missed periods up to today
+            let loops = 0;
+            // Count already generated items for this template ID
+            let totalGenerated = (expenses || []).filter(e => e.recurringExpenseId === currentTemplate.id).length;
+            
+            // Loop while nextDate is today or in the past
+            while (nextDate <= today && loops < 1000) {
+                loops++;
+                
+                // Check Termination Conditions BEFORE generating
+                let stop = false;
+                
+                // End Date check
+                if (currentTemplate.recurrenceEndType === 'date' && currentTemplate.recurrenceEndDate) {
+                    const end = parseLocalYYYYMMDD(currentTemplate.recurrenceEndDate);
+                    if (nextDate > end) stop = true;
+                }
+                // Count check
+                if (currentTemplate.recurrenceEndType === 'count' && currentTemplate.recurrenceCount) {
+                    if (totalGenerated >= currentTemplate.recurrenceCount) stop = true;
+                }
+
+                if (stop) break;
+
+                // GENERATE EXPENSE
+                const newExpense: Expense = {
+                    ...currentTemplate,
+                    id: crypto.randomUUID(),
+                    date: toYYYYMMDD(nextDate),
+                    recurringExpenseId: currentTemplate.id,
+                    frequency: 'single', // Converted to single instance in history
+                    // Remove recurrence config properties from the instance to keep it clean
+                    recurrence: undefined,
+                    recurrenceInterval: undefined,
+                    recurrenceDays: undefined,
+                    recurrenceEndType: undefined,
+                    recurrenceEndDate: undefined,
+                    recurrenceCount: undefined,
+                    monthlyRecurrenceType: undefined,
+                    lastGeneratedDate: undefined
+                };
+                
+                newExpenses.push(newExpense);
+                expensesChanged = true;
+                
+                // Update Template
+                currentTemplate.lastGeneratedDate = toYYYYMMDD(nextDate);
+                templateChanged = true;
+                totalGenerated++;
+
+                // Calculate next date for loop continuation
+                const interval = currentTemplate.recurrenceInterval || 1;
+                const d = new Date(nextDate);
+                switch(currentTemplate.recurrence) {
+                    case 'daily': d.setDate(d.getDate() + interval); break;
+                    case 'weekly': d.setDate(d.getDate() + 7 * interval); break;
+                    case 'monthly': d.setMonth(d.getMonth() + interval); break;
+                    case 'yearly': d.setFullYear(d.getFullYear() + interval); break;
+                }
+                nextDate = d;
+            }
+
+            // 3. Determine if template is FINISHED
+            let isFinished = false;
+            // Check based on the *next* potential date
+            if (currentTemplate.recurrenceEndType === 'date' && currentTemplate.recurrenceEndDate) {
+                 const end = parseLocalYYYYMMDD(currentTemplate.recurrenceEndDate);
+                 if (nextDate > end) isFinished = true;
+            }
+            if (currentTemplate.recurrenceEndType === 'count' && currentTemplate.recurrenceCount) {
+                if (totalGenerated >= currentTemplate.recurrenceCount) isFinished = true;
+            }
+
+            if (isFinished) {
+                // If finished, we drop it from activeTemplates -> effectively deleting it from scheduled list
+                recurringChanged = true; 
+            } else {
+                if (templateChanged) recurringChanged = true;
+                activeTemplates.push(currentTemplate);
+            }
+        });
+
+        // Batch updates
+        if (expensesChanged) setExpenses(newExpenses);
+        if (recurringChanged) setRecurringExpenses(activeTemplates);
+
+    }, 1000); // 1s delay to be safe
+
+    return () => clearTimeout(timer);
+  }, [recurringExpenses, expenses, setExpenses, setRecurringExpenses]);
+
+
   const sanitizeExpenseData = (data: any, imageBase64?: string): Partial<Omit<Expense, 'id'>> => {
     if (!data) return {}; 
     let category = data.category || 'Altro';
@@ -135,12 +238,15 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
     let amount = data.amount;
     if (typeof amount === 'string') amount = parseFloat(amount.replace(',', '.'));
     if (typeof amount !== 'number' || isNaN(amount)) amount = 0;
+    const safeAccounts = accounts || [];
+
     return {
         description: data.description || '',
         amount: amount,
         category: category,
         date: data.date || new Date().toISOString().split('T')[0],
         tags: Array.isArray(data.tags) ? data.tags : [],
+        // Se imageBase64 è undefined, receipts sarà vuoto (corretto per spese multiple)
         receipts: Array.isArray(data.receipts) ? data.receipts : (imageBase64 ? [imageBase64] : []),
         accountId: data.accountId || (safeAccounts.length > 0 ? safeAccounts[0].id : '')
     };
@@ -148,23 +254,79 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
 
   const handleSharedFile = async (file: File) => {
       try {
-          showToast({ message: 'Elaborazione immagine...', type: 'info' });
+          showToast({ message: 'Elaborazione immagine condivisa...', type: 'info' });
           const { base64: base64Image, mimeType } = await processImageFile(file);
           const newImage: OfflineImage = { id: crypto.randomUUID(), base64Image, mimeType, timestamp: Date.now() };
-          if (isOnline) { setImageForAnalysis(newImage); } 
-          else { await addImageToQueue(newImage); refreshPendingImages(); showToast({ message: 'Salvata in coda.', type: 'info' }); }
-      } catch (e) { showToast({ message: "Errore file.", type: 'error' }); }
+          if (isOnline) {
+              setImageForAnalysis(newImage); 
+          } else {
+              await addImageToQueue(newImage);
+              refreshPendingImages();
+              showToast({ message: 'Salvata in coda (offline).', type: 'info' });
+          }
+      } catch (e) {
+          console.error(e);
+          showToast({ message: "Errore file condiviso.", type: 'error' });
+      }
   };
 
   const handleImportFile = async (file: File) => {
       try {
           showToast({ message: 'Elaborazione file...', type: 'info' });
+          
+          // Gestione Import JSON
+          if (file.type === 'application/json' || file.name.toLowerCase().endsWith('.json')) {
+              try {
+                  const text = await file.text();
+                  const data = JSON.parse(text);
+                  if (Array.isArray(data)) {
+                      const imported: Expense[] = data.map((d: any) => ({
+                          id: d.id || crypto.randomUUID(),
+                          description: d.description || '',
+                          amount: Number(d.amount) || 0,
+                          date: d.date || new Date().toISOString().split('T')[0],
+                          category: d.category || 'Altro',
+                          subcategory: d.subcategory,
+                          accountId: d.accountId || (safeAccounts[0]?.id || 'cash'),
+                          tags: d.tags || [],
+                          receipts: d.receipts || [],
+                          time: d.time,
+                          frequency: d.frequency,
+                          recurrence: d.recurrence,
+                          recurrenceInterval: d.recurrenceInterval,
+                          recurrenceDays: d.recurrenceDays,
+                          recurrenceEndType: d.recurrenceEndType,
+                          recurrenceEndDate: d.recurrenceEndDate,
+                          recurrenceCount: d.recurrenceCount,
+                          monthlyRecurrenceType: d.monthlyRecurrenceType,
+                          recurringExpenseId: d.recurringExpenseId,
+                          lastGeneratedDate: d.lastGeneratedDate
+                      }));
+                      
+                      setExpenses(prev => [...prev, ...imported]);
+                      showToast({ message: `${imported.length} spese importate da JSON.`, type: 'success' });
+                      return;
+                  }
+              } catch (e) {
+                  showToast({ message: "File JSON non valido.", type: 'error' });
+                  return;
+              }
+          }
+
           const { processFileToImage } = await import('./utils/fileHelper');
           const { base64: base64Image, mimeType } = await processFileToImage(file);
           const newImage: OfflineImage = { id: crypto.randomUUID(), base64Image, mimeType, timestamp: Date.now() };
-          if (isOnline) { setImageForAnalysis(newImage); } 
-          else { await addImageToQueue(newImage); refreshPendingImages(); showToast({ message: 'File salvato.', type: 'info' }); }
-      } catch (e) { showToast({ message: "Errore importazione.", type: 'error' }); }
+          
+          if (isOnline) {
+              setImageForAnalysis(newImage); 
+          } else {
+              await addImageToQueue(newImage);
+              refreshPendingImages();
+              showToast({ message: 'File salvato in coda (offline).', type: 'info' });
+          }
+      } catch (e) {
+          showToast({ message: "Errore importazione file.", type: 'error' });
+      }
   };
 
   const handleImagePick = async (source: 'camera' | 'gallery') => {
@@ -176,31 +338,43 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
       const { base64: base64Image, mimeType } = await processImageFile(file);
       const newImage: OfflineImage = { id: crypto.randomUUID(), base64Image, mimeType, timestamp: Date.now() };
       if (isOnline) setImageForAnalysis(newImage);
-      else { await addImageToQueue(newImage); refreshPendingImages(); }
-    } catch (error) { } 
+      else {
+        await addImageToQueue(newImage);
+        refreshPendingImages();
+      }
+    } catch (error) { /* Ignora */ } 
     finally { setTimeout(() => sessionStorage.removeItem('preventAutoLock'), 2000); }
   };
 
   const handleAnalyzeImage = async (image: OfflineImage) => {
-    if (!isOnline) { showToast({ message: 'Serve internet.', type: 'error' }); return; }
+    if (!isOnline) { showToast({ message: 'Connettiti a internet per analizzare.', type: 'error' }); return; }
     setSyncingImageId(image.id);
     setIsParsingImage(true);
     try {
       const { parseExpensesFromImage } = await import('./utils/ai');
       const parsedData = await parseExpensesFromImage(image.base64Image, image.mimeType);
+      
       if (parsedData?.length === 1) {
+        // SPESA SINGOLA: Passiamo l'immagine così viene allegata
         setPrefilledData(sanitizeExpenseData(parsedData[0], image.base64Image));
         window.history.replaceState({ modal: 'form' }, ''); 
         setIsFormOpen(true);
       } else if (parsedData?.length > 1) {
-        setMultipleExpensesData(parsedData.map(item => sanitizeExpenseData(item, undefined))); 
+        // SPESE MULTIPLE: Passiamo undefined come immagine, così le ricevute vengono tolte
+        setMultipleExpensesData(parsedData.map(item => sanitizeExpenseData(item, undefined)));
         window.history.replaceState({ modal: 'multiple' }, ''); 
         setIsMultipleExpensesModalOpen(true);
-      } else { showToast({ message: "Nessuna spesa trovata.", type: 'info' }); }
+      } else {
+        showToast({ message: "Nessuna spesa trovata.", type: 'info' });
+      }
       await deleteImageFromQueue(image.id);
       refreshPendingImages();
-    } catch (error) { showToast({ message: "Errore analisi.", type: 'error' }); } 
-    finally { setIsParsingImage(false); setSyncingImageId(null); }
+    } catch (error) {
+      showToast({ message: "Errore analisi immagine. Riprova.", type: 'error' });
+    } finally {
+      setIsParsingImage(false);
+      setSyncingImageId(null);
+    }
   };
 
   const handleVoiceParsed = (data: Partial<Omit<Expense, 'id'>>) => {
@@ -211,28 +385,35 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
     setIsFormOpen(true);
   };
 
-  // --- Effects ---
   useEffect(() => {
     if (!currentEmail || !isOnline) return;
     const timer = setTimeout(() => {
         const allUsers = getUsers();
         const currentUser = allUsers[currentEmail.toLowerCase()];
         if (currentUser) {
-            saveToCloud(currentEmail, { expenses, recurringExpenses, accounts }, currentUser.pinHash, currentUser.pinSalt)
-                .then(ok => { if (ok) console.log("Backup OK"); })
-                .catch(e => console.warn("Cloud error", e));
+            console.log("☁️ Backup Cloud per:", currentEmail);
+            saveToCloud(
+                currentEmail, 
+                { expenses, recurringExpenses, accounts },
+                currentUser.pinHash, 
+                currentUser.pinSalt
+            ).then(ok => {
+                if (ok) console.log("✅ Backup completato");
+            }).catch(e => console.warn("Cloud error", e));
         }
     }, 5000);
     return () => clearTimeout(timer);
   }, [expenses, recurringExpenses, accounts, currentEmail, isOnline]);
 
-  useEffect(() => { if (!isSharedStart.current) refreshPendingImages(); }, [refreshPendingImages]);
+  useEffect(() => {
+    if (!isSharedStart.current) refreshPendingImages();
+  }, [refreshPendingImages]);
 
   useEffect(() => {
     const checkForSharedFile = async () => {
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.get('shared') === 'true' || isSharedStart.current) {
-        try { window.history.replaceState({ modal: 'home' }, '', window.location.pathname); } catch (e) {}
+        try { window.history.replaceState({ modal: 'home' }, '', window.location.pathname); } catch (e) { try { window.history.replaceState({ modal: 'home' }, ''); } catch(e) {} }
         try {
             const images = await getQueuedImages();
             const safeImages = Array.isArray(images) ? images : [];
@@ -243,8 +424,8 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
                const flaggedImage: ExtendedOfflineImage = { ...latestImage, _isShared: true };
                setImageForAnalysis(flaggedImage);
                setPendingImages(safeImages.filter(img => img.id !== latestImage.id));
-            }
-        } catch (e) { }
+            } else { setPendingImages([]); }
+        } catch (e) { console.error("Error checking shared file", e); }
       }
     };
     checkForSharedFile();
@@ -262,7 +443,9 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
         window.history.pushState({ modal: 'home' }, '');
     }
     const params = new URLSearchParams(window.location.search);
-    if (params.get('install') === 'true') { setTimeout(() => setIsInstallModalOpen(true), 500); }
+    if (params.get('install') === 'true') {
+        setTimeout(() => setIsInstallModalOpen(true), 500);
+    }
   }, []);
 
   useEffect(() => {
@@ -272,8 +455,12 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
   }, []);
 
   const handleInstallClick = () => {
-    if (installPromptEvent) { installPromptEvent.prompt(); installPromptEvent.userChoice.then((c: any) => setInstallPromptEvent(null)); } 
-    else { setIsInstallModalOpen(true); }
+    if (installPromptEvent) {
+      installPromptEvent.prompt();
+      installPromptEvent.userChoice.then((choiceResult: any) => { setInstallPromptEvent(null); });
+    } else {
+      setIsInstallModalOpen(true);
+    }
   };
 
   const closeAllModals = () => {
@@ -316,11 +503,18 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
       if (modal !== 'calculator' && modal !== 'calculator_details') setIsCalculatorContainerOpen(false);
 
       if (!modal || modal === 'home') {
-        setIsHistoryScreenOpen(false); setIsHistoryClosing(false); setIsHistoryFilterOpen(false); setIsRecurringScreenOpen(false); setImageForAnalysis(null);
+        setIsHistoryScreenOpen(false);
+        setIsHistoryClosing(false); 
+        setIsHistoryFilterOpen(false); 
+        setIsRecurringScreenOpen(false);
+        setImageForAnalysis(null);
       } else if (modal === 'history') {
-        setIsHistoryScreenOpen(true); if (isHistoryClosing) setIsHistoryClosing(false); setIsRecurringScreenOpen(false);
+        setIsHistoryScreenOpen(true);
+        if (isHistoryClosing) setIsHistoryClosing(false);
+        setIsRecurringScreenOpen(false);
       } else if (modal === 'recurring') {
-        setIsRecurringScreenOpen(true); setIsHistoryScreenOpen(false);
+        setIsRecurringScreenOpen(true);
+        setIsHistoryScreenOpen(false);
       }
     };
     window.addEventListener('popstate', handlePopState);
@@ -328,18 +522,54 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
   }, [showToast, isHistoryClosing]);
 
   const handleAddExpense = (data: Omit<Expense, 'id'> | Expense) => {
-      if ('id' in data) { 
-          setExpenses(p => p.map(e => e.id === data.id ? data : e));
-          setRecurringExpenses(p => p.map(e => e.id === data.id ? data : e));
+      // INTERCETTAZIONE: Evita il "flicker" delle spese ricorrenti singole per oggi.
+      // Se è una ricorrenza singola (count=1) e la data è oggi o passata, 
+      // la trasformiamo subito in spesa normale (Storico) senza passare per le programmate.
+      let finalData = { ...data };
+      const todayStr = toYYYYMMDD(new Date());
+
+      if (
+          finalData.frequency === 'recurring' &&
+          finalData.recurrenceEndType === 'count' &&
+          finalData.recurrenceCount === 1 &&
+          finalData.date <= todayStr
+      ) {
+          finalData.frequency = 'single';
+          // Pulizia campi ricorrenza per coerenza
+          finalData.recurrence = undefined;
+          finalData.recurrenceInterval = undefined;
+          finalData.recurrenceDays = undefined;
+          finalData.recurrenceEndType = undefined;
+          finalData.recurrenceEndDate = undefined;
+          finalData.recurrenceCount = undefined;
+          finalData.monthlyRecurrenceType = undefined;
+      }
+
+      if ('id' in finalData) { 
+          // Modifica esistente
+          const updatedExpense = finalData as Expense;
+          setExpenses(p => p.map(e => e.id === updatedExpense.id ? updatedExpense : e));
+          
+          // Se stava nelle ricorrenti ma ora è diventata singola (o l'abbiamo forzata sopra), toglila dalle ricorrenti
+          if (updatedExpense.frequency === 'single') {
+             setRecurringExpenses(p => p.filter(e => e.id !== updatedExpense.id));
+          } else {
+             setRecurringExpenses(p => p.map(e => e.id === updatedExpense.id ? updatedExpense : e));
+          }
       } else { 
-          const newItem = { ...data, id: crypto.randomUUID() } as Expense;
-          if (data.frequency === 'recurring') setRecurringExpenses(p => [newItem, ...p]);
+          // Nuova spesa
+          const newItem = { ...finalData, id: crypto.randomUUID() } as Expense;
+          if (finalData.frequency === 'recurring') setRecurringExpenses(p => [newItem, ...p]);
           else setExpenses(p => [newItem, ...p]);
       }
       setShowSuccessIndicator(true); setTimeout(() => setShowSuccessIndicator(false), 2000);
       
-      if (isFormOpen && (isHistoryScreenOpen || isRecurringScreenOpen)) closeModalWithHistory();
-      else forceNavigateHome();
+      // FIX NAVIGAZIONE: Se il form era aperto (es. da storico), torna indietro invece di andare alla home
+      if (isFormOpen) {
+          window.history.back();
+      } else {
+          forceNavigateHome();
+      }
   };
 
   const handleDeleteRequest = (id: string) => { setExpenseToDeleteId(id); setIsConfirmDeleteModalOpen(true); };
@@ -393,8 +623,6 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
               onNavigateToHistory={() => { window.history.pushState({ modal: 'history' }, ''); setIsHistoryClosing(false); setIsHistoryScreenOpen(true); }}
               onReceiveSharedFile={handleSharedFile} 
               onImportFile={handleImportFile}
-              onExportJSON={handleExportJSON}
-              onImportJSON={handleImportJSON}
            />
            <PendingImages images={pendingImages} onAnalyze={handleAnalyzeImage} onDelete={async (id) => { await deleteImageFromQueue(id); refreshPendingImages(); }} isOnline={isOnline} syncingImageId={syncingImageId} />
         </div>
@@ -426,11 +654,23 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
       )}
 
       <VoiceInputModal isOpen={isVoiceModalOpen} onClose={closeModalWithHistory} onParsed={handleVoiceParsed} />
+
       <ConfirmationModal isOpen={isConfirmDeleteModalOpen} onClose={() => setIsConfirmDeleteModalOpen(false)} onConfirm={confirmDelete} title="Conferma Eliminazione" message="Azione irreversibile." variant="danger" />
-      <ConfirmationModal isOpen={!!imageForAnalysis} onClose={handleModalClose} onConfirm={handleModalConfirm} title="Analizza Immagine" message="Vuoi analizzare subito questa immagine?" confirmButtonText="Sì, analizza" cancelButtonText="No, in coda" />
+      
+      <ConfirmationModal
+        isOpen={!!imageForAnalysis}
+        onClose={handleModalClose}
+        onConfirm={handleModalConfirm}
+        title="Analizza Immagine"
+        message="Vuoi analizzare subito questa immagine?"
+        confirmButtonText="Sì, analizza"
+        cancelButtonText="No, in coda"
+      />
+
       <MultipleExpensesModal isOpen={isMultipleExpensesModalOpen} onClose={closeModalWithHistory} expenses={multipleExpensesData} accounts={safeAccounts} onConfirm={(d) => { d.forEach(handleAddExpense); forceNavigateHome(); }} />
-      {isHistoryScreenOpen && <HistoryScreen expenses={expenses} accounts={safeAccounts} onClose={closeModalWithHistory} onCloseStart={() => setIsHistoryClosing(true)} onEditExpense={(e) => { setEditingExpense(e); window.history.pushState({ modal: 'form' }, ''); setIsFormOpen(true); }} onDeleteExpense={handleDeleteRequest} onDeleteExpenses={(ids) => setExpenses(p => p.filter(e => !ids.includes(e.id)))} isEditingOrDeleting={isFormOpen || isConfirmDeleteModalOpen} isOverlayed={false} onDateModalStateChange={() => {}} onFilterPanelOpenStateChange={setIsHistoryFilterOpen} />}
-      {isRecurringScreenOpen && <RecurringExpensesScreen recurringExpenses={recurringExpenses} expenses={expenses} accounts={safeAccounts} onClose={closeModalWithHistory} onEdit={(e) => { setEditingRecurringExpense(e); window.history.pushState({ modal: 'form' }, ''); setIsFormOpen(true); }} onDelete={(id) => setRecurringExpenses(p => p.filter(e => e.id !== id))} onDeleteRecurringExpenses={(ids) => setRecurringExpenses(p => p.filter(e => !ids.includes(e.id)))} />}
+
+      {isHistoryScreenOpen && <HistoryScreen expenses={expenses} accounts={safeAccounts} onClose={closeModalWithHistory} onCloseStart={() => setIsHistoryClosing(true)} onEditExpense={(e) => { setEditingExpense(e); window.history.pushState({ modal: 'form' }, ''); setIsFormOpen(true); }} onDeleteExpense={handleDeleteRequest} onDeleteExpenses={(ids) => { setExpenses(prev => (prev || []).filter(e => !ids.includes(e.id))); }} isEditingOrDeleting={isFormOpen || isConfirmDeleteModalOpen} isOverlayed={isFormOpen || isConfirmDeleteModalOpen} onDateModalStateChange={() => {}} onFilterPanelOpenStateChange={setIsHistoryFilterOpen} />}
+      {isRecurringScreenOpen && <RecurringExpensesScreen recurringExpenses={recurringExpenses} expenses={expenses} accounts={safeAccounts} onClose={closeModalWithHistory} onEdit={(e) => { setEditingRecurringExpense(e); window.history.pushState({ modal: 'form' }, ''); setIsFormOpen(true); }} onDelete={(id) => setRecurringExpenses(prev => (prev || []).filter(e => e.id !== id))} onDeleteRecurringExpenses={(ids) => setRecurringExpenses(prev => (prev || []).filter(e => !ids.includes(e.id)))} />}
       <ShareQrModal isOpen={isQrModalOpen} onClose={closeModalWithHistory} />
       <InstallPwaModal isOpen={isInstallModalOpen} onClose={() => setIsInstallModalOpen(false)} />
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
