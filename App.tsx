@@ -482,12 +482,44 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
   }, [showToast, isHistoryClosing]);
 
   const handleAddExpense = (data: Omit<Expense, 'id'> | Expense) => {
-      if ('id' in data) { 
-          setExpenses(p => p.map(e => e.id === data.id ? data : e));
-          setRecurringExpenses(p => p.map(e => e.id === data.id ? data : e));
+      // INTERCETTAZIONE: Evita il "flicker" delle spese ricorrenti singole per oggi.
+      // Se è una ricorrenza singola (count=1) e la data è oggi o passata, 
+      // la trasformiamo subito in spesa normale (Storico) senza passare per le programmate.
+      let finalData = { ...data };
+      const todayStr = toYYYYMMDD(new Date());
+
+      if (
+          finalData.frequency === 'recurring' &&
+          finalData.recurrenceEndType === 'count' &&
+          finalData.recurrenceCount === 1 &&
+          finalData.date <= todayStr
+      ) {
+          finalData.frequency = 'single';
+          // Pulizia campi ricorrenza per coerenza
+          finalData.recurrence = undefined;
+          finalData.recurrenceInterval = undefined;
+          finalData.recurrenceDays = undefined;
+          finalData.recurrenceEndType = undefined;
+          finalData.recurrenceEndDate = undefined;
+          finalData.recurrenceCount = undefined;
+          finalData.monthlyRecurrenceType = undefined;
+      }
+
+      if ('id' in finalData) { 
+          // Modifica esistente
+          const updatedExpense = finalData as Expense;
+          setExpenses(p => p.map(e => e.id === updatedExpense.id ? updatedExpense : e));
+          
+          // Se stava nelle ricorrenti ma ora è diventata singola (o l'abbiamo forzata sopra), toglila dalle ricorrenti
+          if (updatedExpense.frequency === 'single') {
+             setRecurringExpenses(p => p.filter(e => e.id !== updatedExpense.id));
+          } else {
+             setRecurringExpenses(p => p.map(e => e.id === updatedExpense.id ? updatedExpense : e));
+          }
       } else { 
-          const newItem = { ...data, id: crypto.randomUUID() } as Expense;
-          if (data.frequency === 'recurring') setRecurringExpenses(p => [newItem, ...p]);
+          // Nuova spesa
+          const newItem = { ...finalData, id: crypto.randomUUID() } as Expense;
+          if (finalData.frequency === 'recurring') setRecurringExpenses(p => [newItem, ...p]);
           else setExpenses(p => [newItem, ...p]);
       }
       setShowSuccessIndicator(true); setTimeout(() => setShowSuccessIndicator(false), 2000);
