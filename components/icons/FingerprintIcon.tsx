@@ -1,7 +1,16 @@
 import React from 'react';
 
 export const FingerprintIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M7.864 4.243A7.5 7.5 0 0 1 19.5 10.5c0 2.92-.556 5.709-1.568 8.268M5.742 6.364A7.465 7.465 0 0 0 4.5 10.5a7.464 7.464 0 0 1-1.15 3.993m1.989 3.559A11.209 11.209 0 0 0 8.25 10.5a3.75 3.75 0 1 1 7.5 0v.75a2.25 2.25 0 1 0 4.5 0v-.75a7.5 7.5 0 0 0-7.5-7.5 7.5 7.5 0 0 0-7.5 7.5c0 2.228-.344 4.378-.986 6.392" />
+  <svg 
+    xmlns="http://www.w3.org/2000/svg" 
+    fill="none" 
+    viewBox="0 0 24 24" 
+    stroke="currentColor" 
+    {...props}
+  >
+    <path d="M8.10008 21.221C6.71021 19.2375 5.89258 16.8243 5.89258 14.2187C5.89258 10.8443 8.6265 8.10938 11.9989 8.10938C15.3712 8.10938 18.1051 10.8443 18.1051 14.2187" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M18.4359 20.3118C18.3259 20.3179 18.218 20.3281 18.107 20.3281C14.7347 20.3281 12.0007 17.5931 12.0007 14.2188" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M13.2694 21.9999C10.675 20.382 8.94705 17.5024 8.94705 14.2187C8.94705 12.5315 10.3145 11.164 12.0007 11.164C13.6869 11.164 15.0543 12.5315 15.0543 14.2187C15.0543 15.9059 16.4218 17.2733 18.108 17.2733C19.7942 17.2733 21.1616 15.9059 21.1616 14.2187C21.1616 9.1571 17.0602 5.05469 12.0017 5.05469C6.94319 5.05469 2.8418 9.1571 2.8418 14.2187C2.8418 15.3469 2.96806 16.4455 3.20021 17.5045" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M20.5257 5.86313C18.4435 3.4978 15.399 2 12.0002 2C8.60136 2 5.55687 3.4978 3.47461 5.86313" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
   </svg>
 );
