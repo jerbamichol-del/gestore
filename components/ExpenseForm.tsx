@@ -7,7 +7,6 @@ import { CurrencyEuroIcon } from './icons/CurrencyEuroIcon';
 import { CalendarIcon } from './icons/CalendarIcon';
 import { TagIcon } from './icons/TagIcon';
 import { CreditCardIcon } from './icons/CreditCardIcon';
-import { TrashIcon } from './icons/TrashIcon'; // Import mantenuto se servisse altrove
 import SelectionMenu from './SelectionMenu';
 import { getCategoryStyle } from '../utils/categoryStyles';
 import { ClockIcon } from './icons/ClockIcon';
@@ -494,13 +493,12 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
         <div 
             className="fixed inset-0 z-[6000] bg-black/95 flex items-center justify-center p-4 animate-fade-in-up"
             onClick={() => setViewingImage(null)}
+            onPointerDown={(e) => e.stopPropagation()}
+            onPointerUp={(e) => e.stopPropagation()}
         >
             <button 
                 className="absolute top-4 right-4 text-white/80 hover:text-white p-2 transition-colors z-50"
-                onClick={(e) => {
-                    e.stopPropagation();
-                    setViewingImage(null);
-                }}
+                onClick={() => setViewingImage(null)}
                 onPointerDown={(e) => e.stopPropagation()}
             >
                 <XMarkIcon className="w-8 h-8" />
@@ -668,7 +666,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                                    name="time"
                                    value={formData.time || ''}
                                    onChange={handleInputChange}
-                                   className="block w-full rounded-md border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-base"
+                                   className="block w-full rounded-md border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-base text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-base"
                                    type="time"
                                />
                            </div>
@@ -705,7 +703,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                 />
               </div>
               
-              {/* Ricevute Section - CORRETTO: SOLO IMMAGINE e X */}
+              {/* Ricevute Section - SOLO IMMAGINE e TASTO X */}
               <div className="animate-fade-in-up">
                   <label className="block text-base font-medium text-slate-700 mb-1">Ricevute</label>
                   {formData.receipts && formData.receipts.length > 0 && (
@@ -721,8 +719,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                                       alt="Ricevuta" 
                                       className="w-full h-full object-cover"
                                   />
-                                  
-                                  {/* Pulsante "X" per eliminare */}
+                                  {/* Tasto X per eliminare */}
                                   <button 
                                       type="button"
                                       onClick={(e) => { 
@@ -739,6 +736,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                           ))}
                       </div>
                   )}
+                  {/* Tasto Allega Ricevuta */}
                   <button
                       type="button"
                       onClick={() => {
@@ -866,18 +864,6 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
               <div className="pt-4 border-t border-slate-200"><div className="grid grid-cols-2 gap-4 items-end"><div className={`relative ${!formData.recurrenceEndType || formData.recurrenceEndType === 'forever' ? 'col-span-2' : ''}`}><button type="button" onClick={() => { setIsRecurrenceEndOptionsOpen(prev => !prev); setIsRecurrenceOptionsOpen(false); }} className="w-full flex items-center justify-between text-left gap-2 px-3 py-2.5 text-base rounded-lg border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors bg-white border-slate-300 text-slate-800 hover:bg-slate-50"><span className="truncate flex-1 capitalize">{getRecurrenceEndLabel()}</span><ChevronDownIcon className={`w-5 h-5 text-slate-500 transition-transform ${isRecurrenceEndOptionsOpen ? 'rotate-180' : ''}`} /></button>{isRecurrenceEndOptionsOpen && (<div className="absolute top-full mt-1 w-full bg-white border border-slate-200 shadow-lg rounded-lg z-10 p-2 space-y-1 animate-fade-in-down">{(['forever', 'date', 'count'] as const).map(key => (<button key={key} onClick={() => handleRecurrenceEndTypeSelect(key)} className="w-full text-left px-4 py-3 text-base font-semibold rounded-lg transition-colors bg-slate-50 text-slate-800 hover:bg-indigo-100 hover:text-indigo-800">{key === 'forever' ? 'Per sempre' : key === 'date' ? 'Fino a' : 'Numero di volte'}</button>))}</div>)}</div>{formData.recurrenceEndType === 'date' && (<div className="animate-fade-in-up"><label htmlFor="recurrence-end-date" className="relative w-full flex items-center justify-center gap-2 px-3 py-2.5 text-base rounded-lg focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500 text-indigo-600 hover:bg-indigo-100 font-semibold cursor-pointer h-[46.5px]"><CalendarIcon className="w-5 h-5"/><span>{formData.recurrenceEndDate ? formatDate(parseLocalYYYYMMDD(formData.recurrenceEndDate)!) : 'Seleziona'}</span><input type="date" id="recurrence-end-date" name="recurrenceEndDate" value={formData.recurrenceEndDate || ''} onChange={(e) => setFormData(prev => ({...prev, recurrenceEndDate: e.target.value, recurrenceEndType: 'date' }))} className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"/></label></div>)}{formData.recurrenceEndType === 'count' && (<div className="animate-fade-in-up"><div className="relative"><input type="number" id="recurrence-count" name="recurrenceCount" value={formData.recurrenceCount || ''} onChange={handleInputChange} className="block w-full text-center rounded-md border border-slate-300 bg-white py-2.5 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-base" placeholder="N." min="1"/></div></div>)}</div></div>
             </main>
             <footer className="p-4 bg-slate-100 border-t border-slate-200 flex justify-end"><button type="button" onClick={handleApplyRecurrence} className="px-4 py-2 text-sm font-semibold text-white bg-indigo-600 rounded-lg shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors">Applica</button></footer>
-          </div>
-        </div>
-      )}
-
-      {isReceiptMenuOpen && (
-        <div className={`fixed inset-0 z-[5200] flex justify-center items-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity duration-300 ease-in-out ${isReceiptMenuAnimating ? 'opacity-100' : 'opacity-0'}`} onClick={handleCloseReceiptMenu}>
-          <div className="bg-slate-50 rounded-lg shadow-xl w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
-            <header className="flex justify-between items-center p-4 border-b border-slate-200"><h2 className="text-lg font-bold text-slate-800">Allega Ricevuta</h2><button onClick={handleCloseReceiptMenu} className="p-1 rounded-full hover:bg-slate-200"><XMarkIcon className="w-6 h-6"/></button></header>
-            <div className="p-4 grid grid-cols-2 gap-4">
-              <button onClick={() => handlePickReceipt('camera')} className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-white border border-slate-200 hover:bg-indigo-50 hover:border-indigo-200 transition-colors"><div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600"><CameraIcon className="w-6 h-6" /></div><span className="font-semibold text-slate-700 text-sm">Fotocamera</span></button>
-              <button onClick={() => handlePickReceipt('gallery')} className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-white border border-slate-200 hover:bg-indigo-50 hover:border-indigo-200 transition-colors"><div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-purple-600"><PhotoIcon className="w-6 h-6" /></div><span className="font-semibold text-slate-700 text-sm">Galleria</span></button>
-            </div>
           </div>
         </div>
       )}
