@@ -7,7 +7,7 @@ import { CurrencyEuroIcon } from './icons/CurrencyEuroIcon';
 import { CalendarIcon } from './icons/CalendarIcon';
 import { TagIcon } from './icons/TagIcon';
 import { CreditCardIcon } from './icons/CreditCardIcon';
-// Rimosso TrashIcon dagli import perché non serve più
+import { TrashIcon } from './icons/TrashIcon';
 import SelectionMenu from './SelectionMenu';
 import { getCategoryStyle } from '../utils/categoryStyles';
 import { ClockIcon } from './icons/ClockIcon';
@@ -232,7 +232,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
           subcategory: prefilledData.subcategory || '',
           accountId: prefilledData.accountId || defaultAccountId,
           frequency: 'single',
-          tags: prefilledData.tags || [], 
+          tags: prefilledData.tags || [],
           receipts: prefilledData.receipts || [],
         });
         setOriginalExpenseState(null);
@@ -289,7 +289,6 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
         setHasChanges(false);
         return;
     }
-
     const currentAmount = parseFloat(String(formData.amount || '0').replace(',', '.'));
     const originalAmount = originalExpenseState.amount || 0;
     const amountChanged = Math.abs(currentAmount - originalAmount) > 0.001;
@@ -307,7 +306,6 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                               formData.recurrenceEndType !== originalExpenseState.recurrenceEndType ||
                               formData.recurrenceEndDate !== originalExpenseState.recurrenceEndDate ||
                               formData.recurrenceCount !== originalExpenseState.recurrenceCount;
-    
     const receiptsChanged = JSON.stringify(formData.receipts) !== JSON.stringify(originalExpenseState.receipts);
 
     const changed = amountChanged || descriptionChanged || dateChanged || timeChanged || categoryChanged || subcategoryChanged || accountIdChanged || frequencyChanged || recurrenceChanged || receiptsChanged;
@@ -488,6 +486,31 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
     const el = e.currentTarget as HTMLInputElement;
     el.blur();
   }, []);
+
+  // --- FULL SCREEN IMAGE VIEWER (PORTAL) ---
+  const renderImageViewer = () => {
+      if (!viewingImage) return null;
+      return createPortal(
+        <div 
+            className="fixed inset-0 z-[6000] bg-black/95 flex items-center justify-center p-4 animate-fade-in-up"
+            onClick={() => setViewingImage(null)}
+        >
+            <button 
+                className="absolute top-4 right-4 text-white/80 hover:text-white p-2 transition-colors z-50"
+                onClick={() => setViewingImage(null)}
+            >
+                <XMarkIcon className="w-8 h-8" />
+            </button>
+            <img 
+                src={`data:image/png;base64,${viewingImage}`} 
+                className="max-w-full max-h-full object-contain rounded-sm shadow-2xl"
+                alt="Ricevuta Full Screen"
+                onClick={(e) => e.stopPropagation()} 
+            />
+        </div>,
+        document.body
+      );
+  };
 
   if (!isOpen) return null;
 
@@ -678,7 +701,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                 />
               </div>
               
-              {/* Ricevute Section */}
+              {/* Ricevute Section - CORRETTO: Solo Immagine e X, niente cestino */}
               <div className="animate-fade-in-up">
                   <label className="block text-base font-medium text-slate-700 mb-1">Ricevute</label>
                   {formData.receipts && formData.receipts.length > 0 && (
@@ -686,7 +709,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                           {formData.receipts.map((receipt, index) => (
                               <div 
                                 key={index} 
-                                className="relative group rounded-lg overflow-hidden border border-slate-200 shadow-sm aspect-video bg-slate-50 cursor-pointer"
+                                className="relative rounded-lg overflow-hidden border border-slate-200 shadow-sm aspect-video bg-slate-50 cursor-pointer hover:border-indigo-300 transition-colors"
                                 onClick={() => setViewingImage(receipt)}
                               >
                                   <img 
@@ -694,10 +717,16 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                                       alt="Ricevuta" 
                                       className="w-full h-full object-cover"
                                   />
+                                  
+                                  {/* Tasto X in alto a destra */}
                                   <button 
                                       type="button"
-                                      onClick={(e) => { e.stopPropagation(); handleRemoveReceipt(index); }}
-                                      className="absolute top-1 right-1 p-1 bg-white/90 text-red-600 rounded-full shadow-sm hover:bg-red-50 hover:text-red-700 transition-colors z-10"
+                                      onClick={(e) => { 
+                                          e.stopPropagation(); 
+                                          handleRemoveReceipt(index); 
+                                      }}
+                                      className="absolute top-1 right-1 p-1 bg-white/90 text-red-600 rounded-full shadow-md hover:bg-red-50 hover:text-red-700 transition-colors z-10 flex items-center justify-center"
+                                      aria-label="Rimuovi ricevuta"
                                   >
                                       <XMarkIcon className="w-5 h-5" />
                                   </button>
@@ -705,6 +734,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                           ))}
                       </div>
                   )}
+                  {/* Tasto Allega Ricevuta */}
                   <button
                       type="button"
                       onClick={() => {
@@ -847,31 +877,12 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
           </div>
         </div>
       )}
-
-      {/* FULL SCREEN VIEWER CON PORTAL */}
-      {viewingImage && createPortal(
-        <div 
-            className="fixed inset-0 z-[6000] bg-black/95 flex items-center justify-center p-4 animate-fade-in-up"
-            onClick={() => setViewingImage(null)}
-        >
-            <button 
-                className="absolute top-4 right-4 text-white/80 hover:text-white p-2 transition-colors z-50"
-                onClick={() => setViewingImage(null)}
-            >
-                <XMarkIcon className="w-8 h-8" />
-            </button>
-            <img 
-                src={`data:image/png;base64,${viewingImage}`} 
-                className="max-w-full max-h-full object-contain rounded-sm shadow-2xl"
-                alt="Ricevuta Full Screen"
-                onClick={(e) => e.stopPropagation()} 
-            />
-        </div>,
-        document.body
-      )}
+      
+      {renderImageViewer()}
 
       <ConfirmationModal isOpen={isConfirmCloseOpen} onClose={() => setIsConfirmCloseOpen(false)} onConfirm={() => { setIsConfirmCloseOpen(false); forceClose(); }} title="Annullare le modifiche?" message="Sei sicuro di voler chiudere senza salvare? Le modifiche andranno perse." variant="danger" confirmButtonText="Sì, annulla" cancelButtonText="No, continua" />
     </div>
+    </>
   );
 };
 
