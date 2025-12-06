@@ -7,7 +7,7 @@ import { CurrencyEuroIcon } from './icons/CurrencyEuroIcon';
 import { CalendarIcon } from './icons/CalendarIcon';
 import { TagIcon } from './icons/TagIcon';
 import { CreditCardIcon } from './icons/CreditCardIcon';
-import { TrashIcon } from './icons/TrashIcon';
+import { TrashIcon } from './icons/TrashIcon'; // Import mantenuto se servisse altrove
 import SelectionMenu from './SelectionMenu';
 import { getCategoryStyle } from '../utils/categoryStyles';
 import { ClockIcon } from './icons/ClockIcon';
@@ -497,7 +497,11 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
         >
             <button 
                 className="absolute top-4 right-4 text-white/80 hover:text-white p-2 transition-colors z-50"
-                onClick={() => setViewingImage(null)}
+                onClick={(e) => {
+                    e.stopPropagation();
+                    setViewingImage(null);
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
             >
                 <XMarkIcon className="w-8 h-8" />
             </button>
@@ -701,7 +705,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                 />
               </div>
               
-              {/* Ricevute Section - CORRETTO: Solo Immagine e X, niente cestino */}
+              {/* Ricevute Section - CORRETTO: SOLO IMMAGINE e X */}
               <div className="animate-fade-in-up">
                   <label className="block text-base font-medium text-slate-700 mb-1">Ricevute</label>
                   {formData.receipts && formData.receipts.length > 0 && (
@@ -718,13 +722,14 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                                       className="w-full h-full object-cover"
                                   />
                                   
-                                  {/* Tasto X in alto a destra */}
+                                  {/* Pulsante "X" per eliminare */}
                                   <button 
                                       type="button"
                                       onClick={(e) => { 
                                           e.stopPropagation(); 
                                           handleRemoveReceipt(index); 
                                       }}
+                                      onPointerDown={(e) => e.stopPropagation()}
                                       className="absolute top-1 right-1 p-1 bg-white/90 text-red-600 rounded-full shadow-md hover:bg-red-50 hover:text-red-700 transition-colors z-10 flex items-center justify-center"
                                       aria-label="Rimuovi ricevuta"
                                   >
@@ -734,7 +739,6 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                           ))}
                       </div>
                   )}
-                  {/* Tasto Allega Ricevuta */}
                   <button
                       type="button"
                       onClick={() => {
