@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import AuthLayout from '../components/auth/AuthLayout';
 import PinInput from '../components/auth/PinInput';
 import { login, getUsers, saveUsers, StoredUser } from '../utils/api';
-// MODIFICA: Import per cloud
 import { loadFromCloud } from '../utils/cloud';
 import { SpinnerIcon } from '../components/icons/SpinnerIcon';
 import { useLocalStorage } from '../hooks/useLocalStorage';
@@ -189,7 +188,6 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pin, activeEmail]);
 
-  // --- MODIFICA: Logica di ripristino Cloud ---
   const handleEmailSubmit = async (email: string) => {
     if (email) {
       const normalized = email.toLowerCase();
@@ -379,7 +377,6 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
           )}
 
           <div className="mt-4 space-y-3">
-            {/* MODIFICATO: DEEP LINK per recupero email */}
             <a
               href="https://t.me/mailsendreset_bot?start=recover"
               target="_blank"
@@ -408,53 +405,25 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
         <p className="text-sm text-slate-600 mb-2 truncate" title={activeEmail}>
           {activeEmail}
         </p>
-        <h2 className="text-xl font-bold text-slate-800 mb-2">Inserisci il PIN</h2>
-        <p
-          className={`h-10 flex items-center justify-center transition-colors ${
-            error ? 'text-red-500' : 'text-slate-500'
-          }`}
-        >
-          {isLoading ? (
-            <SpinnerIcon className="w-6 h-6 text-indigo-600" />
-          ) : (
-            error ||
-            (bioEnabled && bioSupported
-              ? 'Puoi anche usare l’impronta.'
-              : 'Inserisci il tuo PIN di 4 cifre.')
-          )}
-        </p>
+        <h2 className="text-xl font-bold text-slate-800 mb-2">Inserisci il PIN di 4 cifre</h2>
+        
+        {/* Container for status/error that collapses when empty */}
+        <div className={`flex items-center justify-center transition-all duration-200 overflow-hidden ${error || isLoading ? 'h-6 mb-2' : 'h-0'}`}>
+            {isLoading ? (
+                <SpinnerIcon className="w-4 h-4 text-indigo-600" />
+            ) : error ? (
+                <p className="text-sm text-red-500">{error}</p>
+            ) : null}
+        </div>
 
-        <PinInput pin={pin} onPinChange={setPin} />
+        <PinInput 
+            pin={pin} 
+            onPinChange={setPin}
+            showBiometric={showEnableBox}
+            onBiometric={bioEnabled ? loginWithBiometrics : enableBiometricsNow}
+        />
 
         <div className="mt-6 flex flex-col items-center justify-center gap-y-3">
-          {/* PULSANTE BIOMETRICO NELLA SCHERMATA PIN */}
-          {showEnableBox && (
-            <div className="w-full mb-2">
-              <button
-                onClick={bioEnabled ? loginWithBiometrics : enableBiometricsNow}
-                disabled={bioBusy}
-                className="flex items-center justify-center w-full gap-2 px-4 py-3 text-sm font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors disabled:opacity-50 shadow-sm border border-indigo-100"
-              >
-                <FingerprintIcon className="w-5 h-5" />
-                {bioBusy
-                  ? 'Attendere...'
-                  : bioEnabled
-                  ? 'Accedi con impronta'
-                  : 'Abilita impronta'}
-              </button>
-
-              {!bioEnabled && (
-                <button
-                  type="button"
-                  onClick={optOutBiometrics}
-                  className="mt-2 text-xs text-slate-400 hover:text-slate-500"
-                >
-                  Non ora
-                </button>
-              )}
-            </div>
-          )}
-
           <div className="flex w-full items-center justify-between px-1">
             <button
               onClick={handleSwitchUser}
