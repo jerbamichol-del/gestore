@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { Expense, Account, CATEGORIES } from '../types';
 import { XMarkIcon } from './icons/XMarkIcon';
 import { DocumentTextIcon } from './icons/DocumentTextIcon';
@@ -6,7 +7,7 @@ import { CurrencyEuroIcon } from './icons/CurrencyEuroIcon';
 import { CalendarIcon } from './icons/CalendarIcon';
 import { TagIcon } from './icons/TagIcon';
 import { CreditCardIcon } from './icons/CreditCardIcon';
-import { TrashIcon } from './icons/TrashIcon';
+// Rimosso TrashIcon dagli import perché non serve più
 import SelectionMenu from './SelectionMenu';
 import { getCategoryStyle } from '../utils/categoryStyles';
 import { ClockIcon } from './icons/ClockIcon';
@@ -36,16 +37,11 @@ const toYYYYMMDD = (date: Date) => {
 };
 
 const getCurrentTime = () => new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
-
 const getTodayString = () => toYYYYMMDD(new Date());
 
 interface FormInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'> {
-  id: string;
-  name: string;
-  label: string;
-  value: string | number | readonly string[] | undefined;
-  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  icon: React.ReactNode;
+  id: string; name: string; label: string; value: string | number | readonly string[] | undefined;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; icon: React.ReactNode;
 }
 
 const FormInput = React.memo(React.forwardRef<HTMLInputElement, FormInputProps>(({ id, name, label, value, onChange, icon, ...props }, ref) => {
@@ -56,15 +52,7 @@ const FormInput = React.memo(React.forwardRef<HTMLInputElement, FormInputProps>(
         <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
           {icon}
         </div>
-        <input
-          ref={ref}
-          id={id}
-          name={name}
-          value={value || ''}
-          onChange={onChange}
-          className="block w-full rounded-md border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-base"
-          {...props}
-        />
+        <input ref={ref} id={id} name={name} value={value || ''} onChange={onChange} className="block w-full rounded-md border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-base" {...props} />
       </div>
     </div>
   );
@@ -74,15 +62,10 @@ FormInput.displayName = 'FormInput';
 const parseLocalYYYYMMDD = (dateString: string | null): Date | null => {
   if (!dateString) return null;
   const parts = dateString.split('-').map(Number);
-  return new Date(parts[0], parts[1] - 1, parts[2]); // locale 00:00
+  return new Date(parts[0], parts[1] - 1, parts[2]);
 };
 
-const recurrenceLabels: Record<'daily' | 'weekly' | 'monthly' | 'yearly', string> = {
-  daily: 'Giornaliera',
-  weekly: 'Settimanale',
-  monthly: 'Mensile',
-  yearly: 'Annuale',
-};
+const recurrenceLabels: Record<'daily' | 'weekly' | 'monthly' | 'yearly', string> = { daily: 'Giornaliera', weekly: 'Settimanale', monthly: 'Mensile', yearly: 'Annuale' };
 const daysOfWeekLabels = { 0: 'Dom', 1: 'Lun', 2: 'Mar', 3: 'Mer', 4: 'Gio', 5: 'Ven', 6: 'Sab' };
 const dayOfWeekNames = ['domenica', 'lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato'];
 const ordinalSuffixes = ['primo', 'secondo', 'terzo', 'quarto', 'ultimo'];
@@ -95,12 +78,10 @@ const formatShortDate = (dateString: string | undefined): string => {
 };
 
 const getRecurrenceSummary = (expense: Partial<Expense>): string => {
-    if (expense.frequency !== 'recurring' || !expense.recurrence) {
-        return 'Imposta ricorrenza';
-    }
+    if (expense.frequency !== 'recurring' || !expense.recurrence) return 'Imposta ricorrenza';
     const { recurrence, recurrenceInterval = 1, recurrenceDays, monthlyRecurrenceType, date: dateString, recurrenceEndType = 'forever', recurrenceEndDate, recurrenceCount } = expense;
     let summary = '';
-    if (recurrenceInterval === 1) { summary = recurrenceLabels[recurrence]; } 
+    if (recurrenceInterval === 1) summary = recurrenceLabels[recurrence];
     else {
         switch (recurrence) {
             case 'daily': summary = `Ogni ${recurrenceInterval} giorni`; break;
@@ -124,8 +105,8 @@ const getRecurrenceSummary = (expense: Partial<Expense>): string => {
             summary += ` (${ordinal} ${dayName}.)`;
         }
     }
-    if (recurrenceEndType === 'date' && recurrenceEndDate) { summary += `, fino al ${formatShortDate(recurrenceEndDate)}`; } 
-    else if (recurrenceEndType === 'count' && recurrenceCount && recurrenceCount > 0) { summary += `, ${recurrenceCount} volte`; }
+    if (recurrenceEndType === 'date' && recurrenceEndDate) summary += `, fino al ${formatShortDate(recurrenceEndDate)}`;
+    else if (recurrenceEndType === 'count' && recurrenceCount && recurrenceCount > 0) summary += `, ${recurrenceCount} volte`;
     return summary;
 };
 
@@ -158,6 +139,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
   const [hasChanges, setHasChanges] = useState(false);
   const [isConfirmCloseOpen, setIsConfirmCloseOpen] = useState(false);
   
+  // Recurrence Modal State
   const [isRecurrenceModalOpen, setIsRecurrenceModalOpen] = useState(false);
   const [isRecurrenceModalAnimating, setIsRecurrenceModalAnimating] = useState(false);
   const [isRecurrenceOptionsOpen, setIsRecurrenceOptionsOpen] = useState(false);
@@ -167,10 +149,13 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
   const [tempRecurrenceDays, setTempRecurrenceDays] = useState<number[] | undefined>(formData.recurrenceDays);
   const [tempMonthlyRecurrenceType, setTempMonthlyRecurrenceType] = useState(formData.monthlyRecurrenceType);
 
-  // Receipt Modal
+  // Receipt Modal State
   const [isReceiptMenuOpen, setIsReceiptMenuOpen] = useState(false);
   const [isReceiptMenuAnimating, setIsReceiptMenuAnimating] = useState(false);
   const receiptMenuCloseTimeRef = useRef(0);
+
+  // State per visualizzazione immagine a schermo intero
+  const [viewingImage, setViewingImage] = useState<string | null>(null);
 
   const amountInputRef = useRef<HTMLInputElement>(null);
   const descriptionInputRef = useRef<HTMLInputElement>(null);
@@ -191,7 +176,18 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
 
   const resetForm = useCallback(() => {
     const defaultAccountId = safeAccounts.length > 0 ? safeAccounts[0].id : '';
-    setFormData({ description: '', amount: '', date: getTodayString(), time: getCurrentTime(), category: '', subcategory: '', accountId: defaultAccountId, frequency: 'single', tags: [], receipts: [] });
+    setFormData({
+      description: '',
+      amount: '',
+      date: getTodayString(),
+      time: getCurrentTime(),
+      category: '',
+      subcategory: '',
+      accountId: defaultAccountId,
+      frequency: 'single',
+      tags: [],
+      receipts: [],
+    });
     setError(null);
     setOriginalExpenseState(null);
   }, [safeAccounts]);
@@ -265,7 +261,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
     }
   }, [isOpen, initialData, prefilledData, resetForm, safeAccounts, isForRecurringTemplate]);
   
-    useEffect(() => {
+  useEffect(() => {
     if (isRecurrenceModalOpen) {
       setTempRecurrence(formData.recurrence || 'monthly');
       setTempRecurrenceInterval(formData.recurrenceInterval || 1);
@@ -311,6 +307,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                               formData.recurrenceEndType !== originalExpenseState.recurrenceEndType ||
                               formData.recurrenceEndDate !== originalExpenseState.recurrenceEndDate ||
                               formData.recurrenceCount !== originalExpenseState.recurrenceCount;
+    
     const receiptsChanged = JSON.stringify(formData.receipts) !== JSON.stringify(originalExpenseState.receipts);
 
     const changed = amountChanged || descriptionChanged || dateChanged || timeChanged || categoryChanged || subcategoryChanged || accountIdChanged || frequencyChanged || recurrenceChanged || receiptsChanged;
@@ -561,6 +558,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
   const selectedCategoryLabel = formData.category ? getCategoryStyle(formData.category).label : undefined;
   
   return (
+    <>
     <div
       className={`fixed inset-0 z-[5000] transition-opacity duration-300 ease-in-out ${isAnimating ? 'opacity-100' : 'opacity-0'} bg-slate-900/60 backdrop-blur-sm`}
       onClick={handleBackdropClick}
@@ -686,34 +684,27 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
                   {formData.receipts && formData.receipts.length > 0 && (
                       <div className="grid grid-cols-2 gap-3 mb-3">
                           {formData.receipts.map((receipt, index) => (
-                              <div key={index} className="relative group rounded-lg overflow-hidden border border-slate-200 shadow-sm aspect-video bg-slate-50">
+                              <div 
+                                key={index} 
+                                className="relative group rounded-lg overflow-hidden border border-slate-200 shadow-sm aspect-video bg-slate-50 cursor-pointer"
+                                onClick={() => setViewingImage(receipt)}
+                              >
                                   <img 
                                       src={`data:image/png;base64,${receipt}`} 
                                       alt="Ricevuta" 
                                       className="w-full h-full object-cover"
                                   />
-                                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                      <button 
-                                          type="button"
-                                          onClick={() => handleRemoveReceipt(index)}
-                                          className="p-2 bg-red-600 text-white rounded-full hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
-                                      >
-                                          <TrashIcon className="w-5 h-5" />
-                                      </button>
-                                  </div>
-                                  {/* Mobile always visible delete button */}
                                   <button 
                                       type="button"
-                                      onClick={() => handleRemoveReceipt(index)}
-                                      className="md:hidden absolute top-1 right-1 p-1 bg-white/90 text-red-600 rounded-full shadow-sm"
+                                      onClick={(e) => { e.stopPropagation(); handleRemoveReceipt(index); }}
+                                      className="absolute top-1 right-1 p-1 bg-white/90 text-red-600 rounded-full shadow-sm hover:bg-red-50 hover:text-red-700 transition-colors z-10"
                                   >
-                                      <XMarkIcon className="w-4 h-4" />
+                                      <XMarkIcon className="w-5 h-5" />
                                   </button>
                               </div>
                           ))}
                       </div>
                   )}
-                  {/* Tasto Allega Ricevuta - Sempre visibile */}
                   <button
                       type="button"
                       onClick={() => {
@@ -832,51 +823,19 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
       {isRecurrenceModalOpen && (
         <div className={`fixed inset-0 z-[60] flex justify-center items-center p-4 transition-opacity duration-300 ease-in-out ${isRecurrenceModalAnimating ? 'opacity-100' : 'opacity-0'} bg-slate-900/60 backdrop-blur-sm`} onClick={handleCloseRecurrenceModal} aria-modal="true" role="dialog">
           <div className={`bg-white rounded-lg shadow-xl w-full max-w-sm transform transition-all duration-300 ease-in-out ${isRecurrenceModalAnimating ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`} onClick={(e) => e.stopPropagation()}>
-            <header className="flex justify-between items-center p-4 border-b border-slate-200">
-              <h2 className="text-lg font-bold text-slate-800">Imposta Ricorrenza</h2>
-              <button type="button" onClick={handleCloseRecurrenceModal} className="text-slate-500 hover:text-slate-800 transition-colors p-1 rounded-full hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500" aria-label="Chiudi"><XMarkIcon className="w-6 h-6" /></button>
-            </header>
+            <header className="flex justify-between items-center p-4 border-b border-slate-200"><h2 className="text-lg font-bold text-slate-800">Imposta Ricorrenza</h2><button type="button" onClick={handleCloseRecurrenceModal} className="text-slate-500 hover:text-slate-800 transition-colors p-1 rounded-full hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500" aria-label="Chiudi"><XMarkIcon className="w-6 h-6" /></button></header>
             <main className="p-4 space-y-4">
-              <div className="relative">
-                <button onClick={() => { setIsRecurrenceOptionsOpen(prev => !prev); setIsRecurrenceEndOptionsOpen(false); }} className="w-full flex items-center justify-between text-left gap-2 px-3 py-2.5 text-base rounded-lg border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors bg-white border-slate-300 text-slate-800 hover:bg-slate-50">
-                  <span className="truncate flex-1 capitalize">{recurrenceLabels[tempRecurrence as keyof typeof recurrenceLabels] || 'Seleziona'}</span>
-                  <ChevronDownIcon className={`w-5 h-5 text-slate-500 transition-transform ${isRecurrenceOptionsOpen ? 'rotate-180' : ''}`} />
-                </button>
-                {isRecurrenceOptionsOpen && (
-                  <div className="absolute top-full mt-1 w-full bg-white border border-slate-200 shadow-lg rounded-lg z-20 p-2 space-y-1 animate-fade-in-down">
-                    {(Object.keys(recurrenceLabels) as Array<keyof typeof recurrenceLabels>).map((key) => (<button key={key} onClick={() => { setTempRecurrence(key); setIsRecurrenceOptionsOpen(false); }} className="w-full text-left px-4 py-3 text-base font-semibold rounded-lg transition-colors bg-slate-50 text-slate-800 hover:bg-indigo-100 hover:text-indigo-800">{recurrenceLabels[key]}</button>))}
-                  </div>
-                )}
-              </div>
-              <div className="animate-fade-in-up pt-2" style={{animationDuration: '200ms'}}>
-                <div className="flex items-center justify-center gap-2 bg-slate-100 p-3 rounded-lg">
-                  <span className="text-base text-slate-700">Ogni</span>
-                  <input type="number" value={tempRecurrenceInterval || ''} onChange={(e) => { const val = e.target.value; if (val === '') { setTempRecurrenceInterval(undefined); } else { const num = parseInt(val, 10); if (!isNaN(num) && num > 0) { setTempRecurrenceInterval(num); } } }} onFocus={(e) => e.currentTarget.select()} className="w-12 text-center text-lg font-bold text-slate-800 bg-transparent border-0 border-b-2 border-slate-400 focus:ring-0 focus:outline-none focus:border-indigo-600 p-0" min="1" />
-                  <span className="text-base text-slate-700">{getIntervalLabel(tempRecurrence as any, tempRecurrenceInterval)}</span>
-                </div>
-              </div>
+              <div className="relative"><button onClick={() => { setIsRecurrenceOptionsOpen(prev => !prev); setIsRecurrenceEndOptionsOpen(false); }} className="w-full flex items-center justify-between text-left gap-2 px-3 py-2.5 text-base rounded-lg border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors bg-white border-slate-300 text-slate-800 hover:bg-slate-50"><span className="truncate flex-1 capitalize">{recurrenceLabels[tempRecurrence as keyof typeof recurrenceLabels] || 'Seleziona'}</span><ChevronDownIcon className={`w-5 h-5 text-slate-500 transition-transform ${isRecurrenceOptionsOpen ? 'rotate-180' : ''}`} /></button>{isRecurrenceOptionsOpen && (<div className="absolute top-full mt-1 w-full bg-white border border-slate-200 shadow-lg rounded-lg z-20 p-2 space-y-1 animate-fade-in-down">{(Object.keys(recurrenceLabels) as Array<keyof typeof recurrenceLabels>).map((key) => (<button key={key} onClick={() => { setTempRecurrence(key); setIsRecurrenceOptionsOpen(false); }} className="w-full text-left px-4 py-3 text-base font-semibold rounded-lg transition-colors bg-slate-50 text-slate-800 hover:bg-indigo-100 hover:text-indigo-800">{recurrenceLabels[key]}</button>))}</div>)}</div>
+              <div className="animate-fade-in-up pt-2"><div className="flex items-center justify-center gap-2 bg-slate-100 p-3 rounded-lg"><span className="text-base text-slate-700">Ogni</span><input type="number" value={tempRecurrenceInterval || ''} onChange={(e) => { const val = e.target.value; if (val === '') { setTempRecurrenceInterval(undefined); } else { const num = parseInt(val, 10); if (!isNaN(num) && num > 0) { setTempRecurrenceInterval(num); } } }} onFocus={(e) => e.currentTarget.select()} className="w-12 text-center text-lg font-bold text-slate-800 bg-transparent border-0 border-b-2 border-slate-400 focus:ring-0 focus:outline-none focus:border-indigo-600 p-0" min="1" /><span className="text-base text-slate-700">{getIntervalLabel(tempRecurrence as any, tempRecurrenceInterval)}</span></div></div>
               {tempRecurrence === 'weekly' && (<div className="animate-fade-in-up pt-2"><div className="flex flex-wrap justify-center gap-2">{daysOfWeekForPicker.map(day => (<button key={day.value} onClick={() => handleToggleDay(day.value)} className={`w-14 h-14 rounded-full text-sm font-semibold transition-colors focus:outline-none border-2 ${(tempRecurrenceDays || []).includes(day.value) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-800 border-indigo-400 hover:bg-indigo-50'}`}>{day.label}</button>))}</div></div>)}
               {tempRecurrence === 'monthly' && (<div className="animate-fade-in-up pt-4 space-y-2 border-t border-slate-200"><div role="radio" aria-checked={tempMonthlyRecurrenceType === 'dayOfMonth'} onClick={() => setTempMonthlyRecurrenceType('dayOfMonth')} className="flex items-center gap-3 p-2 cursor-pointer rounded-lg hover:bg-slate-100"><div className="w-5 h-5 rounded-full border-2 border-slate-400 flex items-center justify-center flex-shrink-0">{tempMonthlyRecurrenceType === 'dayOfMonth' && <div className="w-2.5 h-2.5 bg-indigo-600 rounded-full" />}</div><label className="text-sm font-medium text-slate-700 cursor-pointer">Lo stesso giorno di ogni mese</label></div><div role="radio" aria-checked={tempMonthlyRecurrenceType === 'dayOfWeek'} onClick={() => setTempMonthlyRecurrenceType('dayOfWeek')} className="flex items-center gap-3 p-2 cursor-pointer rounded-lg hover:bg-slate-100"><div className="w-5 h-5 rounded-full border-2 border-slate-400 flex items-center justify-center flex-shrink-0">{tempMonthlyRecurrenceType === 'dayOfWeek' && <div className="w-2.5 h-2.5 bg-indigo-600 rounded-full" />}</div><label className="text-sm font-medium text-slate-700 cursor-pointer">{dynamicMonthlyDayOfWeekLabel}</label></div></div>)}
-              <div className="pt-4 border-t border-slate-200">
-                <div className="grid grid-cols-2 gap-4 items-end">
-                  <div className={`relative ${!formData.recurrenceEndType || formData.recurrenceEndType === 'forever' ? 'col-span-2' : ''}`}>
-                    <button type="button" onClick={() => { setIsRecurrenceEndOptionsOpen(prev => !prev); setIsRecurrenceOptionsOpen(false); }} className="w-full flex items-center justify-between text-left gap-2 px-3 py-2.5 text-base rounded-lg border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors bg-white border-slate-300 text-slate-800 hover:bg-slate-50">
-                        <span className="truncate flex-1 capitalize">{getRecurrenceEndLabel()}</span>
-                        <ChevronDownIcon className={`w-5 h-5 text-slate-500 transition-transform ${isRecurrenceEndOptionsOpen ? 'rotate-180' : ''}`} />
-                    </button>
-                     {isRecurrenceEndOptionsOpen && (<div className="absolute top-full mt-1 w-full bg-white border border-slate-200 shadow-lg rounded-lg z-10 p-2 space-y-1 animate-fade-in-down">{(['forever', 'date', 'count'] as const).map(key => (<button key={key} onClick={() => handleRecurrenceEndTypeSelect(key)} className="w-full text-left px-4 py-3 text-base font-semibold rounded-lg transition-colors bg-slate-50 text-slate-800 hover:bg-indigo-100 hover:text-indigo-800">{key === 'forever' ? 'Per sempre' : key === 'date' ? 'Fino a' : 'Numero di volte'}</button>))}</div>)}
-                  </div>
-                  {formData.recurrenceEndType === 'date' && (<div className="animate-fade-in-up"><label htmlFor="recurrence-end-date" className="relative w-full flex items-center justify-center gap-2 px-3 py-2.5 text-base rounded-lg focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500 text-indigo-600 hover:bg-indigo-100 font-semibold cursor-pointer h-[46.5px]"><CalendarIcon className="w-5 h-5"/><span>{formData.recurrenceEndDate ? formatDate(parseLocalYYYYMMDD(formData.recurrenceEndDate)!) : 'Seleziona'}</span><input type="date" id="recurrence-end-date" name="recurrenceEndDate" value={formData.recurrenceEndDate || ''} onChange={(e) => setFormData(prev => ({...prev, recurrenceEndDate: e.target.value, recurrenceEndType: 'date' }))} className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"/></label></div>)}
-                  {formData.recurrenceEndType === 'count' && (<div className="animate-fade-in-up"><div className="relative"><input type="number" id="recurrence-count" name="recurrenceCount" value={formData.recurrenceCount || ''} onChange={handleInputChange} className="block w-full text-center rounded-md border border-slate-300 bg-white py-2.5 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-base" placeholder="N." min="1"/></div></div>)}
-                </div>
-              </div>
+              <div className="pt-4 border-t border-slate-200"><div className="grid grid-cols-2 gap-4 items-end"><div className={`relative ${!formData.recurrenceEndType || formData.recurrenceEndType === 'forever' ? 'col-span-2' : ''}`}><button type="button" onClick={() => { setIsRecurrenceEndOptionsOpen(prev => !prev); setIsRecurrenceOptionsOpen(false); }} className="w-full flex items-center justify-between text-left gap-2 px-3 py-2.5 text-base rounded-lg border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors bg-white border-slate-300 text-slate-800 hover:bg-slate-50"><span className="truncate flex-1 capitalize">{getRecurrenceEndLabel()}</span><ChevronDownIcon className={`w-5 h-5 text-slate-500 transition-transform ${isRecurrenceEndOptionsOpen ? 'rotate-180' : ''}`} /></button>{isRecurrenceEndOptionsOpen && (<div className="absolute top-full mt-1 w-full bg-white border border-slate-200 shadow-lg rounded-lg z-10 p-2 space-y-1 animate-fade-in-down">{(['forever', 'date', 'count'] as const).map(key => (<button key={key} onClick={() => handleRecurrenceEndTypeSelect(key)} className="w-full text-left px-4 py-3 text-base font-semibold rounded-lg transition-colors bg-slate-50 text-slate-800 hover:bg-indigo-100 hover:text-indigo-800">{key === 'forever' ? 'Per sempre' : key === 'date' ? 'Fino a' : 'Numero di volte'}</button>))}</div>)}</div>{formData.recurrenceEndType === 'date' && (<div className="animate-fade-in-up"><label htmlFor="recurrence-end-date" className="relative w-full flex items-center justify-center gap-2 px-3 py-2.5 text-base rounded-lg focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500 text-indigo-600 hover:bg-indigo-100 font-semibold cursor-pointer h-[46.5px]"><CalendarIcon className="w-5 h-5"/><span>{formData.recurrenceEndDate ? formatDate(parseLocalYYYYMMDD(formData.recurrenceEndDate)!) : 'Seleziona'}</span><input type="date" id="recurrence-end-date" name="recurrenceEndDate" value={formData.recurrenceEndDate || ''} onChange={(e) => setFormData(prev => ({...prev, recurrenceEndDate: e.target.value, recurrenceEndType: 'date' }))} className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"/></label></div>)}{formData.recurrenceEndType === 'count' && (<div className="animate-fade-in-up"><div className="relative"><input type="number" id="recurrence-count" name="recurrenceCount" value={formData.recurrenceCount || ''} onChange={handleInputChange} className="block w-full text-center rounded-md border border-slate-300 bg-white py-2.5 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-base" placeholder="N." min="1"/></div></div>)}</div></div>
             </main>
             <footer className="p-4 bg-slate-100 border-t border-slate-200 flex justify-end"><button type="button" onClick={handleApplyRecurrence} className="px-4 py-2 text-sm font-semibold text-white bg-indigo-600 rounded-lg shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors">Applica</button></footer>
           </div>
         </div>
       )}
 
-      {/* MODAL PER SCELTA SORGENTE RICEVUTA */}
       {isReceiptMenuOpen && (
         <div className={`fixed inset-0 z-[5200] flex justify-center items-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity duration-300 ease-in-out ${isReceiptMenuAnimating ? 'opacity-100' : 'opacity-0'}`} onClick={handleCloseReceiptMenu}>
           <div className="bg-slate-50 rounded-lg shadow-xl w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
@@ -888,20 +847,30 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
           </div>
         </div>
       )}
-      
-      <ConfirmationModal
-        isOpen={isConfirmCloseOpen}
-        onClose={() => setIsConfirmCloseOpen(false)}
-        onConfirm={() => {
-            setIsConfirmCloseOpen(false);
-            forceClose();
-        }}
-        title="Annullare le modifiche?"
-        message="Sei sicuro di voler chiudere senza salvare? Le modifiche andranno perse."
-        variant="danger"
-        confirmButtonText="Sì, annulla"
-        cancelButtonText="No, continua"
-      />
+
+      {/* FULL SCREEN VIEWER CON PORTAL */}
+      {viewingImage && createPortal(
+        <div 
+            className="fixed inset-0 z-[6000] bg-black/95 flex items-center justify-center p-4 animate-fade-in-up"
+            onClick={() => setViewingImage(null)}
+        >
+            <button 
+                className="absolute top-4 right-4 text-white/80 hover:text-white p-2 transition-colors z-50"
+                onClick={() => setViewingImage(null)}
+            >
+                <XMarkIcon className="w-8 h-8" />
+            </button>
+            <img 
+                src={`data:image/png;base64,${viewingImage}`} 
+                className="max-w-full max-h-full object-contain rounded-sm shadow-2xl"
+                alt="Ricevuta Full Screen"
+                onClick={(e) => e.stopPropagation()} 
+            />
+        </div>,
+        document.body
+      )}
+
+      <ConfirmationModal isOpen={isConfirmCloseOpen} onClose={() => setIsConfirmCloseOpen(false)} onConfirm={() => { setIsConfirmCloseOpen(false); forceClose(); }} title="Annullare le modifiche?" message="Sei sicuro di voler chiudere senza salvare? Le modifiche andranno perse." variant="danger" confirmButtonText="Sì, annulla" cancelButtonText="No, continua" />
     </div>
   );
 };
