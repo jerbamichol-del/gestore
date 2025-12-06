@@ -1,13 +1,16 @@
 import React from 'react';
 import { BackspaceIcon } from '../icons/BackspaceIcon';
+import { FingerprintIcon } from '../icons/FingerprintIcon';
 
 interface PinInputProps {
   pin: string;
   onPinChange: (newPin: string) => void;
   pinLength?: number;
+  onBiometric?: () => void;
+  showBiometric?: boolean;
 }
 
-const PinInput: React.FC<PinInputProps> = ({ pin, onPinChange, pinLength = 4 }) => {
+const PinInput: React.FC<PinInputProps> = ({ pin, onPinChange, pinLength = 4, onBiometric, showBiometric }) => {
   const handleNumberClick = (num: string) => {
     if (pin.length < pinLength) {
       onPinChange(pin + num);
@@ -21,7 +24,7 @@ const PinInput: React.FC<PinInputProps> = ({ pin, onPinChange, pinLength = 4 }) 
   };
 
   const PinDots = () => (
-    <div className="flex justify-center space-x-4 my-6">
+    <div className="flex justify-center space-x-4 mb-6">
       {Array.from({ length: pinLength }).map((_, index) => (
         <div
           key={index}
@@ -38,13 +41,29 @@ const PinInput: React.FC<PinInputProps> = ({ pin, onPinChange, pinLength = 4 }) 
       '1', '2', '3',
       '4', '5', '6',
       '7', '8', '9',
-      '', '0', 'backspace'
+      'biometric', '0', 'backspace'
     ];
 
     return (
       <div className="grid grid-cols-3 gap-4">
         {buttons.map((btn, index) => {
-          if (btn === '') return <div key={index} />;
+          if (btn === 'biometric') {
+             if (showBiometric && onBiometric) {
+                 return (
+                    <button
+                        key={index}
+                        type="button"
+                        onClick={onBiometric}
+                        className="w-16 h-16 mx-auto rounded-full text-white bg-indigo-600 active:bg-indigo-700 transition-colors flex justify-center items-center shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                        aria-label="Usa impronta digitale"
+                    >
+                        <FingerprintIcon className="w-8 h-8" />
+                    </button>
+                 );
+             }
+             return <div key={index} />;
+          }
+
           if (btn === 'backspace') {
             return (
               <button
