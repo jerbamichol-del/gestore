@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Expense, Account, CATEGORIES } from './types';
 import { useLocalStorage } from './hooks/useLocalStorage';
@@ -62,7 +61,7 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
   const [isParsingImage, setIsParsingImage] = useState(false);
   
   const [isRecurringScreenOpen, setIsRecurringScreenOpen] = useState(false);
-  const [isRecurringClosing, setIsRecurringClosing] = useState(false); // NEW: Manage closing animation state
+  const [isRecurringClosing, setIsRecurringClosing] = useState(false); 
 
   const [isHistoryScreenOpen, setIsHistoryScreenOpen] = useState(false);
   const [isHistoryClosing, setIsHistoryClosing] = useState(false);
@@ -389,6 +388,65 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
     setIsFormOpen(true);
   };
 
+  // --- NUOVA FUNZIONE: SYNC DAL CLOUD (Con modalità silenziosa) ---
+  const handleSyncFromCloud = async (isSilent = false) => {
+    try {
+      if (!isSilent) showToast({ message: 'Sincronizzazione...', type: 'info' });
+      
+      // INCOLLA QUI SOTTO IL TUO URL DI GOOGLE APPS SCRIPT (quello che finisce con /exec)
+      const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzuAtweyuib21-BX4dQszoxEL5BW-nzVN2Vyum4UZvWH-TzP3GLZB5He1jFkrO6242JPA/exec'; 
+
+      const response = await fetch(SCRIPT_URL, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'load', email: currentEmail })
+      });
+      
+      const json = await response.json();
+      
+      if (json.success && json.data) {
+        setExpenses(json.data.expenses || []);
+        if (json.data.recurringExpenses) setRecurringExpenses(json.data.recurringExpenses);
+        if (json.data.accounts) setAccounts(json.data.accounts);
+
+        if (!isSilent) showToast({ message: 'Dati aggiornati!', type: 'success' });
+        console.log("Sync completato con successo.");
+      } 
+    } catch (e) {
+      console.error("Errore sync auto:", e);
+      if (!isSilent) showToast({ message: 'Errore connessione.', type: 'error' });
+    }
+  };
+
+  // --- NUOVO: AUTOMAZIONE SYNC QUANDO L'APP SI APRE O TORNA VISIBILE ---
+  useEffect(() => {
+    const autoSync = async () => {
+      if (isOnline && currentEmail) {
+        console.log("App tornata attiva: Controllo aggiornamenti...");
+        await handleSyncFromCloud(true); // true = modalità silenziosa
+      }
+    };
+
+    // 1. Sincronizza subito all'avvio
+    autoSync();
+
+    // 2. Sincronizza quando l'utente torna sull'app (es. da standby o da altra app)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        autoSync();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleVisibilityChange); 
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleVisibilityChange);
+    };
+  }, [isOnline, currentEmail]);
+
+
+  // Cloud Backup (Existing)
   useEffect(() => {
     if (!currentEmail || !isOnline) return;
     const timer = setTimeout(() => {
@@ -632,6 +690,7 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
               onNavigateToHistory={() => { window.history.pushState({ modal: 'history' }, ''); setIsHistoryClosing(false); setIsHistoryScreenOpen(true); }}
               onReceiveSharedFile={handleSharedFile} 
               onImportFile={handleImportFile}
+              onSync={() => handleSyncFromCloud(false)} // PASSO LA FUNZIONE DI SYNC QUI
            />
            <PendingImages images={pendingImages} onAnalyze={handleAnalyzeImage} onDelete={async (id) => { await deleteImageFromQueue(id); refreshPendingImages(); }} isOnline={isOnline} syncingImageId={syncingImageId} />
         </div>
@@ -680,14 +739,13 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
 
       {isHistoryScreenOpen && <HistoryScreen expenses={expenses} accounts={safeAccounts} onClose={closeModalWithHistory} onCloseStart={() => setIsHistoryClosing(true)} onEditExpense={(e) => { setEditingExpense(e); window.history.pushState({ modal: 'form' }, ''); setIsFormOpen(true); }} onDeleteExpense={handleDeleteRequest} onDeleteExpenses={(ids) => { setExpenses(prev => (prev || []).filter(e => !ids.includes(e.id))); }} isEditingOrDeleting={isFormOpen || isConfirmDeleteModalOpen} isOverlayed={isFormOpen || isConfirmDeleteModalOpen} onDateModalStateChange={() => {}} onFilterPanelOpenStateChange={setIsHistoryFilterOpen} />}
       
-      {/* Updated: Recurring Expenses Screen now properly managed like History */}
       {(isRecurringScreenOpen || isRecurringClosing) && (
         <RecurringExpensesScreen 
             recurringExpenses={recurringExpenses} 
             expenses={expenses} 
             accounts={safeAccounts} 
             onClose={closeModalWithHistory}
-            onCloseStart={() => setIsRecurringClosing(true)} // Signal closing animation start
+            onCloseStart={() => setIsRecurringClosing(true)} 
             onEdit={(e) => { setEditingRecurringExpense(e); window.history.pushState({ modal: 'form' }, ''); setIsFormOpen(true); }} 
             onDelete={(id) => setRecurringExpenses(prev => (prev || []).filter(e => e.id !== id))} 
             onDeleteRecurringExpenses={(ids) => setRecurringExpenses(prev => (prev || []).filter(e => !ids.includes(e.id)))} 
