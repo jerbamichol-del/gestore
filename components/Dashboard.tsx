@@ -8,6 +8,7 @@ import { ArrowsUpDownIcon } from './icons/ArrowsUpDownIcon';
 import { ArrowDownTrayIcon } from './icons/ArrowDownTrayIcon';
 import { ArrowUpTrayIcon } from './icons/ArrowUpTrayIcon';
 import { XMarkIcon } from './icons/XMarkIcon';
+import { ArrowLeftIcon } from './icons/ArrowLeftIcon';
 import SelectionMenu from './SelectionMenu';
 import { exportExpenses } from '../utils/fileHelper';
 import { useTapBridge } from '../hooks/useTapBridge';
@@ -126,6 +127,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
   const [isPeriodMenuOpen, setIsPeriodMenuOpen] = useState(false);
   const [isSwipeAnimating, setIsSwipeAnimating] = useState(false);
   const [isImportExportMenuOpen, setIsImportExportMenuOpen] = useState(false);
+  const [showExportOptions, setShowExportOptions] = useState(false);
 
   const activeIndex = selectedIndex;
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -149,14 +151,23 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
       }
   };
 
-  const handleImportExportSelect = (value: string) => {
+  const handleImportClick = () => {
       setIsImportExportMenuOpen(false);
-      if (value === 'import') {
-          fileInputRef.current?.click();
-      } else if (value === 'export') {
-          exportExpenses(expenses);
-      }
+      fileInputRef.current?.click();
   };
+
+  const handleExportClick = (format: 'excel' | 'json') => {
+      exportExpenses(expenses, format);
+      setIsImportExportMenuOpen(false);
+      setShowExportOptions(false);
+  };
+
+  // Reset sub-menu when modal closes
+  useEffect(() => {
+      if (!isImportExportMenuOpen) {
+          setTimeout(() => setShowExportOptions(false), 300);
+      }
+  }, [isImportExportMenuOpen]);
 
   // Swipe Handler for Header
   const { progress } = useSwipe(headerContainerRef, {
@@ -563,24 +574,56 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
             <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={() => setIsImportExportMenuOpen(false)}>
                 <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-fade-in-up" onClick={e => e.stopPropagation()}>
                     <div className="flex justify-between items-center p-4 border-b border-slate-100">
-                        <h3 className="text-lg font-bold text-slate-800 flex-1 text-center pl-8">Gestione Dati</h3>
+                        {showExportOptions && (
+                            <button onClick={() => setShowExportOptions(false)} className="p-2 -ml-2 rounded-full hover:bg-slate-100 text-slate-500" aria-label="Indietro">
+                                <ArrowLeftIcon className="w-5 h-5" />
+                            </button>
+                        )}
+                        <h3 className={`text-lg font-bold text-slate-800 flex-1 text-center ${showExportOptions ? '' : 'pl-8'}`}>
+                            {showExportOptions ? "Scegli Formato" : "Gestione Dati"}
+                        </h3>
                         <button onClick={() => setIsImportExportMenuOpen(false)} className="p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors">
                             <XMarkIcon className="w-6 h-6" />
                         </button>
                     </div>
                     <div className="p-4 space-y-3">
-                        <button onClick={() => handleImportExportSelect('import')} className="w-full flex items-center gap-4 p-4 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors text-left group">
-                            <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center text-green-600 group-hover:scale-110 transition-transform">
-                                <ArrowDownTrayIcon className="w-6 h-6" />
-                            </div>
-                            <span className="font-semibold text-slate-700 text-lg">Importa (CSV/Excel/JSON)</span>
-                        </button>
-                        <button onClick={() => handleImportExportSelect('export')} className="w-full flex items-center gap-4 p-4 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors text-left group">
-                            <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
-                                <ArrowUpTrayIcon className="w-6 h-6" />
-                            </div>
-                            <span className="font-semibold text-slate-700 text-lg">Esporta (Excel/JSON)</span>
-                        </button>
+                        {!showExportOptions ? (
+                            <>
+                                <button onClick={handleImportClick} className="w-full flex items-center gap-4 p-4 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors text-left group">
+                                    <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center text-green-600 group-hover:scale-110 transition-transform">
+                                        <ArrowDownTrayIcon className="w-6 h-6" />
+                                    </div>
+                                    <span className="font-semibold text-slate-700 text-lg">Importa (CSV/Excel/JSON)</span>
+                                </button>
+                                <button onClick={() => setShowExportOptions(true)} className="w-full flex items-center gap-4 p-4 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors text-left group">
+                                    <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
+                                        <ArrowUpTrayIcon className="w-6 h-6" />
+                                    </div>
+                                    <span className="font-semibold text-slate-700 text-lg">Esporta (Excel/JSON)</span>
+                                </button>
+                            </>
+                        ) : (
+                            <>
+                                <button onClick={() => handleExportClick('excel')} className="w-full flex items-center gap-4 p-4 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors text-left group">
+                                    <div className="w-12 h-12 flex-shrink-0 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform">
+                                        <span className="font-bold text-sm">XLSX</span>
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <span className="font-semibold text-slate-700 text-lg">Excel (.xlsx)</span>
+                                        <span className="text-xs text-slate-500">Le ricevute non verranno salvate</span>
+                                    </div>
+                                </button>
+                                <button onClick={() => handleExportClick('json')} className="w-full flex items-center gap-4 p-4 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors text-left group">
+                                    <div className="w-12 h-12 flex-shrink-0 rounded-full bg-yellow-100 flex items-center justify-center text-yellow-600 group-hover:scale-110 transition-transform">
+                                        <span className="font-bold text-sm">JSON</span>
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <span className="font-semibold text-slate-700 text-lg">JSON (.json)</span>
+                                        <span className="text-xs text-slate-500">Backup completo dell'app</span>
+                                    </div>
+                                </button>
+                            </>
+                        )}
                     </div>
                 </div>
             </div>
