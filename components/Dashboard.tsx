@@ -385,265 +385,272 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
   const listTx = -activeViewIndex * (100 / 3);
   
   return (
-    <div className="p-4 md:p-6 space-y-6" {...tapBridgeHandlers}>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-1 flex flex-col gap-4">
-                {/* Modificato: Rimosso overflow-hidden dalla card principale */}
-                <div className="bg-white p-6 rounded-2xl shadow-lg flex flex-col justify-between relative">
-                    
-                    {/* Totals Section (Spostata SOPRA i filtri) */}
-                    <div className="text-center mb-2 relative z-10">
-                        <h3 className="text-lg font-bold text-black leading-tight uppercase tracking-wide">{periodLabel}</h3>
-                        <p className="text-sm font-medium text-slate-400 capitalize mb-1">{dateRangeLabel}</p>
+    <>
+        <div className="p-4 md:p-6 space-y-6" {...tapBridgeHandlers}>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-1 flex flex-col gap-4">
+                    {/* Modificato: Rimosso overflow-hidden dalla card principale */}
+                    <div className="bg-white p-6 rounded-2xl shadow-lg flex flex-col justify-between relative">
                         
-                        {/* Importo Centrato con Euro accanto */}
-                        <div className="relative flex justify-center items-center text-indigo-600 mt-1">
-                            <div className="relative flex items-baseline">
-                                <span className="absolute right-full mr-2 text-3xl font-semibold opacity-80 top-1/2 -translate-y-1/2">€</span>
-                                <span className="text-5xl font-extrabold tracking-tight">
-                                    {formatCurrency(totalExpenses).replace('€', '').trim()}
-                                </span>
-                            </div>
+                        {/* Totals Section (Spostata SOPRA i filtri) */}
+                        <div className="text-center mb-2 relative z-10">
+                            <h3 className="text-lg font-bold text-black leading-tight uppercase tracking-wide">{periodLabel}</h3>
+                            <p className="text-sm font-medium text-slate-400 capitalize mb-1">{dateRangeLabel}</p>
                             
-                            {/* Recurring indicator - Right Edge Square */}
-                            {recurringCountInPeriod > 0 && (
-                                <div className="absolute right-0 top-1/2 -translate-y-1/2">
-                                     <span className="w-8 h-8 flex items-center justify-center text-xs font-bold text-slate-900 bg-amber-100 border border-amber-400 rounded-lg shadow-sm" title="Spese programmate in arrivo">
-                                        {recurringCountInPeriod}P
+                            {/* Importo Centrato con Euro accanto */}
+                            <div className="relative flex justify-center items-center text-indigo-600 mt-1">
+                                <div className="relative flex items-baseline">
+                                    <span className="absolute right-full mr-2 text-3xl font-semibold opacity-80 top-1/2 -translate-y-1/2">€</span>
+                                    <span className="text-5xl font-extrabold tracking-tight">
+                                        {formatCurrency(totalExpenses).replace('€', '').trim()}
                                     </span>
                                 </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Filter Container - (Spostata SOTTO l'importo) */}
-                    <div className="mb-2 relative z-20 mx-5" ref={headerContainerRef} style={{ touchAction: 'pan-y' }}>
-                        {/* Modificato: overflow-hidden diventa condizionale */}
-                        <div className={`relative ${isPeriodMenuOpen ? 'overflow-visible' : 'overflow-hidden'}`}>
-                            <div 
-                                className="w-[300%] flex transition-transform duration-300 ease-out"
-                                style={{ 
-                                    transform: `translateX(${listTx}%)` 
-                                }}
-                            >
-                                {/* Page 0: Quick Filters - Nascondi se menu aperto */}
-                                <div className={`w-1/3 px-1 ${isPeriodMenuOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-                                    <QuickFilterControl 
-                                        isActive={activeViewIndex === 0}
-                                        currentValue={quickFilter}
-                                        onSelect={(v) => { setQuickFilter(v); setActiveViewIndex(0); }}
-                                        compact={true}
-                                    />
-                                </div>
-                                {/* Page 1: Period Navigator - Sempre visibile (è quello col menu) */}
-                                <div className="w-1/3 px-1 relative z-20">
-                                    <PeriodNavigator 
-                                        isActive={activeViewIndex === 1}
-                                        periodType={periodType}
-                                        periodDate={periodDate}
-                                        onTypeChange={setPeriodType}
-                                        onDateChange={setPeriodDate}
-                                        onActivate={() => setActiveViewIndex(1)}
-                                        isMenuOpen={isPeriodMenuOpen}
-                                        onMenuToggle={setIsPeriodMenuOpen}
-                                        isPanelOpen={true} // Always drop down in dashboard
-                                        compact={true}
-                                    />
-                                </div>
-                                {/* Page 2: Custom Range - Nascondi se menu aperto */}
-                                <div className={`w-1/3 px-1 ${isPeriodMenuOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-                                    <CustomDateRangeInputs 
-                                        isActive={activeViewIndex === 2}
-                                        range={customRange}
-                                        onChange={(r) => { setCustomRange(r); setActiveViewIndex(2); }}
-                                        compact={true}
-                                    />
-                                </div>
+                                
+                                {/* Recurring indicator - Right Edge Square */}
+                                {recurringCountInPeriod > 0 && (
+                                    <div className="absolute right-0 top-1/2 -translate-y-1/2">
+                                        <span className="w-8 h-8 flex items-center justify-center text-xs font-bold text-slate-900 bg-amber-100 border border-amber-400 rounded-lg shadow-sm" title="Spese programmate in arrivo">
+                                            {recurringCountInPeriod}P
+                                        </span>
+                                    </div>
+                                )}
                             </div>
                         </div>
-                        
-                        {/* Dots */}
-                        <div className="flex justify-center items-center mt-3 gap-2">
-                            {[0, 1, 2].map((i) => (
+
+                        {/* Filter Container - (Spostata SOTTO l'importo) */}
+                        <div className="mb-2 relative z-20 mx-5" ref={headerContainerRef} style={{ touchAction: 'pan-y' }}>
+                            {/* Modificato: overflow-hidden diventa condizionale */}
+                            <div className={`relative ${isPeriodMenuOpen ? 'overflow-visible' : 'overflow-hidden'}`}>
+                                <div 
+                                    className="w-[300%] flex transition-transform duration-300 ease-out"
+                                    style={{ 
+                                        transform: `translateX(${listTx}%)` 
+                                    }}
+                                >
+                                    {/* Page 0: Quick Filters - Nascondi se menu aperto */}
+                                    <div className={`w-1/3 px-1 ${isPeriodMenuOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+                                        <QuickFilterControl 
+                                            isActive={activeViewIndex === 0}
+                                            currentValue={quickFilter}
+                                            onSelect={(v) => { setQuickFilter(v); setActiveViewIndex(0); }}
+                                            compact={true}
+                                        />
+                                    </div>
+                                    {/* Page 1: Period Navigator - Sempre visibile (è quello col menu) */}
+                                    <div className="w-1/3 px-1 relative z-20">
+                                        <PeriodNavigator 
+                                            isActive={activeViewIndex === 1}
+                                            periodType={periodType}
+                                            periodDate={periodDate}
+                                            onTypeChange={setPeriodType}
+                                            onDateChange={setPeriodDate}
+                                            onActivate={() => setActiveViewIndex(1)}
+                                            isMenuOpen={isPeriodMenuOpen}
+                                            onMenuToggle={setIsPeriodMenuOpen}
+                                            isPanelOpen={true} // Always drop down in dashboard
+                                            compact={true}
+                                        />
+                                    </div>
+                                    {/* Page 2: Custom Range - Nascondi se menu aperto */}
+                                    <div className={`w-1/3 px-1 ${isPeriodMenuOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+                                        <CustomDateRangeInputs 
+                                            isActive={activeViewIndex === 2}
+                                            range={customRange}
+                                            onChange={(r) => { setCustomRange(r); setActiveViewIndex(2); }}
+                                            compact={true}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            {/* Dots */}
+                            <div className="flex justify-center items-center mt-3 gap-2">
+                                {[0, 1, 2].map((i) => (
+                                    <button
+                                        key={i}
+                                        onClick={() => setActiveViewIndex(i)}
+                                        className={`w-2 h-2 rounded-full transition-colors ${activeViewIndex === i ? 'bg-indigo-600' : 'bg-slate-300 hover:bg-slate-400'}`}
+                                        aria-label={`Vai alla pagina filtri ${i + 1}`}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="mt-4 pt-4 border-t border-slate-200 relative z-10">
+                            <div>
+                                <h4 className="text-sm font-medium text-slate-500">Spesa Oggi</h4>
+                                <p className="text-xl font-bold text-slate-800">{formatCurrency(dailyTotal)}</p>
+                            </div>
+                            <div className="mt-4 grid grid-cols-2 gap-3">
                                 <button
-                                    key={i}
-                                    onClick={() => setActiveViewIndex(i)}
-                                    className={`w-2 h-2 rounded-full transition-colors ${activeViewIndex === i ? 'bg-indigo-600' : 'bg-slate-300 hover:bg-slate-400'}`}
-                                    aria-label={`Vai alla pagina filtri ${i + 1}`}
-                                />
-                            ))}
+                                    onClick={onNavigateToRecurring}
+                                    style={{ touchAction: 'manipulation' }}
+                                    className="flex items-center justify-center py-2 px-3 text-center font-semibold text-slate-900 bg-amber-100 rounded-xl hover:bg-amber-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition-all border border-amber-400"
+                                >
+                                    <span className="text-sm">S. Programmate</span>
+                                </button>
+
+                                <button
+                                    onClick={onNavigateToHistory}
+                                    style={{ touchAction: 'manipulation' }}
+                                    className="flex items-center justify-center py-2 px-3 text-center font-semibold text-slate-900 bg-amber-100 rounded-xl hover:bg-amber-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition-all border border-amber-400"
+                                >
+                                    <span className="text-sm">Storico Spese</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
 
-                    <div className="mt-4 pt-4 border-t border-slate-200 relative z-10">
-                        <div>
-                            <h4 className="text-sm font-medium text-slate-500">Spesa Oggi</h4>
-                            <p className="text-xl font-bold text-slate-800">{formatCurrency(dailyTotal)}</p>
-                        </div>
-                        <div className="mt-4 grid grid-cols-2 gap-3">
-                            <button
-                                onClick={onNavigateToRecurring}
-                                style={{ touchAction: 'manipulation' }}
-                                className="flex items-center justify-center py-2 px-3 text-center font-semibold text-slate-900 bg-amber-100 rounded-xl hover:bg-amber-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition-all border border-amber-400"
-                            >
-                                <span className="text-sm">S. Programmate</span>
-                            </button>
-
-                            <button
-                                onClick={onNavigateToHistory}
-                                style={{ touchAction: 'manipulation' }}
-                                className="flex items-center justify-center py-2 px-3 text-center font-semibold text-slate-900 bg-amber-100 rounded-xl hover:bg-amber-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition-all border border-amber-400"
-                            >
-                                <span className="text-sm">Storico Spese</span>
-                            </button>
-                        </div>
-                    </div>
+                    {/* Pulsante Importa/Esporta File */}
+                    <input
+                        type="file"
+                        ref={fileInputRef}
+                        className="hidden"
+                        accept=".csv, .xlsx, .xls, .json"
+                        onChange={handleFileChange}
+                    />
+                    <button
+                        onClick={openImportExportMenu}
+                        className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-indigo-50 text-indigo-700 font-bold rounded-2xl border border-indigo-100 shadow-sm hover:bg-indigo-100 transition-colors"
+                    >
+                        <ArrowsUpDownIcon className="w-6 h-6" />
+                        Imp/Exp (CSV/Excel/JSON)
+                    </button>
                 </div>
 
-                {/* Pulsante Importa/Esporta File */}
-                <input
-                    type="file"
-                    ref={fileInputRef}
-                    className="hidden"
-                    accept=".csv, .xlsx, .xls, .json"
-                    onChange={handleFileChange}
-                />
-                <button
-                    onClick={openImportExportMenu}
-                    className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-indigo-50 text-indigo-700 font-bold rounded-2xl border border-indigo-100 shadow-sm hover:bg-indigo-100 transition-colors"
-                >
-                    <ArrowsUpDownIcon className="w-6 h-6" />
-                    Imp/Exp (CSV/Excel/JSON)
-                </button>
+                <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-lg flex flex-col">
+                    <div className="mb-4">
+                        <h3 className="text-xl font-bold text-slate-700">Riepilogo Categorie</h3>
+                        <p className="text-sm text-slate-500 font-medium capitalize">{dateRangeLabel}</p>
+                    </div>
+                    
+                    {categoryData.length > 0 ? (
+                        <div className="space-y-4 flex-grow">
+                            {categoryData.map(cat => {
+                                const style = getCategoryStyle(cat.name);
+                                const percentage = totalExpenses > 0 ? (cat.value / totalExpenses) * 100 : 0;
+                                return (
+                                    <div key={cat.name} className="flex items-center gap-4 text-base">
+                                        <span className={`w-10 h-10 rounded-xl flex items-center justify-center ${style.bgColor}`}>
+                                            <style.Icon className={`w-6 h-6 ${style.color}`} />
+                                        </span>
+                                        <div className="flex-grow">
+                                            <div className="flex justify-between items-center mb-1">
+                                                <span className="font-semibold text-slate-700">{style.label}</span>
+                                                <span className="font-bold text-slate-800">{formatCurrency(cat.value)}</span>
+                                            </div>
+                                            <div className="w-full bg-slate-200 rounded-full h-2.5">
+                                                <div className="bg-indigo-500 h-2.5 rounded-full" style={{ width: `${percentage}%` }}></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    ) : <p className="text-center text-slate-500 flex-grow flex items-center justify-center">Nessuna spesa registrata in questo periodo.</p>}
+                </div>
             </div>
 
-            <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-lg flex flex-col">
-                <div className="mb-4">
-                    <h3 className="text-xl font-bold text-slate-700">Riepilogo Categorie</h3>
+            <div className="bg-white p-6 rounded-2xl shadow-lg">
+                <div className="mb-2 text-center">
+                    <h3 className="text-xl font-bold text-slate-700">Spese per Categoria</h3>
                     <p className="text-sm text-slate-500 font-medium capitalize">{dateRangeLabel}</p>
                 </div>
                 
                 {categoryData.length > 0 ? (
-                    <div className="space-y-4 flex-grow">
-                        {categoryData.map(cat => {
-                            const style = getCategoryStyle(cat.name);
-                            const percentage = totalExpenses > 0 ? (cat.value / totalExpenses) * 100 : 0;
-                            return (
-                                <div key={cat.name} className="flex items-center gap-4 text-base">
-                                    <span className={`w-10 h-10 rounded-xl flex items-center justify-center ${style.bgColor}`}>
-                                        <style.Icon className={`w-6 h-6 ${style.color}`} />
-                                    </span>
-                                    <div className="flex-grow">
-                                        <div className="flex justify-between items-center mb-1">
-                                            <span className="font-semibold text-slate-700">{style.label}</span>
-                                            <span className="font-bold text-slate-800">{formatCurrency(cat.value)}</span>
-                                        </div>
-                                        <div className="w-full bg-slate-200 rounded-full h-2.5">
-                                            <div className="bg-indigo-500 h-2.5 rounded-full" style={{ width: `${percentage}%` }}></div>
-                                        </div>
-                                    </div>
-                                </div>
-                            )
-                        })}
-                    </div>
-                ) : <p className="text-center text-slate-500 flex-grow flex items-center justify-center">Nessuna spesa registrata in questo periodo.</p>}
-            </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-2xl shadow-lg">
-            <div className="mb-2 text-center">
-                <h3 className="text-xl font-bold text-slate-700">Spese per Categoria</h3>
-                <p className="text-sm text-slate-500 font-medium capitalize">{dateRangeLabel}</p>
-            </div>
-            
-            {categoryData.length > 0 ? (
-                <div className="relative cursor-pointer" onClick={handleChartBackgroundClick}>
-                    <ResponsiveContainer width="100%" height={300}>
-                        <PieChart>
-                        <Pie
-                            data={categoryData}
-                            cx="50%"
-                            cy="50%"
-                            innerRadius={68}
-                            outerRadius={102}
-                            fill="#8884d8"
-                            paddingAngle={2}
-                            dataKey="value"
-                            nameKey="name"
-                            {...({ activeIndex: activeIndex ?? undefined } as any)}
-                            activeShape={renderActiveShape}
-                        >
-                            {categoryData.map((entry) => (
-                            <Cell key={`cell-${entry.name}`} fill={categoryHexColors[entry.name] || DEFAULT_COLOR} />
-                            ))}
-                        </Pie>
-                        </PieChart>
-                    </ResponsiveContainer>
-                    {activeIndex === null && (
-                        <div className="absolute inset-0 flex flex-col justify-center items-center pointer-events-none">
-                            <span className="text-slate-800 text-base font-bold">Totale</span>
-                            <span className="text-2xl font-extrabold text-slate-800 mt-1">
-                                {formatCurrency(totalExpenses)}
-                            </span>
-                        </div>
-                    )}
-                </div>
-            ) : <p className="text-center text-slate-500 py-16">Nessun dato da visualizzare.</p>}
-
-            {categoryData.length > 0 && (
-                <div className="mt-4 pt-4 border-t border-slate-200">
-                    <div className="flex flex-wrap justify-center gap-x-4 gap-y-3">
-                    {categoryData.map((entry, index) => {
-                        const style = getCategoryStyle(entry.name);
-                        return (
-                        <button
-                            key={`item-${index}`}
-                            onClick={(e) => handleLegendItemClick(index, e)}
-                            style={{ touchAction: 'manipulation' }}
-                            data-legend-item
-                            className={`flex items-center gap-3 p-2 rounded-full text-left transition-all duration-200 bg-slate-100 hover:bg-slate-200`}
-                        >
-                            <span className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${style.bgColor}`}>
-                                <style.Icon className={`w-4 h-4 ${style.color}`} />
-                            </span>
-                            <div className="min-w-0 pr-2">
-                                <p className={`font-semibold text-sm truncate text-slate-700`}>{style.label}</p>
+                    <div className="relative cursor-pointer" onClick={handleChartBackgroundClick}>
+                        <ResponsiveContainer width="100%" height={300}>
+                            <PieChart>
+                            <Pie
+                                data={categoryData}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={68}
+                                outerRadius={102}
+                                fill="#8884d8"
+                                paddingAngle={2}
+                                dataKey="value"
+                                nameKey="name"
+                                {...({ activeIndex: activeIndex ?? undefined } as any)}
+                                activeShape={renderActiveShape}
+                            >
+                                {categoryData.map((entry) => (
+                                <Cell key={`cell-${entry.name}`} fill={categoryHexColors[entry.name] || DEFAULT_COLOR} />
+                                ))}
+                            </Pie>
+                            </PieChart>
+                        </ResponsiveContainer>
+                        {activeIndex === null && (
+                            <div className="absolute inset-0 flex flex-col justify-center items-center pointer-events-none">
+                                <span className="text-slate-800 text-base font-bold">Totale</span>
+                                <span className="text-2xl font-extrabold text-slate-800 mt-1">
+                                    {formatCurrency(totalExpenses)}
+                                </span>
                             </div>
-                        </button>
-                        );
-                    })}
+                        )}
                     </div>
-                </div>
-            )}
+                ) : <p className="text-center text-slate-500 py-16">Nessun dato da visualizzare.</p>}
+
+                {categoryData.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-slate-200">
+                        <div className="flex flex-wrap justify-center gap-x-4 gap-y-3">
+                        {categoryData.map((entry, index) => {
+                            const style = getCategoryStyle(entry.name);
+                            return (
+                            <button
+                                key={`item-${index}`}
+                                onClick={(e) => handleLegendItemClick(index, e)}
+                                style={{ touchAction: 'manipulation' }}
+                                data-legend-item
+                                className={`flex items-center gap-3 p-2 rounded-full text-left transition-all duration-200 bg-slate-100 hover:bg-slate-200`}
+                            >
+                                <span className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${style.bgColor}`}>
+                                    <style.Icon className={`w-4 h-4 ${style.color}`} />
+                                </span>
+                                <div className="min-w-0 pr-2">
+                                    <p className={`font-semibold text-sm truncate text-slate-700`}>{style.label}</p>
+                                </div>
+                            </button>
+                            );
+                        })}
+                        </div>
+                    </div>
+                )}
+            </div>
         </div>
 
         {/* Modal Centrato per Import/Export */}
         {isImportExportMenuOpen && (
             <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={handleCloseNavigation}>
-                <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-fade-in-up" onClick={e => e.stopPropagation()}>
+                <div 
+                    className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-fade-in-up" 
+                    onClick={e => e.stopPropagation()}
+                    onPointerDown={e => e.stopPropagation()}
+                    onPointerUp={e => e.stopPropagation()}
+                >
                     <div className="flex justify-between items-center p-4 border-b border-slate-100">
                         {showExportOptions && (
-                            <button onClick={handleBackNavigation} className="p-2 -ml-2 rounded-full hover:bg-slate-100 text-slate-500" aria-label="Indietro">
+                            <button onClick={handleBackNavigation} className="p-2 -ml-2 rounded-full hover:bg-slate-100 text-slate-500" aria-label="Indietro" onPointerDown={(e) => e.stopPropagation()}>
                                 <ArrowLeftIcon className="w-5 h-5" />
                             </button>
                         )}
                         <h3 className={`text-lg font-bold text-slate-800 flex-1 text-center ${showExportOptions ? '' : 'pl-8'}`}>
                             {showExportOptions ? "Scegli Formato" : "Gestione Dati"}
                         </h3>
-                        <button onClick={handleCloseNavigation} className="p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors">
+                        <button onClick={handleCloseNavigation} className="p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors" onPointerDown={(e) => e.stopPropagation()}>
                             <XMarkIcon className="w-6 h-6" />
                         </button>
                     </div>
                     <div className="p-4 space-y-3">
                         {!showExportOptions ? (
                             <>
-                                <button onClick={handleImportClick} className="w-full flex items-center gap-4 p-4 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors text-left group">
+                                <button onClick={handleImportClick} onPointerDown={(e) => e.stopPropagation()} className="w-full flex items-center gap-4 p-4 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors text-left group">
                                     <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center text-green-600 group-hover:scale-110 transition-transform">
                                         <ArrowDownTrayIcon className="w-6 h-6" />
                                     </div>
                                     <span className="font-semibold text-slate-700 text-lg">Importa (CSV/Excel/JSON)</span>
                                 </button>
-                                <button onClick={openExportOptions} className="w-full flex items-center gap-4 p-4 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors text-left group">
+                                <button onClick={openExportOptions} onPointerDown={(e) => e.stopPropagation()} className="w-full flex items-center gap-4 p-4 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors text-left group">
                                     <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
                                         <ArrowUpTrayIcon className="w-6 h-6" />
                                     </div>
@@ -652,7 +659,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
                             </>
                         ) : (
                             <>
-                                <button onClick={() => handleExportClick('excel')} className="w-full flex items-center gap-4 p-4 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors text-left group">
+                                <button onClick={() => handleExportClick('excel')} onPointerDown={(e) => e.stopPropagation()} className="w-full flex items-center gap-4 p-4 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors text-left group">
                                     <div className="w-12 h-12 flex-shrink-0 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform">
                                         <span className="font-bold text-sm">XLSX</span>
                                     </div>
@@ -661,7 +668,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
                                         <span className="text-xs text-slate-500">Le ricevute non verranno salvate</span>
                                     </div>
                                 </button>
-                                <button onClick={() => handleExportClick('json')} className="w-full flex items-center gap-4 p-4 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors text-left group">
+                                <button onClick={() => handleExportClick('json')} onPointerDown={(e) => e.stopPropagation()} className="w-full flex items-center gap-4 p-4 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors text-left group">
                                     <div className="w-12 h-12 flex-shrink-0 rounded-full bg-yellow-100 flex items-center justify-center text-yellow-600 group-hover:scale-110 transition-transform">
                                         <span className="font-bold text-sm">JSON</span>
                                     </div>
@@ -676,7 +683,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
                 </div>
             </div>
         )}
-    </div>
+    </>
   );
 };
 
