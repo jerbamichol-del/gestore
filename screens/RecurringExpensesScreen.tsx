@@ -9,6 +9,7 @@ import { TrashIcon } from '../components/icons/TrashIcon';
 import { CalendarDaysIcon } from '../components/icons/CalendarDaysIcon';
 import { CheckIcon } from '../components/icons/CheckIcon';
 import ConfirmationModal from '../components/ConfirmationModal';
+import { useTapBridge } from '../hooks/useTapBridge';
 
 const ACTION_WIDTH = 72;
 
@@ -246,7 +247,7 @@ const RecurringExpenseItem: React.FC<{
             <div className="absolute top-0 right-0 h-full flex items-center z-0">
                 <button
                     onClick={() => onDeleteRequest(expense.id)}
-                    className="w-[72px] h-full flex flex-col items-center justify-center bg-red-500 text-white hover:bg-red-600 transition-colors focus:outline-none focus:visible:ring-2 focus-visible:ring-inset focus-visible:ring-white"
+                    className="w-[72px] h-full flex flex-col items-center justify-center bg-red-500 text-white hover:bg-red-600 transition-colors focus:outline-none focus:visible:ring-2 focus-visible:ring-inset focus:visible:ring-white"
                     aria-label="Elimina spesa programmata"
                 >
                     <TrashIcon className="w-6 h-6" />
@@ -298,17 +299,19 @@ interface RecurringExpensesScreenProps {
   expenses: Expense[];
   accounts: Account[];
   onClose: () => void;
+  onCloseStart?: () => void;
   onEdit: (expense: Expense) => void;
   onDelete: (id: string) => void;
   onDeleteRecurringExpenses: (ids: string[]) => void; // Bulk delete prop
 }
 
-const RecurringExpensesScreen: React.FC<RecurringExpensesScreenProps> = ({ recurringExpenses, expenses, accounts, onClose, onEdit, onDelete, onDeleteRecurringExpenses }) => {
+const RecurringExpensesScreen: React.FC<RecurringExpensesScreenProps> = ({ recurringExpenses, expenses, accounts, onClose, onCloseStart, onEdit, onDelete, onDeleteRecurringExpenses }) => {
   const [isAnimatingIn, setIsAnimatingIn] = useState(false);
   const [openItemId, setOpenItemId] = useState<string | null>(null);
   const [expenseToDeleteId, setExpenseToDeleteId] = useState<string | null>(null);
   const [isConfirmDeleteModalOpen, setIsConfirmDeleteModalOpen] = useState(false);
   const autoCloseRef = useRef<number | null>(null);
+  const tapBridge = useTapBridge();
 
   // Selection State
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -380,6 +383,7 @@ const RecurringExpensesScreen: React.FC<RecurringExpensesScreenProps> = ({ recur
 
   const handleClose = () => {
       setOpenItemId(null);
+      if (onCloseStart) onCloseStart();
       setIsAnimatingIn(false);
       setTimeout(onClose, 300);
   }
@@ -452,6 +456,7 @@ const RecurringExpensesScreen: React.FC<RecurringExpensesScreenProps> = ({ recur
             setOpenItemId(null);
         }
       }}
+      {...tapBridge}
     >
       <header className="sticky top-0 z-20 flex items-center gap-4 p-4 bg-white/80 backdrop-blur-sm shadow-sm h-[60px]">
         {isSelectionMode ? (
