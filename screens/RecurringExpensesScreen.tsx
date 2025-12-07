@@ -228,7 +228,8 @@ const RecurringExpenseItem: React.FC<{
       setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
     };
 
-    const handleClick = () => {
+    const handleClick = (e: React.MouseEvent) => {
+        e.stopPropagation(); // Impedisce che il click raggiunga il container e chiuda la spesa
         if (dragState.current.isDragging || dragState.current.wasHorizontal) return;
         
         if (isSelectionMode) {
@@ -445,6 +446,12 @@ const RecurringExpensesScreen: React.FC<RecurringExpensesScreenProps> = ({ recur
     <div 
       className={`fixed inset-0 z-50 bg-slate-100 transform transition-transform duration-300 ease-in-out ${isAnimatingIn ? 'translate-y-0' : 'translate-y-full'}`}
       style={{ touchAction: 'pan-y' }}
+      onClick={() => {
+        // Chiudi sezione aperta se si clicca sullo sfondo
+        if (openItemId) {
+            setOpenItemId(null);
+        }
+      }}
     >
       <header className="sticky top-0 z-20 flex items-center gap-4 p-4 bg-white/80 backdrop-blur-sm shadow-sm h-[60px]">
         {isSelectionMode ? (
