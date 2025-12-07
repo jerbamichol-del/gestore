@@ -7,6 +7,7 @@ import { getCategoryStyle } from '../utils/categoryStyles';
 import { ArrowsUpDownIcon } from './icons/ArrowsUpDownIcon';
 import { ArrowDownTrayIcon } from './icons/ArrowDownTrayIcon';
 import { ArrowUpTrayIcon } from './icons/ArrowUpTrayIcon';
+import { ArrowPathIcon } from './icons/ArrowPathIcon'; // Import ArrowPathIcon
 import { XMarkIcon } from './icons/XMarkIcon';
 import { ArrowLeftIcon } from './icons/ArrowLeftIcon';
 import SelectionMenu from './SelectionMenu';
@@ -73,6 +74,7 @@ interface DashboardProps {
   onNavigateToHistory: () => void;
   onImportFile: (file: File) => void;
   onReceiveSharedFile?: (file: File) => void | Promise<void>;
+  onSync: () => Promise<void> | void;
 }
 
 const parseLocalYYYYMMDD = (s: string): Date => {
@@ -111,7 +113,7 @@ const calculateNextDueDate = (template: Expense, fromDate: Date): Date | null =>
   return nextDate;
 };
 
-const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNavigateToRecurring, onNavigateToHistory, onImportFile }) => {
+const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNavigateToRecurring, onNavigateToHistory, onImportFile, onSync }) => {
   const tapBridgeHandlers = useTapBridge();
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   
@@ -149,6 +151,16 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
       if (fileInputRef.current) {
           fileInputRef.current.value = '';
       }
+  };
+
+  const handleNavigateToRecurring = (e: React.MouseEvent<HTMLButtonElement>) => {
+      e.currentTarget.blur();
+      onNavigateToRecurring();
+  };
+
+  const handleNavigateToHistory = (e: React.MouseEvent<HTMLButtonElement>) => {
+      e.currentTarget.blur();
+      onNavigateToHistory();
   };
 
   // Sync state with History API
@@ -208,6 +220,13 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
       exportExpenses(expenses, format);
       // Go back to dashboard (Format -> Main -> Home)
       window.history.go(-2);
+  };
+  
+  const handleSyncClick = async () => {
+      // Go back to dashboard (Main -> Home)
+      window.history.back();
+      // Trigger sync
+      await onSync();
   };
 
   // Reset sub-menu when modal closes (cleanup)
@@ -483,7 +502,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
                             </div>
                             <div className="mt-4 grid grid-cols-2 gap-3">
                                 <button
-                                    onClick={onNavigateToRecurring}
+                                    onClick={handleNavigateToRecurring}
                                     style={{ touchAction: 'manipulation' }}
                                     className="flex items-center justify-center py-2 px-3 text-center font-semibold text-slate-900 bg-amber-100 rounded-xl hover:bg-amber-200 focus:outline-none active:scale-95 active:bg-amber-200 active:ring-2 active:ring-offset-2 active:ring-amber-500 transition-all border border-amber-400"
                                 >
@@ -491,7 +510,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
                                 </button>
 
                                 <button
-                                    onClick={onNavigateToHistory}
+                                    onClick={handleNavigateToHistory}
                                     style={{ touchAction: 'manipulation' }}
                                     className="flex items-center justify-center py-2 px-3 text-center font-semibold text-slate-900 bg-amber-100 rounded-xl hover:bg-amber-200 focus:outline-none active:scale-95 active:bg-amber-200 active:ring-2 active:ring-offset-2 active:ring-amber-500 transition-all border border-amber-400"
                                 >
@@ -514,7 +533,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
                         className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-indigo-50 text-indigo-700 font-bold rounded-2xl border border-indigo-100 shadow-sm hover:bg-indigo-100 transition-colors"
                     >
                         <ArrowsUpDownIcon className="w-6 h-6" />
-                        Imp/Exp (CSV/Excel/JSON)
+                        Gestione Dati
                     </button>
                 </div>
 
@@ -644,6 +663,15 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
                     <div className="p-4 space-y-3">
                         {!showExportOptions ? (
                             <>
+                                <button onClick={handleSyncClick} onPointerDown={(e) => e.stopPropagation()} className="w-full flex items-center gap-4 p-4 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors text-left group">
+                                    <div className="w-12 h-12 rounded-full bg-cyan-100 flex items-center justify-center text-cyan-600 group-hover:scale-110 transition-transform">
+                                        <ArrowPathIcon className="w-6 h-6" />
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <span className="font-semibold text-slate-700 text-lg">Sincronizza Cloud</span>
+                                        <span className="text-xs text-slate-500">Scarica ultimi dati dal cloud</span>
+                                    </div>
+                                </button>
                                 <button onClick={handleImportClick} onPointerDown={(e) => e.stopPropagation()} className="w-full flex items-center gap-4 p-4 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors text-left group">
                                     <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center text-green-600 group-hover:scale-110 transition-transform">
                                         <ArrowDownTrayIcon className="w-6 h-6" />
