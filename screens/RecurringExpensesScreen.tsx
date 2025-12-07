@@ -186,8 +186,9 @@ const RecurringExpenseItem: React.FC<{
         if (e.cancelable) e.preventDefault();
   
         let x = ds.initialTranslateX + dx;
-        if (x > 0) x = Math.tanh(x / 50) * 25;
-        if (x < -ACTION_WIDTH) x = -ACTION_WIDTH - Math.tanh((Math.abs(x) - ACTION_WIDTH) / 50) * 25;
+        // Hard limit: no rubber-banding
+        if (x > 0) x = 0;
+        if (x < -ACTION_WIDTH) x = -ACTION_WIDTH;
         setTranslateX(x, false);
       }
     };
