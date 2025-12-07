@@ -485,7 +485,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
                                 <button
                                     onClick={onNavigateToRecurring}
                                     style={{ touchAction: 'manipulation' }}
-                                    className="flex items-center justify-center py-2 px-3 text-center font-semibold text-slate-900 bg-amber-100 rounded-xl hover:bg-amber-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition-all border border-amber-400"
+                                    className="flex items-center justify-center py-2 px-3 text-center font-semibold text-slate-900 bg-amber-100 rounded-xl hover:bg-amber-200 focus:outline-none active:scale-95 active:bg-amber-200 active:ring-2 active:ring-offset-2 active:ring-amber-500 transition-all border border-amber-400"
                                 >
                                     <span className="text-sm">S. Programmate</span>
                                 </button>
@@ -493,7 +493,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
                                 <button
                                     onClick={onNavigateToHistory}
                                     style={{ touchAction: 'manipulation' }}
-                                    className="flex items-center justify-center py-2 px-3 text-center font-semibold text-slate-900 bg-amber-100 rounded-xl hover:bg-amber-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition-all border border-amber-400"
+                                    className="flex items-center justify-center py-2 px-3 text-center font-semibold text-slate-900 bg-amber-100 rounded-xl hover:bg-amber-200 focus:outline-none active:scale-95 active:bg-amber-200 active:ring-2 active:ring-offset-2 active:ring-amber-500 transition-all border border-amber-400"
                                 >
                                     <span className="text-sm">Storico Spese</span>
                                 </button>
