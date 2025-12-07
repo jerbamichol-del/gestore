@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Expense, Account, CATEGORIES } from './types';
 import { useLocalStorage } from './hooks/useLocalStorage';
@@ -79,14 +78,14 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
   const isOnline = useOnlineStatus();
   const [pendingImages, setPendingImages] = useState<OfflineImage[]>([]);
   const [syncingImageId, setSyncingImageId] = useState<string | null>(null);
-  
+   
   // --- Toast & Install ---
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const showToast = useCallback((msg: ToastMessage) => setToast(msg), []);
   const [showSuccessIndicator, setShowSuccessIndicator] = useState(false);
   const [installPromptEvent, setInstallPromptEvent] = useState<any>(null);
   const pendingImagesCountRef = useRef(0);
-  
+   
   // --- Shared Logic ---
   const sharedImageIdRef = useRef<string | null>(null);
   const isSharedStart = useRef(new URLSearchParams(window.location.search).get('shared') === 'true');
@@ -385,6 +384,63 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
     setIsFormOpen(true);
   };
 
+  // --- FUNZIONE DI SYNC DAL CLOUD (Modificata per Auto-Sync) ---
+  const handleSyncFromCloud = async (isSilent = false) => {
+    try {
+      if (!isSilent) showToast({ message: 'Sincronizzazione...', type: 'info' });
+      
+      // INCOLLA QUI SOTTO IL TUO URL DI GOOGLE APPS SCRIPT (quello che finisce con /exec)
+      const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzuAtweyuib21-BX4dQszoxEL5BW-nzVN2Vyum4UZvWH-TzP3GLZB5He1jFkrO6242JPA/exec'; 
+
+      const response = await fetch(SCRIPT_URL, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'load', email: currentEmail })
+      });
+      
+      const json = await response.json();
+      
+      if (json.success && json.data) {
+        setExpenses(json.data.expenses || []);
+        if (json.data.recurringExpenses) setRecurringExpenses(json.data.recurringExpenses);
+        if (json.data.accounts) setAccounts(json.data.accounts);
+
+        if (!isSilent) showToast({ message: 'Dati aggiornati!', type: 'success' });
+        console.log("Sync completato con successo.");
+      } 
+    } catch (e) {
+      console.error("Errore sync auto:", e);
+      if (!isSilent) showToast({ message: 'Errore connessione.', type: 'error' });
+    }
+  };
+
+  // --- AUTOMAZIONE: SYNC QUANDO L'APP SI APRE ---
+  useEffect(() => {
+    const autoSync = async () => {
+      if (isOnline && currentEmail) {
+        console.log("App tornata attiva: Controllo aggiornamenti...");
+        await handleSyncFromCloud(true); // true = modalità silenziosa
+      }
+    };
+
+    // 1. Sincronizza subito all'avvio
+    autoSync();
+
+    // 2. Sincronizza quando l'utente torna sull'app
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        autoSync();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleVisibilityChange); 
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleVisibilityChange);
+    };
+  }, [isOnline, currentEmail]);
+
   useEffect(() => {
     if (!currentEmail || !isOnline) return;
     const timer = setTimeout(() => {
@@ -523,8 +579,6 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
 
   const handleAddExpense = (data: Omit<Expense, 'id'> | Expense) => {
       // INTERCETTAZIONE: Evita il "flicker" delle spese ricorrenti singole per oggi.
-      // Se è una ricorrenza singola (count=1) e la data è oggi o passata, 
-      // la trasformiamo subito in spesa normale (Storico) senza passare per le programmate.
       let finalData = { ...data };
       const todayStr = toYYYYMMDD(new Date());
 
@@ -535,7 +589,6 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
           finalData.date <= todayStr
       ) {
           finalData.frequency = 'single';
-          // Pulizia campi ricorrenza per coerenza
           finalData.recurrence = undefined;
           finalData.recurrenceInterval = undefined;
           finalData.recurrenceDays = undefined;
@@ -546,25 +599,21 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
       }
 
       if ('id' in finalData) { 
-          // Modifica esistente
           const updatedExpense = finalData as Expense;
           setExpenses(p => p.map(e => e.id === updatedExpense.id ? updatedExpense : e));
           
-          // Se stava nelle ricorrenti ma ora è diventata singola (o l'abbiamo forzata sopra), toglila dalle ricorrenti
           if (updatedExpense.frequency === 'single') {
              setRecurringExpenses(p => p.filter(e => e.id !== updatedExpense.id));
           } else {
              setRecurringExpenses(p => p.map(e => e.id === updatedExpense.id ? updatedExpense : e));
           }
       } else { 
-          // Nuova spesa
           const newItem = { ...finalData, id: crypto.randomUUID() } as Expense;
           if (finalData.frequency === 'recurring') setRecurringExpenses(p => [newItem, ...p]);
           else setExpenses(p => [newItem, ...p]);
       }
       setShowSuccessIndicator(true); setTimeout(() => setShowSuccessIndicator(false), 2000);
       
-      // FIX NAVIGAZIONE: Se il form era aperto (es. da storico), torna indietro invece di andare alla home
       if (isFormOpen) {
           window.history.back();
       } else {
@@ -623,6 +672,7 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
               onNavigateToHistory={() => { window.history.pushState({ modal: 'history' }, ''); setIsHistoryClosing(false); setIsHistoryScreenOpen(true); }}
               onReceiveSharedFile={handleSharedFile} 
               onImportFile={handleImportFile}
+              onSync={() => handleSyncFromCloud(false)}
            />
            <PendingImages images={pendingImages} onAnalyze={handleAnalyzeImage} onDelete={async (id) => { await deleteImageFromQueue(id); refreshPendingImages(); }} isOnline={isOnline} syncingImageId={syncingImageId} />
         </div>
