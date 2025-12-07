@@ -533,7 +533,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
                         className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-indigo-50 text-indigo-700 font-bold rounded-2xl border border-indigo-100 shadow-sm hover:bg-indigo-100 transition-colors"
                     >
                         <ArrowsUpDownIcon className="w-6 h-6" />
-                        Gestione Dati
+                        Imp/Exp (CSV/Excel/JSON)
                     </button>
                 </div>
 
