@@ -151,18 +151,66 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
       }
   };
 
+  // Sync state with History API
+  useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+        const modal = event.state?.modal;
+        if (modal === 'import_export_main') {
+            setIsImportExportMenuOpen(true);
+            setShowExportOptions(false);
+        } else if (modal === 'import_export_format') {
+            setIsImportExportMenuOpen(true);
+            setShowExportOptions(true);
+        } else {
+            // Not in our modal flow, assume closed (e.g. home)
+            setIsImportExportMenuOpen(false);
+            setShowExportOptions(false);
+        }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const openImportExportMenu = () => {
+      window.history.pushState({ modal: 'import_export_main' }, '');
+      setIsImportExportMenuOpen(true);
+      setShowExportOptions(false);
+  };
+
+  const openExportOptions = () => {
+      window.history.pushState({ modal: 'import_export_format' }, '');
+      setShowExportOptions(true);
+  };
+
+  const handleBackNavigation = () => {
+      window.history.back();
+  };
+
+  const handleCloseNavigation = () => {
+      if (showExportOptions) {
+          // If in format view, go back 2 steps (Format -> Main -> Home)
+          window.history.go(-2);
+      } else {
+          // If in main view, go back 1 step (Main -> Home)
+          window.history.back();
+      }
+  };
+
   const handleImportClick = () => {
-      setIsImportExportMenuOpen(false);
-      fileInputRef.current?.click();
+      // Go back to dashboard (Main -> Home)
+      window.history.back();
+      // Delay click to allow modal to close visually
+      setTimeout(() => fileInputRef.current?.click(), 100);
   };
 
   const handleExportClick = (format: 'excel' | 'json') => {
       exportExpenses(expenses, format);
-      setIsImportExportMenuOpen(false);
-      setShowExportOptions(false);
+      // Go back to dashboard (Format -> Main -> Home)
+      window.history.go(-2);
   };
 
-  // Reset sub-menu when modal closes
+  // Reset sub-menu when modal closes (cleanup)
   useEffect(() => {
       if (!isImportExportMenuOpen) {
           setTimeout(() => setShowExportOptions(false), 300);
@@ -461,7 +509,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
                     onChange={handleFileChange}
                 />
                 <button
-                    onClick={() => setIsImportExportMenuOpen(true)}
+                    onClick={openImportExportMenu}
                     className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-indigo-50 text-indigo-700 font-bold rounded-2xl border border-indigo-100 shadow-sm hover:bg-indigo-100 transition-colors"
                 >
                     <ArrowsUpDownIcon className="w-6 h-6" />
@@ -571,18 +619,18 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
 
         {/* Modal Centrato per Import/Export */}
         {isImportExportMenuOpen && (
-            <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={() => setIsImportExportMenuOpen(false)}>
+            <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={handleCloseNavigation}>
                 <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-fade-in-up" onClick={e => e.stopPropagation()}>
                     <div className="flex justify-between items-center p-4 border-b border-slate-100">
                         {showExportOptions && (
-                            <button onClick={() => setShowExportOptions(false)} className="p-2 -ml-2 rounded-full hover:bg-slate-100 text-slate-500" aria-label="Indietro">
+                            <button onClick={handleBackNavigation} className="p-2 -ml-2 rounded-full hover:bg-slate-100 text-slate-500" aria-label="Indietro">
                                 <ArrowLeftIcon className="w-5 h-5" />
                             </button>
                         )}
                         <h3 className={`text-lg font-bold text-slate-800 flex-1 text-center ${showExportOptions ? '' : 'pl-8'}`}>
                             {showExportOptions ? "Scegli Formato" : "Gestione Dati"}
                         </h3>
-                        <button onClick={() => setIsImportExportMenuOpen(false)} className="p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors">
+                        <button onClick={handleCloseNavigation} className="p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors">
                             <XMarkIcon className="w-6 h-6" />
                         </button>
                     </div>
@@ -595,7 +643,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
                                     </div>
                                     <span className="font-semibold text-slate-700 text-lg">Importa (CSV/Excel/JSON)</span>
                                 </button>
-                                <button onClick={() => setShowExportOptions(true)} className="w-full flex items-center gap-4 p-4 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors text-left group">
+                                <button onClick={openExportOptions} className="w-full flex items-center gap-4 p-4 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors text-left group">
                                     <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
                                         <ArrowUpTrayIcon className="w-6 h-6" />
                                     </div>
