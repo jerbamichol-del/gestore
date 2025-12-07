@@ -234,7 +234,8 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
     setTranslateX(isOpen ? -ACTION_WIDTH : 0, true);
   };
 
-  const handleClick = () => {
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Importante: evita che il click raggiunga il container e chiuda la spesa
     if (dragState.current.isDragging || dragState.current.wasHorizontal) return;
     
     if (isSelectionMode) {
@@ -737,6 +738,12 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
           transitionDuration: '300ms, 0s',
           transitionDelay: isAnimatingIn ? '0s, 0s' : '0s, 300ms' 
       }}
+      onClick={() => {
+        // Tapping anywhere in the container (that isn't stopped by children) closes any open section
+        if (openItemId) {
+            setOpenItemId(null);
+        }
+      }}
     >
       <header className="sticky top-0 z-20 flex items-center gap-4 p-4 bg-white/80 backdrop-blur-sm shadow-sm h-[60px]">
         {isSelectionMode ? (
@@ -772,7 +779,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
                 <div className="relative">
                     <button
                         ref={sortButtonRef}
-                        onClick={() => setIsSortMenuOpen(!isSortMenuOpen)}
+                        onClick={(e) => { e.stopPropagation(); setIsSortMenuOpen(!isSortMenuOpen); }}
                         className={`p-2 rounded-full transition-colors ${sortOption !== 'date' ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-slate-200 text-slate-600'}`}
                         aria-label="Ordina spese"
                     >
@@ -785,6 +792,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
                             ref={sortMenuRef}
                             className="absolute top-full right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-slate-100 z-50 overflow-hidden animate-fade-in-up"
                             style={{ animationDuration: '150ms' }}
+                            onPointerDown={(e) => e.stopPropagation()} // Prevent closing swipe when using menu
                         >
                             <div className="py-1">
                                 <button
