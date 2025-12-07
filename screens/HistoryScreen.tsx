@@ -394,6 +394,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
   isOverlayed,
 }) => {
   const [isAnimatingIn, setIsAnimatingIn] = useState(false);
+  const tapBridge = useTapBridge();
   
   // Date Filtering State
   const [activeFilterMode, setActiveFilterMode] = useState<ActiveFilterMode>('quick');
@@ -744,6 +745,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
             setOpenItemId(null);
         }
       }}
+      {...tapBridge}
     >
       <header className="sticky top-0 z-20 flex items-center gap-4 p-4 bg-white/80 backdrop-blur-sm shadow-sm h-[60px]">
         {isSelectionMode ? (
