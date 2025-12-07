@@ -31,16 +31,16 @@ const useMediaQuery = (query: string) => {
   return matches;
 };
 
-// UTC-safe utilities
+// Local time utilities to prevent date shifting
 const toYYYYMMDD = (date: Date) => {
-  const y = date.getUTCFullYear();
-  const m = String(date.getUTCMonth() + 1).padStart(2, '0');
-  const d = String(date.getUTCDate()).padStart(2, '0');
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
 };
 
 const getCurrentTime = () =>
-  new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
+  new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
 
 const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   isOpen,
@@ -255,7 +255,11 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
 
   const baseTranslate = view === 'calculator' ? 0 : -50;
   const dragTranslate = progress * 50;
-  const finalTranslate = baseTranslate + dragTranslate;
+  let finalTranslate = baseTranslate + dragTranslate;
+
+  // Clamp translation to avoid overscroll showing empty background
+  if (finalTranslate > 0) finalTranslate = 0;
+  if (finalTranslate < -50) finalTranslate = -50;
 
   const transformStyle = isDesktop ? {} : {
     transform: `translateX(${finalTranslate}%)`,
