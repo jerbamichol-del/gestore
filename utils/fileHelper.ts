@@ -139,44 +139,46 @@ export const pickImage = (source: 'camera' | 'gallery'): Promise<File> => {
     });
 };
 
-export const exportExpenses = (expenses: Expense[]) => {
+export const exportExpenses = (expenses: Expense[], format: 'excel' | 'json' = 'excel') => {
     const dateStr = new Date().toISOString().slice(0, 10);
 
-    // 1. Esporta in Excel
-    try {
-        const rows = expenses.map(e => ({
-            Data: e.date,
-            Ora: e.time || '',
-            Importo: e.amount,
-            Descrizione: e.description,
-            Categoria: e.category,
-            Sottocategoria: e.subcategory || '',
-            Conto: e.accountId,
-            Tags: e.tags ? e.tags.join(', ') : '',
-            Frequenza: e.frequency === 'recurring' ? 'Ricorrente' : 'Singola'
-        }));
+    if (format === 'excel') {
+        // 1. Esporta in Excel
+        try {
+            const rows = expenses.map(e => ({
+                Data: e.date,
+                Ora: e.time || '',
+                Importo: e.amount,
+                Descrizione: e.description,
+                Categoria: e.category,
+                Sottocategoria: e.subcategory || '',
+                Conto: e.accountId,
+                Tags: e.tags ? e.tags.join(', ') : '',
+                Frequenza: e.frequency === 'recurring' ? 'Ricorrente' : 'Singola'
+            }));
 
-        const worksheet = XLSX.utils.json_to_sheet(rows);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Spese");
-        XLSX.writeFile(workbook, `Spese_Export_${dateStr}.xlsx`);
-    } catch (e) {
-        console.error("Export Excel failed", e);
-    }
-
-    // 2. Esporta in JSON
-    try {
-        const jsonStr = JSON.stringify(expenses, null, 2);
-        const blob = new Blob([jsonStr], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `Spese_Export_${dateStr}.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    } catch (e) {
-        console.error("Export JSON failed", e);
+            const worksheet = XLSX.utils.json_to_sheet(rows);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Spese");
+            XLSX.writeFile(workbook, `Spese_Export_${dateStr}.xlsx`);
+        } catch (e) {
+            console.error("Export Excel failed", e);
+        }
+    } else if (format === 'json') {
+        // 2. Esporta in JSON
+        try {
+            const jsonStr = JSON.stringify(expenses, null, 2);
+            const blob = new Blob([jsonStr], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Spese_Export_${dateStr}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (e) {
+            console.error("Export JSON failed", e);
+        }
     }
 };
