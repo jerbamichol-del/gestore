@@ -11,7 +11,6 @@ import { XMarkIcon } from './icons/XMarkIcon';
 import { ArrowLeftIcon } from './icons/ArrowLeftIcon';
 import { exportExpenses } from '../utils/fileHelper';
 import { useTapBridge } from '../hooks/useTapBridge';
-// Assicurati che HistoryFilterCard esista e esporti questi componenti
 import { 
     QuickFilterControl, 
     PeriodNavigator, 
@@ -22,21 +21,20 @@ import {
 import { useSwipe } from '../hooks/useSwipe';
 
 const categoryHexColors: Record<string, string> = {
-    'Alimentari': '#16a34a', // green-600
-    'Trasporti': '#2563eb', // blue-600
-    'Casa': '#ea580c', // orange-600
-    'Shopping': '#db2777', // pink-600
-    'Tempo Libero': '#9333ea', // purple-600
-    'Salute': '#dc2626', // red-600
-    'Istruzione': '#ca8a04', // yellow-600
-    'Lavoro': '#4f46e5', // indigo-600
-    'Altro': '#4b5563', // gray-600
+    'Alimentari': '#16a34a',
+    'Trasporti': '#2563eb',
+    'Casa': '#ea580c',
+    'Shopping': '#db2777',
+    'Tempo Libero': '#9333ea',
+    'Salute': '#dc2626',
+    'Istruzione': '#ca8a04',
+    'Lavoro': '#4f46e5',
+    'Altro': '#4b5563',
 };
 const DEFAULT_COLOR = '#4b5563';
 
 const renderActiveShape = (props: any) => {
   const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, payload, percent } = props;
-
   if (!payload) return null;
 
   return (
@@ -50,7 +48,6 @@ const renderActiveShape = (props: any) => {
       <text x={cx} y={cy + 32} textAnchor="middle" fill="#334155" className="text-sm font-bold">
         {`(${(percent * 100).toFixed(2)}%)`}
       </text>
-      
       <Sector
         cx={cx}
         cy={cy}
@@ -93,20 +90,11 @@ const calculateNextDueDate = (template: Expense, fromDate: Date): Date | null =>
   const nextDate = new Date(fromDate);
 
   switch (template.recurrence) {
-    case 'daily':
-      nextDate.setDate(nextDate.getDate() + interval);
-      break;
-    case 'weekly':
-      nextDate.setDate(nextDate.getDate() + 7 * interval);
-      break;
-    case 'monthly':
-      nextDate.setMonth(nextDate.getMonth() + interval);
-      break;
-    case 'yearly':
-      nextDate.setFullYear(nextDate.getFullYear() + interval);
-      break;
-    default:
-      return null;
+    case 'daily': nextDate.setDate(nextDate.getDate() + interval); break;
+    case 'weekly': nextDate.setDate(nextDate.getDate() + 7 * interval); break;
+    case 'monthly': nextDate.setMonth(nextDate.getMonth() + interval); break;
+    case 'yearly': nextDate.setFullYear(nextDate.getFullYear() + interval); break;
+    default: return null;
   }
   return nextDate;
 };
@@ -115,10 +103,8 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
   const tapBridgeHandlers = useTapBridge();
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   
-  // View State for Filter Swiper (0: Quick, 1: Period, 2: Custom)
-  const [activeViewIndex, setActiveViewIndex] = useState(1); // Default to Period view (middle)
+  const [activeViewIndex, setActiveViewIndex] = useState(1);
   
-  // Filter States
   const [quickFilter, setQuickFilter] = useState<DateFilter>('30d');
   const [periodType, setPeriodType] = useState<PeriodType>('month');
   const [periodDate, setPeriodDate] = useState<Date>(new Date());
@@ -132,6 +118,10 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
   const activeIndex = selectedIndex;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const headerContainerRef = useRef<HTMLDivElement>(null);
+
+  // --- REFS PER I BOTTONI ---
+  const recurringBtnRef = useRef<HTMLButtonElement>(null);
+  const historyBtnRef = useRef<HTMLButtonElement>(null);
 
   const handleLegendItemClick = (index: number, event: React.MouseEvent) => {
     event.stopPropagation();
@@ -161,34 +151,28 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
       onNavigateToHistory();
   };
 
-  // --- FIX AGGRESSIVO FOCUS (Soluzione Definitiva) ---
+  // --- SOLUZIONE DEFINITIVA FOCUS BACK BUTTON ---
   useEffect(() => {
-    const forceBlur = () => {
-        // Un piccolo delay (50ms) assicura che il browser abbia finito 
-        // di ripristinare lo stato prima che noi lo cancelliamo
+    const handleHardwareBackBlur = () => {
+        // Aumentato delay a 200ms per sicurezza su mobile
         setTimeout(() => {
+            // Forza il blur sui pulsanti specifici se hanno il focus
+            recurringBtnRef.current?.blur();
+            historyBtnRef.current?.blur();
+            
+            // Fallback generico
             if (document.activeElement instanceof HTMLElement) {
                 document.activeElement.blur();
             }
-        }, 50);
+        }, 200);
     };
 
-    // 1. Esegui al montaggio del componente (quando torni alla Dashboard)
-    forceBlur();
-
-    // 2. Esegui esplicitamente all'evento popstate (tasto indietro fisico)
-    window.addEventListener('popstate', forceBlur);
-    // 3. Esegui anche su pageshow (per sicurezza su alcuni browser Android)
-    window.addEventListener('pageshow', forceBlur);
-
-    return () => {
-        window.removeEventListener('popstate', forceBlur);
-        window.removeEventListener('pageshow', forceBlur);
-    };
+    window.addEventListener('popstate', handleHardwareBackBlur);
+    return () => window.removeEventListener('popstate', handleHardwareBackBlur);
   }, []);
-  // ---------------------------------------------------
+  // ----------------------------------------------
 
-  // Sync state with History API (Gestione Modali)
+  // Sync state with History API
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
         const modal = event.state?.modal;
@@ -252,7 +236,6 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
       }
   }, [isImportExportMenuOpen]);
 
-  // Swipe Handler for Header
   const { progress } = useSwipe(headerContainerRef, {
       onSwipeLeft: () => {
           if (activeViewIndex < 2 && !isPeriodMenuOpen) {
@@ -291,7 +274,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
 
     let start: Date, end: Date, label: string, rangeLabel = '';
 
-    if (activeViewIndex === 0) { // Quick Filters
+    if (activeViewIndex === 0) { 
         end = new Date(now);
         end.setHours(23, 59, 59, 999);
         start = new Date(now);
@@ -307,7 +290,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
         const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
         rangeLabel = `${start.toLocaleDateString('it-IT', opts)} - Oggi`;
 
-    } else if (activeViewIndex === 2) { // Custom Range
+    } else if (activeViewIndex === 2) { 
         if (customRange.start && customRange.end) {
             start = parseLocalYYYYMMDD(customRange.start);
             end = parseLocalYYYYMMDD(customRange.end);
@@ -322,7 +305,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
             label = "Seleziona Date";
             rangeLabel = "-";
         }
-    } else { // Period View (Default)
+    } else { 
         start = new Date(periodDate);
         start.setHours(0, 0, 0, 0);
         end = new Date(periodDate);
@@ -349,7 +332,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
             end.setHours(23, 59, 59, 999);
             label = "Spesa Mensile";
             rangeLabel = start.toLocaleString('it-IT', { month: 'long', year: 'numeric' });
-        } else { // 'year'
+        } else { 
             start.setMonth(0, 1);
             end = new Date(start);
             end.setFullYear(end.getFullYear() + 1);
@@ -500,16 +483,18 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
                             </div>
                             <div className="mt-4 grid grid-cols-2 gap-3">
                                 <button
+                                    ref={recurringBtnRef}
                                     onClick={handleNavigateToRecurring}
-                                    style={{ touchAction: 'manipulation' }}
+                                    style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
                                     className="flex items-center justify-center py-2 px-3 text-center font-semibold text-slate-900 bg-amber-100 rounded-xl hover:bg-amber-200 focus:outline-none active:scale-95 active:bg-amber-200 active:ring-2 active:ring-offset-2 active:ring-amber-500 transition-all border border-amber-400"
                                 >
                                     <span className="text-sm">S. Programmate</span>
                                 </button>
 
                                 <button
+                                    ref={historyBtnRef}
                                     onClick={handleNavigateToHistory}
-                                    style={{ touchAction: 'manipulation' }}
+                                    style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
                                     className="flex items-center justify-center py-2 px-3 text-center font-semibold text-slate-900 bg-amber-100 rounded-xl hover:bg-amber-200 focus:outline-none active:scale-95 active:bg-amber-200 active:ring-2 active:ring-offset-2 active:ring-amber-500 transition-all border border-amber-400"
                                 >
                                     <span className="text-sm">Storico Spese</span>
