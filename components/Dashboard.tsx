@@ -1,4 +1,3 @@
-
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Sector } from 'recharts';
 import { Expense } from '../types';
@@ -7,13 +6,12 @@ import { getCategoryStyle } from '../utils/categoryStyles';
 import { ArrowsUpDownIcon } from './icons/ArrowsUpDownIcon';
 import { ArrowDownTrayIcon } from './icons/ArrowDownTrayIcon';
 import { ArrowUpTrayIcon } from './icons/ArrowUpTrayIcon';
-import { ArrowPathIcon } from './icons/ArrowPathIcon'; // Import ArrowPathIcon
+import { ArrowPathIcon } from './icons/ArrowPathIcon'; 
 import { XMarkIcon } from './icons/XMarkIcon';
 import { ArrowLeftIcon } from './icons/ArrowLeftIcon';
-import SelectionMenu from './SelectionMenu';
 import { exportExpenses } from '../utils/fileHelper';
 import { useTapBridge } from '../hooks/useTapBridge';
-// Import components from HistoryFilterCard
+// Assicurati che HistoryFilterCard esista e esporti questi componenti
 import { 
     QuickFilterControl, 
     PeriodNavigator, 
@@ -153,21 +151,17 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
       }
   };
 
+  // --- MODIFICA QUI: Aggiunto .blur() per rimuovere il focus dopo il click ---
   const handleNavigateToRecurring = (e: React.MouseEvent<HTMLButtonElement>) => {
-      const btn = e.currentTarget;
-      // Blur immediately so when history state is pushed, the active element is body
-      // This prevents browser from restoring focus to this button when navigating back
-      btn.blur();
+      e.currentTarget.blur(); // Rimuove il "cerchio" di selezione dal bottone
       onNavigateToRecurring();
   };
 
   const handleNavigateToHistory = (e: React.MouseEvent<HTMLButtonElement>) => {
-      const btn = e.currentTarget;
-      // Blur immediately so when history state is pushed, the active element is body
-      // This prevents browser from restoring focus to this button when navigating back
-      btn.blur();
+      e.currentTarget.blur(); // Rimuove il "cerchio" di selezione dal bottone
       onNavigateToHistory();
   };
+  // --------------------------------------------------------------------------
 
   // Sync state with History API
   useEffect(() => {
@@ -207,35 +201,27 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
 
   const handleCloseNavigation = () => {
       if (showExportOptions) {
-          // If in format view, go back 2 steps (Format -> Main -> Home)
           window.history.go(-2);
       } else {
-          // If in main view, go back 1 step (Main -> Home)
           window.history.back();
       }
   };
 
   const handleImportClick = () => {
-      // Go back to dashboard (Main -> Home)
       window.history.back();
-      // Delay click to allow modal to close visually
       setTimeout(() => fileInputRef.current?.click(), 100);
   };
 
   const handleExportClick = (format: 'excel' | 'json') => {
       exportExpenses(expenses, format);
-      // Go back to dashboard (Format -> Main -> Home)
       window.history.go(-2);
   };
   
   const handleSyncClick = async () => {
-      // Go back to dashboard (Main -> Home)
-      window.history.back();
-      // Trigger sync
-      await onSync();
+      window.history.back(); 
+      await onSync(); 
   };
 
-  // Reset sub-menu when modal closes (cleanup)
   useEffect(() => {
       if (!isImportExportMenuOpen) {
           setTimeout(() => setShowExportOptions(false), 300);
@@ -265,18 +251,15 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
       }
   }, [isSwipeAnimating]);
 
-  // Reset menu when swiping
   useEffect(() => {
       setIsPeriodMenuOpen(false);
   }, [activeViewIndex]);
 
   const { totalExpenses, dailyTotal, categoryData, recurringCountInPeriod, periodLabel, dateRangeLabel } = useMemo(() => {
-    // Safety check for expenses array
     const safeExpenses = expenses || [];
     const validExpenses = safeExpenses.filter(e => e.amount != null && !isNaN(Number(e.amount)));
     const now = new Date();
     
-    // Daily total (always relative to today for the small text)
     const todayString = toYYYYMMDD(now);
     const daily = validExpenses
         .filter(expense => expense.date === todayString)
@@ -284,7 +267,6 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
 
     let start: Date, end: Date, label: string, rangeLabel = '';
 
-    // Filter Logic based on Active View
     if (activeViewIndex === 0) { // Quick Filters
         end = new Date(now);
         end.setHours(23, 59, 59, 999);
@@ -311,7 +293,6 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
             const yOpts: Intl.DateTimeFormatOptions = { year: '2-digit' };
             rangeLabel = `${start.toLocaleDateString('it-IT', opts)} - ${end.toLocaleDateString('it-IT', opts)} '${end.toLocaleDateString('it-IT', yOpts)}`;
         } else {
-            // Fallback if range not set
             start = new Date();
             end = new Date();
             label = "Seleziona Date";
@@ -327,7 +308,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
             const isToday = toYYYYMMDD(start) === toYYYYMMDD(now);
             label = isToday ? "Spesa di Oggi" : "Spesa Giornaliera";
             rangeLabel = start.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'long' });
-        } else if (periodType === 'week') { // Changed 'weekly' to 'week' to match PeriodType
+        } else if (periodType === 'week') {
             const day = start.getDay();
             const diff = start.getDate() - day + (day === 0 ? -6 : 1);
             start.setDate(diff);
@@ -336,7 +317,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
             end.setHours(23, 59, 59, 999);
             label = "Spesa Settimanale";
             rangeLabel = `${start.getDate()} ${start.toLocaleString('it-IT', { month: 'short' })} - ${end.getDate()} ${end.toLocaleString('it-IT', { month: 'short' })}`;
-        } else if (periodType === 'month') { // 'month'
+        } else if (periodType === 'month') {
             start.setDate(1);
             end = new Date(start);
             end.setMonth(end.getMonth() + 1);
@@ -362,9 +343,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
         
     const total = periodExpenses.reduce((acc, expense) => acc + Number(expense.amount), 0);
     
-    // Recurring count logic
     let recurringCount = 0;
-    // Only calc if valid dates
     if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
         recurringExpenses.forEach(template => {
             if (!template.date) return;
@@ -414,15 +393,11 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
         <div className="p-4 md:p-6 space-y-6" {...tapBridgeHandlers}>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-1 flex flex-col gap-4">
-                    {/* Modificato: Rimosso overflow-hidden dalla card principale */}
                     <div className="bg-white p-6 rounded-2xl shadow-lg flex flex-col justify-between relative">
-                        
-                        {/* Totals Section (Spostata SOPRA i filtri) */}
                         <div className="text-center mb-2 relative z-10">
                             <h3 className="text-lg font-bold text-black leading-tight uppercase tracking-wide">{periodLabel}</h3>
                             <p className="text-sm font-medium text-slate-400 capitalize mb-1">{dateRangeLabel}</p>
                             
-                            {/* Importo Centrato con Euro accanto */}
                             <div className="relative flex justify-center items-center text-indigo-600 mt-1">
                                 <div className="relative flex items-baseline">
                                     <span className="absolute right-full mr-2 text-3xl font-semibold opacity-80 top-1/2 -translate-y-1/2">€</span>
@@ -431,20 +406,17 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
                                     </span>
                                 </div>
                                 
-                                {/* Recurring indicator - Right Edge Square */}
                                 {recurringCountInPeriod > 0 && (
                                     <div className="absolute right-0 top-1/2 -translate-y-1/2">
-                                        <span className="w-8 h-8 flex items-center justify-center text-xs font-bold text-slate-900 bg-amber-100 border border-amber-400 rounded-lg shadow-sm" title="Spese programmate in arrivo">
-                                            {recurringCountInPeriod}P
-                                        </span>
+                                            <span className="w-8 h-8 flex items-center justify-center text-xs font-bold text-slate-900 bg-amber-100 border border-amber-400 rounded-lg shadow-sm" title="Spese programmate in arrivo">
+                                                {recurringCountInPeriod}P
+                                            </span>
                                     </div>
                                 )}
                             </div>
                         </div>
 
-                        {/* Filter Container - (Spostata SOTTO l'importo) */}
                         <div className="mb-2 relative z-20 mx-5" ref={headerContainerRef} style={{ touchAction: 'pan-y' }}>
-                            {/* Modificato: overflow-hidden diventa condizionale */}
                             <div className={`relative ${isPeriodMenuOpen ? 'overflow-visible' : 'overflow-hidden'}`}>
                                 <div 
                                     className="w-[300%] flex transition-transform duration-300 ease-out"
@@ -452,7 +424,6 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
                                         transform: `translateX(${listTx}%)` 
                                     }}
                                 >
-                                    {/* Page 0: Quick Filters - Nascondi se menu aperto */}
                                     <div className={`w-1/3 px-1 ${isPeriodMenuOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
                                         <QuickFilterControl 
                                             isActive={activeViewIndex === 0}
@@ -461,7 +432,6 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
                                             compact={true}
                                         />
                                     </div>
-                                    {/* Page 1: Period Navigator - Sempre visibile (è quello col menu) */}
                                     <div className="w-1/3 px-1 relative z-20">
                                         <PeriodNavigator 
                                             isActive={activeViewIndex === 1}
@@ -472,11 +442,10 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
                                             onActivate={() => setActiveViewIndex(1)}
                                             isMenuOpen={isPeriodMenuOpen}
                                             onMenuToggle={setIsPeriodMenuOpen}
-                                            isPanelOpen={true} // Always drop down in dashboard
+                                            isPanelOpen={true}
                                             compact={true}
                                         />
                                     </div>
-                                    {/* Page 2: Custom Range - Nascondi se menu aperto */}
                                     <div className={`w-1/3 px-1 ${isPeriodMenuOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
                                         <CustomDateRangeInputs 
                                             isActive={activeViewIndex === 2}
@@ -488,7 +457,6 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
                                 </div>
                             </div>
                             
-                            {/* Dots */}
                             <div className="flex justify-center items-center mt-3 gap-2">
                                 {[0, 1, 2].map((i) => (
                                     <button
@@ -526,7 +494,6 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
                         </div>
                     </div>
 
-                    {/* Pulsante Importa/Esporta File */}
                     <input
                         type="file"
                         ref={fileInputRef}
@@ -539,7 +506,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
                         className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-indigo-50 text-indigo-700 font-bold rounded-2xl border border-indigo-100 shadow-sm hover:bg-indigo-100 transition-colors"
                     >
                         <ArrowsUpDownIcon className="w-6 h-6" />
-                        Imp/Exp (CSV/Excel/JSON)
+                        Gestione Dati
                     </button>
                 </div>
 
