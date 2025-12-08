@@ -161,22 +161,32 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
       onNavigateToHistory();
   };
 
-  // --- FIX: RIMUOVI FOCUS AL TASTO INDIETRO DEL TELEFONO ---
+  // --- FIX AGGRESSIVO FOCUS (Soluzione Definitiva) ---
   useEffect(() => {
-    const handleHardwareBackBlur = () => {
-        // Usiamo requestAnimationFrame per assicurarci che accada dopo che il browser 
-        // ha tentato di ripristinare il focus
-        requestAnimationFrame(() => {
+    const forceBlur = () => {
+        // Un piccolo delay (50ms) assicura che il browser abbia finito 
+        // di ripristinare lo stato prima che noi lo cancelliamo
+        setTimeout(() => {
             if (document.activeElement instanceof HTMLElement) {
                 document.activeElement.blur();
             }
-        });
+        }, 50);
     };
 
-    window.addEventListener('popstate', handleHardwareBackBlur);
-    return () => window.removeEventListener('popstate', handleHardwareBackBlur);
+    // 1. Esegui al montaggio del componente (quando torni alla Dashboard)
+    forceBlur();
+
+    // 2. Esegui esplicitamente all'evento popstate (tasto indietro fisico)
+    window.addEventListener('popstate', forceBlur);
+    // 3. Esegui anche su pageshow (per sicurezza su alcuni browser Android)
+    window.addEventListener('pageshow', forceBlur);
+
+    return () => {
+        window.removeEventListener('popstate', forceBlur);
+        window.removeEventListener('pageshow', forceBlur);
+    };
   }, []);
-  // ----------------------------------------------------------
+  // ---------------------------------------------------
 
   // Sync state with History API (Gestione Modali)
   useEffect(() => {
