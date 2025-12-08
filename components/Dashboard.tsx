@@ -151,19 +151,34 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
       }
   };
 
-  // --- MODIFICA QUI: Aggiunto .blur() per rimuovere il focus dopo il click ---
   const handleNavigateToRecurring = (e: React.MouseEvent<HTMLButtonElement>) => {
-      e.currentTarget.blur(); // Rimuove il "cerchio" di selezione dal bottone
+      e.currentTarget.blur();
       onNavigateToRecurring();
   };
 
   const handleNavigateToHistory = (e: React.MouseEvent<HTMLButtonElement>) => {
-      e.currentTarget.blur(); // Rimuove il "cerchio" di selezione dal bottone
+      e.currentTarget.blur();
       onNavigateToHistory();
   };
-  // --------------------------------------------------------------------------
 
-  // Sync state with History API
+  // --- FIX: RIMUOVI FOCUS AL TASTO INDIETRO DEL TELEFONO ---
+  useEffect(() => {
+    const handleHardwareBackBlur = () => {
+        // Usiamo requestAnimationFrame per assicurarci che accada dopo che il browser 
+        // ha tentato di ripristinare il focus
+        requestAnimationFrame(() => {
+            if (document.activeElement instanceof HTMLElement) {
+                document.activeElement.blur();
+            }
+        });
+    };
+
+    window.addEventListener('popstate', handleHardwareBackBlur);
+    return () => window.removeEventListener('popstate', handleHardwareBackBlur);
+  }, []);
+  // ----------------------------------------------------------
+
+  // Sync state with History API (Gestione Modali)
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
         const modal = event.state?.modal;
@@ -174,7 +189,6 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
             setIsImportExportMenuOpen(true);
             setShowExportOptions(true);
         } else {
-            // Not in our modal flow, assume closed (e.g. home)
             setIsImportExportMenuOpen(false);
             setShowExportOptions(false);
         }
