@@ -388,7 +388,7 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
     setIsFormOpen(true);
   };
 
-  // --- NUOVA FUNZIONE: SYNC DAL CLOUD (Con modalità silenziosa) ---
+  // --- SYNC DAL CLOUD (Con modalità silenziosa) ---
   const handleSyncFromCloud = async (isSilent = false) => {
     try {
       if (!isSilent) showToast({ message: 'Sincronizzazione...', type: 'info' });
@@ -417,7 +417,7 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
     }
   };
 
-  // --- NUOVO: AUTOMAZIONE SYNC QUANDO L'APP SI APRE O TORNA VISIBILE ---
+  // --- AUTOMAZIONE SYNC QUANDO L'APP SI APRE O TORNA VISIBILE ---
   useEffect(() => {
     const autoSync = async () => {
       if (isOnline && currentEmail) {
@@ -426,10 +426,8 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
       }
     };
 
-    // 1. Sincronizza subito all'avvio
     autoSync();
 
-    // 2. Sincronizza quando l'utente torna sull'app (es. da standby o da altra app)
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         autoSync();
@@ -446,26 +444,56 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
   }, [isOnline, currentEmail]);
 
 
-  // Cloud Backup (Existing)
-  useEffect(() => {
+  [cite_start]// --- CLOUD SYNC: INTELLIGENTE (Salva su modifiche e su uscita) [cite: 114, 115, 116] ---
+  
+  // 1. Funzione per salvare i dati correnti
+  const performSave = useCallback(() => {
     if (!currentEmail || !isOnline) return;
-    const timer = setTimeout(() => {
-        const allUsers = getUsers();
-        const currentUser = allUsers[currentEmail.toLowerCase()];
-        if (currentUser) {
-            console.log("☁️ Backup Cloud per:", currentEmail);
-            saveToCloud(
-                currentEmail, 
-                { expenses, recurringExpenses, accounts },
-                currentUser.pinHash, 
-                currentUser.pinSalt
-            ).then(ok => {
-                if (ok) console.log("✅ Backup completato");
-            }).catch(e => console.warn("Cloud error", e));
+    const allUsers = getUsers();
+    const currentUser = allUsers[currentEmail.toLowerCase()];
+    
+    if (currentUser) {
+       console.log("☁️ Salvataggio in corso...");
+       saveToCloud(
+           currentEmail, 
+           { expenses, recurringExpenses, accounts },
+           currentUser.pinHash, 
+           currentUser.pinSalt
+       );
+    }
+  }, [currentEmail, isOnline, expenses, recurringExpenses, accounts]);
+
+  // 2. Timer automatico (Debounce): Salva solo se ti fermi per 2 secondi
+  useEffect(() => {
+      const timer = setTimeout(() => {
+          performSave();
+      }, 2000); // 2 secondi dopo l'ultima modifica
+      return () => clearTimeout(timer);
+  }, [performSave]); // Scatta ogni volta che expenses/accounts cambiano
+
+  // 3. SALVATAGGIO DI EMERGENZA (Quando chiudi l'app)
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+        // Se l'utente chiude la pagina o cambia tab
+        performSave();
+    };
+
+    const handleVisibilityChange = () => {
+        // Se l'utente minimizza l'app (stato 'hidden')
+        if (document.visibilityState === 'hidden') {
+            performSave();
         }
-    }, 5000);
-    return () => clearTimeout(timer);
-  }, [expenses, recurringExpenses, accounts, currentEmail, isOnline]);
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+        window.removeEventListener('beforeunload', handleBeforeUnload);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [performSave]);
+
 
   useEffect(() => {
     if (!isSharedStart.current) refreshPendingImages();
