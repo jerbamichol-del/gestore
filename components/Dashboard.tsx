@@ -154,12 +154,18 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
   };
 
   const handleNavigateToRecurring = (e: React.MouseEvent<HTMLButtonElement>) => {
-      e.currentTarget.blur();
+      const btn = e.currentTarget;
+      // Blur immediately so when history state is pushed, the active element is body
+      // This prevents browser from restoring focus to this button when navigating back
+      btn.blur();
       onNavigateToRecurring();
   };
 
   const handleNavigateToHistory = (e: React.MouseEvent<HTMLButtonElement>) => {
-      e.currentTarget.blur();
+      const btn = e.currentTarget;
+      // Blur immediately so when history state is pushed, the active element is body
+      // This prevents browser from restoring focus to this button when navigating back
+      btn.blur();
       onNavigateToHistory();
   };
 
