@@ -154,28 +154,13 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
   };
 
   const handleNavigateToRecurring = (e: React.MouseEvent<HTMLButtonElement>) => {
-      const btn = e.currentTarget;
-      // Blur immediately so when history state is pushed, the active element is body
-      // This prevents browser from restoring focus to this button when navigating back
-      btn.blur();
-      
-      // Delay navigation to ensure blur state is fully registered by browser history
-      // before the new state is pushed.
-      setTimeout(() => {
-          onNavigateToRecurring();
-      }, 100);
+      e.currentTarget.blur();
+      onNavigateToRecurring();
   };
 
   const handleNavigateToHistory = (e: React.MouseEvent<HTMLButtonElement>) => {
-      const btn = e.currentTarget;
-      // Blur immediately so when history state is pushed, the active element is body
-      // This prevents browser from restoring focus to this button when navigating back
-      btn.blur();
-      
-      // Delay navigation to ensure blur state is fully registered by browser history
-      setTimeout(() => {
-          onNavigateToHistory();
-      }, 100);
+      e.currentTarget.blur();
+      onNavigateToHistory();
   };
 
   // Sync state with History API
@@ -518,7 +503,6 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
                             <div className="mt-4 grid grid-cols-2 gap-3">
                                 <button
                                     onClick={handleNavigateToRecurring}
-                                    type="button"
                                     style={{ touchAction: 'manipulation' }}
                                     className="flex items-center justify-center py-2 px-3 text-center font-semibold text-slate-900 bg-amber-100 rounded-xl hover:bg-amber-200 focus:outline-none active:scale-95 active:bg-amber-200 active:ring-2 active:ring-offset-2 active:ring-amber-500 transition-all border border-amber-400"
                                 >
@@ -527,7 +511,6 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
 
                                 <button
                                     onClick={handleNavigateToHistory}
-                                    type="button"
                                     style={{ touchAction: 'manipulation' }}
                                     className="flex items-center justify-center py-2 px-3 text-center font-semibold text-slate-900 bg-amber-100 rounded-xl hover:bg-amber-200 focus:outline-none active:scale-95 active:bg-amber-200 active:ring-2 active:ring-offset-2 active:ring-amber-500 transition-all border border-amber-400"
                                 >
