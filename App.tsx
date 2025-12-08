@@ -444,7 +444,7 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
   }, [isOnline, currentEmail]);
 
 
-  [cite_start]// --- CLOUD SYNC: INTELLIGENTE (Salva su modifiche e su uscita) [cite: 114, 115, 116] ---
+  // --- CLOUD SYNC: INTELLIGENTE (Salva su modifiche e su uscita) [cite: 114, 115, 116] ---
   
   // 1. Funzione per salvare i dati correnti
   const performSave = useCallback(() => {
