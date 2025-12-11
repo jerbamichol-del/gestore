@@ -1,4 +1,3 @@
-
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Sector } from 'recharts';
 import { Expense } from '../types';
@@ -10,6 +9,12 @@ import { ArrowUpTrayIcon } from './icons/ArrowUpTrayIcon';
 import { ArrowPathIcon } from './icons/ArrowPathIcon'; // Import ArrowPathIcon
 import { XMarkIcon } from './icons/XMarkIcon';
 import { ArrowLeftIcon } from './icons/ArrowLeftIcon';
+import { ChevronRightIcon } from './icons/ChevronRightIcon';
+import { ProgrammateDetailedIcon } from './icons/ProgrammateDetailedIcon'; 
+import { ExpensesDetailedIcon } from './icons/ExpensesDetailedIcon'; 
+import { IncomeDetailedIcon } from './icons/IncomeDetailedIcon'; 
+import { AccountsDetailedIcon } from './icons/AccountsDetailedIcon'; // Use the new icon
+import { BuildingLibraryIcon } from './icons/BuildingLibraryIcon'; // Keep import if needed elsewhere, though removed from usage here
 import SelectionMenu from './SelectionMenu';
 import { exportExpenses } from '../utils/fileHelper';
 import { useTapBridge } from '../hooks/useTapBridge';
@@ -22,6 +27,9 @@ import {
     PeriodType 
 } from './HistoryFilterCard';
 import { useSwipe } from '../hooks/useSwipe';
+import { BudgetTrendChart } from './BudgetTrendChart';
+import { EyeIcon } from './icons/EyeIcon';
+import { EyeSlashIcon } from './icons/EyeSlashIcon';
 
 const categoryHexColors: Record<string, string> = {
     'Alimentari': '#16a34a', // green-600
@@ -72,9 +80,13 @@ interface DashboardProps {
   recurringExpenses: Expense[];
   onNavigateToRecurring: () => void;
   onNavigateToHistory: () => void;
+  onNavigateToIncomes?: () => void; // New prop for income navigation
+  onNavigateToAccounts?: () => void; // New prop for accounts navigation
   onImportFile: (file: File) => void;
   onReceiveSharedFile?: (file: File) => void | Promise<void>;
   onSync: () => Promise<void> | void;
+  isBalanceVisible: boolean;
+  onToggleBalanceVisibility: () => void;
 }
 
 const parseLocalYYYYMMDD = (s: string): Date => {
@@ -113,7 +125,18 @@ const calculateNextDueDate = (template: Expense, fromDate: Date): Date | null =>
   return nextDate;
 };
 
-const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNavigateToRecurring, onNavigateToHistory, onImportFile, onSync }) => {
+const Dashboard: React.FC<DashboardProps> = ({ 
+    expenses, 
+    recurringExpenses, 
+    onNavigateToRecurring, 
+    onNavigateToHistory, 
+    onNavigateToIncomes, 
+    onNavigateToAccounts,
+    onImportFile, 
+    onSync,
+    isBalanceVisible,
+    onToggleBalanceVisibility
+}) => {
   const tapBridgeHandlers = useTapBridge();
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   
@@ -161,6 +184,16 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
   const handleNavigateToHistory = (e: React.MouseEvent<HTMLButtonElement>) => {
       e.currentTarget.blur();
       onNavigateToHistory();
+  };
+
+  const handleNavigateToIncomes = (e: React.MouseEvent<HTMLButtonElement>) => {
+      e.currentTarget.blur();
+      onNavigateToIncomes?.();
+  };
+
+  const handleNavigateToAccounts = (e: React.MouseEvent<HTMLButtonElement>) => {
+      e.currentTarget.blur();
+      onNavigateToAccounts?.();
   };
 
   // Sync state with History API
@@ -264,16 +297,16 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
       setIsPeriodMenuOpen(false);
   }, [activeViewIndex]);
 
-  const { totalExpenses, dailyTotal, categoryData, recurringCountInPeriod, periodLabel, dateRangeLabel } = useMemo(() => {
+  const { totalExpenses, totalIncome, netBudget, dailyTotal, categoryData, recurringCountInPeriod, periodLabel, dateRangeLabel } = useMemo(() => {
     // Safety check for expenses array
     const safeExpenses = expenses || [];
     const validExpenses = safeExpenses.filter(e => e.amount != null && !isNaN(Number(e.amount)));
     const now = new Date();
     
-    // Daily total (always relative to today for the small text)
+    // Daily total (always relative to today for the small text) - Only Expenses
     const todayString = toYYYYMMDD(now);
     const daily = validExpenses
-        .filter(expense => expense.date === todayString)
+        .filter(expense => expense.date === todayString && expense.type === 'expense')
         .reduce((acc, expense) => acc + Number(expense.amount), 0);
 
     let start: Date, end: Date, label: string, rangeLabel = '';
@@ -303,7 +336,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
             label = "Periodo Personalizzato";
             const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
             const yOpts: Intl.DateTimeFormatOptions = { year: '2-digit' };
-            rangeLabel = `${start.toLocaleDateString('it-IT', opts)} - ${end.toLocaleDateString('it-IT', opts)} '${end.toLocaleDateString('it-IT', yOpts)}`;
+            rangeLabel = `${start.toLocaleDateString('it-IT', opts)} - ${end.toLocaleDateString('it-IT', yOpts)}`;
         } else {
             // Fallback if range not set
             start = new Date();
@@ -349,14 +382,20 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
         }
     }
     
-    const periodExpenses = validExpenses.filter(e => {
+    const periodTransactions = validExpenses.filter(e => {
         const expenseDate = parseLocalYYYYMMDD(e.date);
         return expenseDate >= start && expenseDate <= end;
     });
         
-    const total = periodExpenses.reduce((acc, expense) => acc + Number(expense.amount), 0);
+    // Calculate Totals by Type (ignoring Transfers in global budget for now, focusing on in/out flow)
+    const periodExpenses = periodTransactions.filter(e => e.type === 'expense');
+    const periodIncome = periodTransactions.filter(e => e.type === 'income');
+
+    const totalExp = periodExpenses.reduce((acc, e) => acc + Number(e.amount), 0);
+    const totalInc = periodIncome.reduce((acc, e) => acc + Number(e.amount), 0);
+    const budget = totalInc - totalExp;
     
-    // Recurring count logic
+    // Recurring count logic (only count expenses)
     let recurringCount = 0;
     // Only calc if valid dates
     if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
@@ -392,7 +431,9 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
         .sort((a, b) => b.value - a.value);
 
     return { 
-        totalExpenses: total, 
+        totalExpenses: totalExp, 
+        totalIncome: totalInc,
+        netBudget: budget,
         dailyTotal: daily,
         categoryData: sortedCategoryData,
         recurringCountInPeriod: recurringCount,
@@ -405,7 +446,7 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
   
   return (
     <>
-        <div className="p-4 md:p-6 space-y-6" {...tapBridgeHandlers}>
+        <div className="p-4 md:p-6 pb-32 md:pb-32 space-y-6" {...tapBridgeHandlers}>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-1 flex flex-col gap-4">
                     {/* Modificato: Rimosso overflow-hidden dalla card principale */}
@@ -495,26 +536,90 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
                             </div>
                         </div>
 
+                        {/* Footer: Spesa Oggi & Saldo */}
                         <div className="mt-4 pt-4 border-t border-slate-200 relative z-10">
-                            <div>
-                                <h4 className="text-sm font-medium text-slate-500">Spesa Oggi</h4>
-                                <p className="text-xl font-bold text-slate-800">{formatCurrency(dailyTotal)}</p>
+                            <div className="flex justify-between items-start gap-4">
+                                <div className="flex-1">
+                                    <h4 className="text-sm font-medium text-slate-500">Spesa Oggi</h4>
+                                    <p className="text-xl font-bold text-slate-800">{formatCurrency(dailyTotal)}</p>
+                                </div>
+                                
+                                <div className="w-px h-12 bg-slate-200" /> {/* Divider */}
+
+                                <div className="flex-1 flex flex-col">
+                                    <div className="flex justify-between items-center h-5 mb-1">
+                                        <button 
+                                            onClick={(e) => { e.stopPropagation(); onToggleBalanceVisibility(); }}
+                                            className="p-1 -ml-1 rounded-full text-slate-400 hover:text-indigo-600 hover:bg-slate-100 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                            aria-label={isBalanceVisible ? "Nascondi saldo" : "Mostra saldo"}
+                                        >
+                                            {isBalanceVisible ? <EyeSlashIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
+                                        </button>
+                                        
+                                        <h4 className="text-sm font-medium text-slate-400 cursor-default select-none">Saldo</h4>
+                                    </div>
+                                    <p className={`text-xl font-bold text-right ${!isBalanceVisible ? 'text-slate-800' : netBudget >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                        {isBalanceVisible ? (
+                                            <>
+                                                {netBudget >= 0 ? '+' : ''}{formatCurrency(netBudget)}
+                                            </>
+                                        ) : (
+                                            '******'
+                                        )}
+                                    </p>
+                                </div>
                             </div>
-                            <div className="mt-4 grid grid-cols-2 gap-3">
+
+                            {/* Navigazione Scrollabile Orizzontale */}
+                            <div 
+                                className="mt-4 flex gap-3 overflow-x-auto py-2 -mx-6 px-6 no-scrollbar" 
+                                style={{ 
+                                    scrollbarWidth: 'none', 
+                                    msOverflowStyle: 'none',
+                                    WebkitOverflowScrolling: 'touch',
+                                    touchAction: 'pan-x pan-y'
+                                }}
+                            >
+                                <style>{`
+                                    .no-scrollbar::-webkit-scrollbar {
+                                        display: none;
+                                    }
+                                `}</style>
+
                                 <button
                                     onClick={handleNavigateToRecurring}
                                     style={{ touchAction: 'manipulation' }}
-                                    className="flex items-center justify-center py-2 px-3 text-center font-semibold text-slate-900 bg-amber-100 rounded-xl hover:bg-amber-200 focus:outline-none active:scale-95 active:bg-amber-200 active:ring-2 active:ring-offset-2 active:ring-amber-500 transition-all border border-amber-400"
+                                    className="flex-none flex items-center justify-center gap-2 py-2 px-5 text-center font-semibold text-slate-900 bg-amber-100 rounded-full hover:bg-amber-200 focus:outline-none active:scale-95 active:bg-amber-200 active:ring-2 active:ring-offset-2 active:ring-amber-500 transition-all border border-amber-400"
                                 >
-                                    <span className="text-sm">S. Programmate</span>
+                                    <ProgrammateDetailedIcon className="w-7 h-7" />
+                                    <span className="text-sm">Programmate</span>
                                 </button>
 
                                 <button
                                     onClick={handleNavigateToHistory}
                                     style={{ touchAction: 'manipulation' }}
-                                    className="flex items-center justify-center py-2 px-3 text-center font-semibold text-slate-900 bg-amber-100 rounded-xl hover:bg-amber-200 focus:outline-none active:scale-95 active:bg-amber-200 active:ring-2 active:ring-offset-2 active:ring-amber-500 transition-all border border-amber-400"
+                                    className="flex-none flex items-center justify-center gap-2 py-2 px-5 text-center font-semibold text-indigo-900 bg-indigo-100 rounded-full hover:bg-indigo-200 focus:outline-none active:scale-95 active:bg-indigo-200 active:ring-2 active:ring-offset-2 active:ring-indigo-500 transition-all border border-indigo-200"
                                 >
-                                    <span className="text-sm">Storico Spese</span>
+                                    <ExpensesDetailedIcon className="w-7 h-7" />
+                                    <span className="text-sm">Spese</span>
+                                </button>
+
+                                <button
+                                    onClick={handleNavigateToIncomes}
+                                    style={{ touchAction: 'manipulation' }}
+                                    className="flex-none flex items-center justify-center gap-2 py-2 px-5 text-center font-semibold text-emerald-900 bg-emerald-100 rounded-full hover:bg-emerald-200 focus:outline-none active:scale-95 active:bg-emerald-200 active:ring-2 active:ring-offset-2 active:ring-emerald-500 transition-all border border-emerald-200"
+                                >
+                                    <IncomeDetailedIcon className="w-7 h-7" />
+                                    <span className="text-sm">Entrate</span>
+                                </button>
+
+                                <button
+                                    onClick={handleNavigateToAccounts}
+                                    style={{ touchAction: 'manipulation' }}
+                                    className="flex-none flex items-center justify-center gap-2 py-2 px-5 text-center font-semibold text-sky-900 bg-sky-100 rounded-full hover:bg-sky-200 focus:outline-none active:scale-95 active:bg-sky-200 active:ring-2 active:ring-offset-2 active:ring-sky-500 transition-all border border-sky-200"
+                                >
+                                    <AccountsDetailedIcon className="w-7 h-7" />
+                                    <span className="text-sm">Conti</span>
                                 </button>
                             </div>
                         </div>
@@ -537,36 +642,38 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
                     </button>
                 </div>
 
-                <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-lg flex flex-col">
-                    <div className="mb-4">
-                        <h3 className="text-xl font-bold text-slate-700">Riepilogo Categorie</h3>
-                        <p className="text-sm text-slate-500 font-medium capitalize">{dateRangeLabel}</p>
-                    </div>
-                    
-                    {categoryData.length > 0 ? (
-                        <div className="space-y-4 flex-grow">
-                            {categoryData.map(cat => {
-                                const style = getCategoryStyle(cat.name);
-                                const percentage = totalExpenses > 0 ? (cat.value / totalExpenses) * 100 : 0;
-                                return (
-                                    <div key={cat.name} className="flex items-center gap-4 text-base">
-                                        <span className={`w-10 h-10 rounded-xl flex items-center justify-center ${style.bgColor}`}>
-                                            <style.Icon className={`w-6 h-6 ${style.color}`} />
-                                        </span>
-                                        <div className="flex-grow">
-                                            <div className="flex justify-between items-center mb-1">
-                                                <span className="font-semibold text-slate-700">{style.label}</span>
-                                                <span className="font-bold text-slate-800">{formatCurrency(cat.value)}</span>
-                                            </div>
-                                            <div className="w-full bg-slate-200 rounded-full h-2.5">
-                                                <div className="bg-indigo-500 h-2.5 rounded-full" style={{ width: `${percentage}%` }}></div>
+                <div className="lg:col-span-2 flex flex-col gap-6">
+                    <div className="bg-white p-6 rounded-2xl shadow-lg flex flex-col">
+                        <div className="mb-4">
+                            <h3 className="text-xl font-bold text-slate-700">Riepilogo Categorie</h3>
+                            <p className="text-sm text-slate-500 font-medium capitalize">{dateRangeLabel}</p>
+                        </div>
+                        
+                        {categoryData.length > 0 ? (
+                            <div className="space-y-4 flex-grow">
+                                {categoryData.map(cat => {
+                                    const style = getCategoryStyle(cat.name);
+                                    const percentage = totalExpenses > 0 ? (cat.value / totalExpenses) * 100 : 0;
+                                    return (
+                                        <div key={cat.name} className="flex items-center gap-4 text-base">
+                                            <span className={`w-10 h-10 rounded-xl flex items-center justify-center ${style.bgColor}`}>
+                                                <style.Icon className={`w-6 h-6 ${style.color}`} />
+                                            </span>
+                                            <div className="flex-grow">
+                                                <div className="flex justify-between items-center mb-1">
+                                                    <span className="font-semibold text-slate-700">{style.label}</span>
+                                                    <span className="font-bold text-slate-800">{formatCurrency(cat.value)}</span>
+                                                </div>
+                                                <div className="w-full bg-slate-200 rounded-full h-2.5">
+                                                    <div className="bg-indigo-500 h-2.5 rounded-full" style={{ width: `${percentage}%` }}></div>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                )
-                            })}
-                        </div>
-                    ) : <p className="text-center text-slate-500 flex-grow flex items-center justify-center">Nessuna spesa registrata in questo periodo.</p>}
+                                    )
+                                })}
+                            </div>
+                        ) : <p className="text-center text-slate-500 flex-grow flex items-center justify-center">Nessuna spesa registrata in questo periodo.</p>}
+                    </div>
                 </div>
             </div>
 
@@ -636,6 +743,16 @@ const Dashboard: React.FC<DashboardProps> = ({ expenses, recurringExpenses, onNa
                     </div>
                 )}
             </div>
+
+            {/* Moved Chart to Bottom */}
+            <BudgetTrendChart 
+                expenses={expenses}
+                periodType={periodType}
+                periodDate={periodDate}
+                activeViewIndex={activeViewIndex}
+                quickFilter={quickFilter}
+                customRange={customRange}
+            />
         </div>
 
         {/* Modal Centrato per Import/Export */}
