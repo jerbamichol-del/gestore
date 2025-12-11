@@ -1,31 +1,33 @@
 
-
 export interface Account {
   id: string;
   name: string;
+  icon?: string;
 }
 
 export interface Expense {
   id:string;
+  type: 'expense' | 'income' | 'transfer'; // Added transfer
   description: string;
   amount: number;
-  date: string; // For recurring templates, this is the start date
+  date: string; 
   time?: string;
   category: string;
   subcategory?: string;
   accountId: string;
+  toAccountId?: string; // Added for transfers
   tags?: string[];
   receipts?: string[];
   frequency?: 'single' | 'recurring';
   recurrence?: 'daily' | 'weekly' | 'monthly' | 'yearly';
   monthlyRecurrenceType?: 'dayOfMonth' | 'dayOfWeek';
   recurrenceInterval?: number;
-  recurrenceDays?: number[]; // 0 for Sunday, 1 for Monday, etc.
+  recurrenceDays?: number[];
   recurrenceEndType?: 'forever' | 'date' | 'count';
   recurrenceEndDate?: string;
   recurrenceCount?: number;
-  recurringExpenseId?: string; // Links an instance to its template
-  lastGeneratedDate?: string; // For templates, tracks the last generation date
+  recurringExpenseId?: string;
+  lastGeneratedDate?: string;
 }
 
 export const CATEGORIES: Record<string, string[]> = {
