@@ -305,7 +305,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
 
         <div className="flex-grow min-w-0">
           <p className={`font-semibold truncate ${isSelected ? 'text-indigo-900' : 'text-slate-800'}`}>
-            {expense.subcategory || style.label} • {accountName}
+            {isIncomeMode ? accountName : `${expense.subcategory || style.label} • ${accountName}`}
           </p>
           <p
             className={`text-sm truncate ${isSelected ? 'text-indigo-700' : 'text-slate-500'}`}
