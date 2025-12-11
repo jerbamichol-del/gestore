@@ -235,7 +235,8 @@ export const BudgetTrendChart: React.FC<BudgetTrendChartProps> = ({
   if (chartData.length === 0) return null;
 
   return (
-    <div className="bg-white p-5 rounded-3xl shadow-lg border border-slate-100">
+    // Modified: removed horizontal padding (on mobile) and radius (on mobile)
+    <div className="bg-white p-5 md:rounded-3xl shadow-lg border border-slate-100">
       <div className="mb-6 flex justify-between items-end">
         <div>
             <h3 className="text-lg font-bold text-slate-800">Andamento Saldo</h3>
@@ -270,7 +271,7 @@ export const BudgetTrendChart: React.FC<BudgetTrendChartProps> = ({
                     }
                     return '';
                 }}
-                minTickGap={20}
+                minTickGap={5} // RIDOTTO: Permette di mostrare più giorni (es. 10)
                 dy={10}
             />
             
