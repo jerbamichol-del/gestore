@@ -1,8 +1,8 @@
-
 // CalculatorInputScreen.tsx
 import React, { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { Expense, Account, CATEGORIES } from '../types';
 import { ArrowLeftIcon } from './icons/ArrowLeftIcon';
+import { ArrowRightIcon } from './icons/ArrowRightIcon';
 import { XMarkIcon } from './icons/XMarkIcon';
 import { CheckIcon } from './icons/CheckIcon';
 import { BackspaceIcon } from './icons/BackspaceIcon';
@@ -110,10 +110,14 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
   const [operator, setOperator] = useState<string | null>(null);
   const [shouldResetCurrentValue, setShouldResetCurrentValue] = useState(false);
   const [justCalculated, setJustCalculated] = useState(false);
-  const [activeMenu, setActiveMenu] = useState<'account' | 'category' | 'subcategory' | null>(null);
+  const [activeMenu, setActiveMenu] = useState<'account' | 'category' | 'subcategory' | 'toAccount' | null>(null);
 
   const isSyncingFromParent = useRef(false);
   const typingSinceActivationRef = useRef(false);
+
+  // Check types
+  const isIncome = formData.type === 'income';
+  const isTransfer = formData.type === 'transfer';
 
   // 🔧 SEMPLIFICATO: Rimosso tap bridge complesso che blocca eventi
   useEffect(() => {
@@ -298,14 +302,24 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
     }
   }, [currentValue, operator, previousValue, shouldResetCurrentValue, calculate]);
 
-  const canSubmit = useMemo(() => (parseFloat(currentValue.replace(/\./g, '').replace(',', '.')) || 0) > 0, [currentValue]);
+  const canSubmit = useMemo(() => {
+      const amountOk = (parseFloat(currentValue.replace(/\./g, '').replace(',', '.')) || 0) > 0;
+      if (isTransfer) {
+          return amountOk && !!formData.toAccountId && formData.accountId !== formData.toAccountId;
+      }
+      return amountOk;
+  }, [currentValue, isTransfer, formData.toAccountId, formData.accountId]);
 
   const handleSubmit = useCallback(() => {
     const amount = parseFloat(currentValue.replace(/\./g, '').replace(',', '.')) || 0;
-    if (amount > 0) {
-      onSubmit({ ...formData, amount, category: formData.category || 'Altro' } as Omit<Expense, 'id'>);
+    if (canSubmit) {
+      onSubmit({ 
+          ...formData, 
+          amount, 
+          category: formData.category || 'Altro' 
+      } as Omit<Expense, 'id'>);
     }
-  }, [currentValue, formData, onSubmit]);
+  }, [currentValue, formData, onSubmit, canSubmit]);
 
   const handleSelectChange = useCallback((field: keyof Omit<Expense, 'id'>, value: string) => {
     const updated = { [field]: value } as Partial<Omit<Expense, 'id'>>;
@@ -313,6 +327,10 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
     onFormChange(updated);
     setActiveMenu(null);
   }, [onFormChange]);
+
+  const handleTypeChange = (type: 'expense' | 'income' | 'transfer') => {
+      onFormChange({ type });
+  };
 
   const categoryOptions = useMemo(() => 
     Object.keys(CATEGORIES).map(cat => ({
@@ -335,6 +353,14 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
     [accounts]
   );
 
+  // Filter out the selected "from" account for the "to" account list
+  const toAccountOptions = useMemo(() => 
+    accounts
+        .filter(acc => acc.id !== formData.accountId)
+        .map(acc => ({ value: acc.id, label: acc.name })),
+    [accounts, formData.accountId]
+  );
+
   const displayValue = useMemo(() => formatAmountForDisplay(currentValue), [currentValue]);
   const smallDisplayValue = useMemo(() => 
     previousValue && operator ? `${formatAmountForDisplay(previousValue)} ${operator}` : ' ',
@@ -353,32 +379,56 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
         <header className="flex items-center justify-between p-4 flex-shrink-0">
           <button
             onClick={() => onClose()}
-            onPointerDown={(e) => e.stopPropagation()} // FIX: Stop propagation to prevent TapBridge from interfering
-            data-no-synthetic-click // FIX: Tell TapBridge to ignore this element
             aria-label="Chiudi calcolatrice"
             className="w-11 h-11 flex items-center justify-center border border-red-300 text-red-600 bg-red-50 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 rounded-full transition-colors cursor-pointer"
           >
             <XMarkIcon className="w-6 h-6" />
           </button>
-          <h2 className="text-xl font-bold text-slate-800">Nuova Spesa</h2>
+          
+          {/* Toggle Type - Updated for 3 options */}
+          <div className={`flex p-1 rounded-full transition-colors duration-300 ${isTransfer ? 'bg-sky-100' : isIncome ? 'bg-emerald-100' : 'bg-rose-100'}`}>
+              <button 
+                onClick={() => handleTypeChange('expense')}
+                className={`px-3 py-1.5 text-xs font-bold rounded-full transition-colors duration-200 ${!isIncome && !isTransfer ? 'text-rose-700' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                  Spesa
+              </button>
+              <button 
+                onClick={() => handleTypeChange('income')}
+                className={`px-3 py-1.5 text-xs font-bold rounded-full transition-colors duration-200 ${isIncome ? 'text-emerald-700' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                  Entrata
+              </button>
+              <button 
+                onClick={() => handleTypeChange('transfer')}
+                className={`px-3 py-1.5 text-xs font-bold rounded-full transition-colors duration-200 ${isTransfer ? 'text-sky-700' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                  Trasferisci
+              </button>
+          </div>
+
           <button
             onClick={(e) => {
               e.stopPropagation();
               e.preventDefault();
-              // FIX: Install a capture listener to swallow the "ghost click" that occurs after the modal closes.
               const preventGhost = (ev: Event) => {
                   ev.stopPropagation();
+                  ev.stopImmediatePropagation();
                   ev.preventDefault();
               };
-              window.addEventListener('click', preventGhost, { capture: true, once: true });
-              setTimeout(() => window.removeEventListener('click', preventGhost, { capture: true }), 600);
-              
-              handleSubmit();
+              const events = ['click', 'touchstart', 'touchend', 'pointerup', 'pointerdown', 'mousedown', 'mouseup'];
+              events.forEach(evt => window.addEventListener(evt, preventGhost, { capture: true }));
+              setTimeout(() => {
+                events.forEach(evt => window.removeEventListener(evt, preventGhost, { capture: true }));
+              }, 800);
+              setTimeout(() => {
+                  handleSubmit();
+              }, 200);
             }}
             onPointerDown={(e) => e.stopPropagation()}
             data-no-synthetic-click
             disabled={!canSubmit}
-            aria-label="Conferma spesa"
+            aria-label="Conferma"
             className={`w-11 h-11 flex items-center justify-center border rounded-full transition-colors
               border-green-500 bg-green-200 text-green-800 hover:bg-green-300 
               focus:outline-none focus:ring-2 focus:ring-green-500 
@@ -395,8 +445,16 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
             <div className="w-full px-4 text-center">
               <span className="text-slate-500 text-2xl font-light h-8 block">{smallDisplayValue}</span>
               <div className={`relative inline-block text-slate-800 font-light tracking-tighter whitespace-nowrap transition-all leading-none ${fontSizeClass}`}>
+                <span 
+                    className={`absolute right-full top-1/2 -translate-y-1/2 mr-2 ${
+                        isIncome ? 'text-green-500' : isTransfer ? 'text-blue-600' : 'text-red-500'
+                    }`} 
+                    style={{ fontSize: isTransfer ? '0.45em' : '0.6em' }}
+                >
+                    {isIncome ? '+' : isTransfer ? '⇄' : '-'}
+                </span>
                 {displayValue}
-                <span className="absolute right-full top-1/2 -translate-y-1/2 opacity-75" style={{ fontSize: '0.6em', marginRight: '0.2em' }}>€</span>
+                <span className="absolute left-full top-1/2 -translate-y-1/2 opacity-75 ml-2" style={{ fontSize: '0.6em' }}>€</span>
               </div>
             </div>
           </div>
@@ -404,11 +462,9 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
           <div
             role="button"
             tabIndex={0}
-            aria-label="Aggiungi dettagli alla spesa"
+            aria-label="Aggiungi dettagli"
             aria-hidden={isDesktop}
-            // FIX: Use onNavigateToDetails prop.
             onClick={onNavigateToDetails}
-            // FIX: Use onNavigateToDetails prop.
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onNavigateToDetails(); }}
             className={`absolute top-1/2 -right-px w-8 h-[148px] flex items-center justify-center cursor-pointer ${isDesktop ? 'hidden' : ''}`}
             style={{ transform: 'translateY(calc(-50% + 2px))' }}
@@ -428,30 +484,87 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
       </div>
       
       <div className="flex-shrink-0 flex flex-col" style={{ height: '52vh' }}>
-        <div className="flex justify-between items-center my-2 w-full px-4" style={{ touchAction: 'pan-y' }}>
-          <button
-            onClick={() => setActiveMenu('account')}
-            className="font-semibold text-indigo-600 hover:text-indigo-800 text-lg w-1/3 truncate p-2 rounded-lg focus:outline-none focus:ring-0 text-left"
-            aria-label="Seleziona conto"
-          >
-            {accounts.find(a => a.id === formData.accountId)?.name || 'Conto'}
-          </button>
-          <button
-            onClick={() => setActiveMenu('category')}
-            className="font-semibold text-indigo-600 hover:text-indigo-800 text-lg w-1/3 truncate p-2 rounded-lg focus:outline-none focus:ring-0 text-center"
-            aria-label="Seleziona categoria"
-          >
-            {formData.category ? getCategoryStyle(formData.category).label : 'Categoria'}
-          </button>
-          <button
-            onClick={() => setActiveMenu('subcategory')}
-            disabled={!formData.category || subcategoryOptions.length === 0}
-            className="font-semibold text-lg w-1/3 truncate p-2 rounded-lg focus:outline-none focus:ring-0 disabled:cursor-not-allowed disabled:text-slate-400 text-indigo-600 hover:text-indigo-800 transition-colors text-right"
-            aria-label="Seleziona sottocategoria"
-            aria-disabled={!formData.category || subcategoryOptions.length === 0}
-          >
-            {formData.subcategory || 'Sottocateg.'}
-          </button>
+        {/* MODIFIED: Changed -translate-x-6 to -translate-x-3 to move the arrow slightly right */}
+        <div className="flex justify-between items-center my-2 w-full px-4 gap-0" style={{ touchAction: 'pan-y' }}>
+          
+          {isTransfer ? (
+              /* TRANSFER LAYOUT */
+              <>
+                  <div className="flex flex-col items-center flex-1 min-w-0">
+                      <span className="text-xs font-bold text-slate-500 mb-1">Da</span>
+                      <button
+                        onClick={() => setActiveMenu('account')}
+                        className="font-semibold text-indigo-600 hover:text-indigo-800 text-lg truncate p-2 rounded-lg focus:outline-none focus:ring-0 text-center w-full"
+                        aria-label="Seleziona conto di origine"
+                      >
+                        {accounts.find(a => a.id === formData.accountId)?.name || 'Conto'}
+                      </button>
+                  </div>
+                  
+                  <div className="flex items-center justify-center pt-7 text-slate-400 shrink-0 -translate-x-3">
+                      {/* Custom Arrow with Long Tail and Small Tip - Shifted Left but less than before */}
+                      <svg 
+                        xmlns="http://www.w3.org/2000/svg" 
+                        viewBox="0 0 100 24" 
+                        fill="none" 
+                        stroke="currentColor" 
+                        strokeWidth={2} 
+                        strokeLinecap="round" 
+                        strokeLinejoin="round" 
+                        className="w-24 h-6"
+                        preserveAspectRatio="none"
+                      >
+                        <path d="M0 12H88" />
+                        <path d="M83 7L88 12L83 17" />
+                      </svg>
+                  </div>
+
+                  <div className="flex flex-col items-center flex-1 min-w-0">
+                      <span className="text-xs font-bold text-slate-500 mb-1">A</span>
+                      <button
+                        onClick={() => setActiveMenu('toAccount')}
+                        className={`font-semibold text-lg truncate p-2 rounded-lg focus:outline-none focus:ring-0 text-center w-full bg-slate-200 ${!formData.toAccountId ? 'text-slate-500 italic' : 'text-indigo-600'}`}
+                        aria-label="Seleziona conto di destinazione"
+                      >
+                        {accounts.find(a => a.id === formData.toAccountId)?.name || 'Scegli'}
+                      </button>
+                  </div>
+              </>
+          ) : (
+              /* EXPENSE / INCOME LAYOUT */
+              <>
+                  <div className={`flex flex-col flex-1 min-w-0 ${isIncome ? 'w-full' : 'w-1/3'}`}>
+                      <button
+                        onClick={() => setActiveMenu('account')}
+                        className="font-semibold text-indigo-600 hover:text-indigo-800 text-lg truncate p-2 rounded-lg focus:outline-none focus:ring-0 text-left w-full"
+                        aria-label="Seleziona conto"
+                      >
+                        {accounts.find(a => a.id === formData.accountId)?.name || 'Conto'}
+                      </button>
+                  </div>
+                  
+                  {!isIncome && (
+                      <>
+                          <button
+                            onClick={() => setActiveMenu('category')}
+                            className={`font-semibold text-lg w-1/3 truncate p-2 rounded-lg focus:outline-none focus:ring-0 text-center transition-opacity text-indigo-600 hover:text-indigo-800`}
+                            aria-label="Seleziona categoria"
+                          >
+                            {formData.category ? getCategoryStyle(formData.category).label : 'Categoria'}
+                          </button>
+                          
+                          <button
+                            onClick={() => setActiveMenu('subcategory')}
+                            disabled={!formData.category}
+                            className={`font-semibold text-lg w-1/3 truncate p-2 rounded-lg focus:outline-none focus:ring-0 text-right transition-opacity ${!formData.category ? 'text-slate-400 opacity-40 cursor-not-allowed' : 'text-indigo-600 hover:text-indigo-800'}`}
+                            aria-label="Seleziona sottocategoria"
+                          >
+                            {formData.subcategory || 'Sottocateg.'}
+                          </button>
+                      </>
+                  )}
+              </>
+          )}
         </div>
 
         <div className="flex-1 p-2 flex flex-row gap-2 px-4 pb-4">
@@ -515,6 +628,13 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
         options={subcategoryOptions}
         selectedValue={formData.subcategory || ''}
         onSelect={(value) => handleSelectChange('subcategory', value)}
+      />
+      <SelectionMenu
+        isOpen={activeMenu === 'toAccount'} onClose={() => setActiveMenu(null)}
+        title="Trasferisci A"
+        options={toAccountOptions}
+        selectedValue={formData.toAccountId || ''}
+        onSelect={(value) => handleSelectChange('toAccountId', value)}
       />
     </div>
   );
