@@ -19,6 +19,7 @@ import PendingImages from './components/PendingImages';
 import Toast from './components/Toast';
 import HistoryScreen from './screens/HistoryScreen';
 import RecurringExpensesScreen from './screens/RecurringExpensesScreen';
+import AccountsScreen from './screens/AccountsScreen'; // NEW
 import ImageSourceCard from './components/ImageSourceCard';
 import ShareQrModal from './components/ShareQrModal';
 import InstallPwaModal from './components/InstallPwaModal';
@@ -28,6 +29,7 @@ import { XMarkIcon } from './components/icons/XMarkIcon';
 import { SpinnerIcon } from './components/icons/SpinnerIcon';
 import CalculatorContainer from './components/CalculatorContainer';
 import SuccessIndicator from './components/SuccessIndicator';
+import PinVerifierModal from './components/PinVerifierModal';
 
 type ToastMessage = { message: string; type: 'success' | 'info' | 'error' };
 type ExtendedOfflineImage = OfflineImage & { _isShared?: boolean };
@@ -66,9 +68,20 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
   const [isHistoryScreenOpen, setIsHistoryScreenOpen] = useState(false);
   const [isHistoryClosing, setIsHistoryClosing] = useState(false);
   
+  // Income Screen State
+  const [isIncomeHistoryOpen, setIsIncomeHistoryOpen] = useState(false);
+  const [isIncomeHistoryClosing, setIsIncomeHistoryClosing] = useState(false);
+
+  // NEW: Accounts Screen State
+  const [isAccountsScreenOpen, setIsAccountsScreenOpen] = useState(false);
+  
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
   const [isHistoryFilterOpen, setIsHistoryFilterOpen] = useState(false);
+
+  // --- PRIVACY STATE ---
+  const [isBalanceVisible, setIsBalanceVisible] = useState(false);
+  const [isPinVerifierOpen, setIsPinVerifierOpen] = useState(false);
 
   // --- Data ---
   const [editingExpense, setEditingExpense] = useState<Expense | undefined>(undefined);
@@ -104,6 +117,20 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
       setPendingImages([]);
     }
   }, []);
+
+  // --- PRIVACY HANDLERS ---
+  const handleToggleBalanceVisibility = () => {
+      if (isBalanceVisible) {
+          setIsBalanceVisible(false);
+      } else {
+          setIsPinVerifierOpen(true);
+      }
+  };
+
+  const handlePinVerified = () => {
+      setIsPinVerifierOpen(false);
+      setIsBalanceVisible(true);
+  };
 
   // --- AUTOMATIC RECURRING EXPENSE GENERATION ---
   useEffect(() => {
@@ -244,6 +271,7 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
     const safeAccounts = accounts || [];
 
     return {
+        type: data.type || 'expense', // Default to expense
         description: data.description || '',
         amount: amount,
         category: category,
@@ -285,12 +313,14 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
                   if (Array.isArray(data)) {
                       const imported: Expense[] = data.map((d: any) => ({
                           id: d.id || crypto.randomUUID(),
+                          type: d.type || 'expense', // Supporto per type in import
                           description: d.description || '',
                           amount: Number(d.amount) || 0,
                           date: d.date || new Date().toISOString().split('T')[0],
                           category: d.category || 'Altro',
                           subcategory: d.subcategory,
                           accountId: d.accountId || (safeAccounts[0]?.id || 'cash'),
+                          toAccountId: d.toAccountId, // Import transfer logic
                           tags: d.tags || [],
                           receipts: d.receipts || [],
                           time: d.time,
@@ -441,7 +471,7 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleVisibilityChange);
     };
-  }, [isOnline, currentEmail]);
+    }, [isOnline, currentEmail]);
 
 
   // --- CLOUD SYNC: INTELLIGENTE (Salva su modifiche e su uscita) [cite: 114, 115, 116] ---
@@ -557,7 +587,9 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
       setIsFormOpen(false); setIsCalculatorContainerOpen(false); setIsImageSourceModalOpen(false);
       setIsVoiceModalOpen(false); setIsMultipleExpensesModalOpen(false); setIsQrModalOpen(false);
       setIsHistoryScreenOpen(false); setIsHistoryFilterOpen(false); setIsRecurringScreenOpen(false);
+      setIsIncomeHistoryOpen(false); setIsIncomeHistoryClosing(false); setIsAccountsScreenOpen(false);
       setImageForAnalysis(null);
+      setIsPinVerifierOpen(false); // Close pin modal on hard reset
   };
 
   const forceNavigateHome = () => {
@@ -567,7 +599,9 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
 
   const closeModalWithHistory = () => {
       if (window.history.state?.modal === 'history') { setIsHistoryScreenOpen(false); setIsHistoryClosing(false); }
+      if (window.history.state?.modal === 'income_history') { setIsIncomeHistoryOpen(false); setIsIncomeHistoryClosing(false); }
       if (window.history.state?.modal === 'recurring') { setIsRecurringScreenOpen(false); setIsRecurringClosing(false); }
+      if (window.history.state?.modal === 'accounts') { setIsAccountsScreenOpen(false); }
       
       if (window.history.state?.modal && window.history.state.modal !== 'home' && window.history.state.modal !== 'exit_guard') window.history.back();
       else forceNavigateHome();
@@ -597,30 +631,52 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
       if (!modal || modal === 'home') {
         setIsHistoryScreenOpen(false);
         setIsHistoryClosing(false); 
+        setIsIncomeHistoryOpen(false);
+        setIsIncomeHistoryClosing(false);
         setIsHistoryFilterOpen(false); 
         setIsRecurringScreenOpen(false);
-        setIsRecurringClosing(false); // Reset recurring closing state
+        setIsRecurringClosing(false); 
+        setIsAccountsScreenOpen(false);
         setImageForAnalysis(null);
       } else if (modal === 'history') {
         setIsHistoryScreenOpen(true);
         if (isHistoryClosing) setIsHistoryClosing(false);
         setIsRecurringScreenOpen(false);
         setIsRecurringClosing(false);
+        setIsIncomeHistoryOpen(false);
+        setIsAccountsScreenOpen(false);
+      } else if (modal === 'income_history') {
+        setIsIncomeHistoryOpen(true);
+        if (isIncomeHistoryClosing) setIsIncomeHistoryClosing(false);
+        setIsHistoryScreenOpen(false);
+        setIsRecurringScreenOpen(false);
+        setIsAccountsScreenOpen(false);
       } else if (modal === 'recurring') {
         setIsRecurringScreenOpen(true);
-        if (isRecurringClosing) setIsRecurringClosing(false); // Reset if re-opening or handling state
+        if (isRecurringClosing) setIsRecurringClosing(false); 
         setIsHistoryScreenOpen(false);
+        setIsIncomeHistoryOpen(false);
+        setIsAccountsScreenOpen(false);
+      } else if (modal === 'accounts') {
+        setIsAccountsScreenOpen(true);
+        setIsHistoryScreenOpen(false);
+        setIsIncomeHistoryOpen(false);
+        setIsRecurringScreenOpen(false);
       }
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [showToast, isHistoryClosing, isRecurringClosing]);
+  }, [showToast, isHistoryClosing, isRecurringClosing, isIncomeHistoryClosing]);
 
   const handleAddExpense = (data: Omit<Expense, 'id'> | Expense) => {
       // INTERCETTAZIONE: Evita il "flicker" delle spese ricorrenti singole per oggi.
       // Se è una ricorrenza singola (count=1) e la data è oggi o passata, 
       // la trasformiamo subito in spesa normale (Storico) senza passare per le programmate.
       let finalData = { ...data };
+      
+      // Default type if missing
+      if (!finalData.type) finalData.type = 'expense';
+
       const todayStr = toYYYYMMDD(new Date());
 
       if (
@@ -694,7 +750,7 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
       setImageForAnalysis(null);
   };
 
-  const fabStyle = (isHistoryScreenOpen && !isHistoryClosing) ? { bottom: `calc(90px + env(safe-area-inset-bottom, 0px))` } : undefined;
+  const fabStyle = (isHistoryScreenOpen && !isHistoryClosing) || (isIncomeHistoryOpen && !isIncomeHistoryClosing) ? { bottom: `calc(90px + env(safe-area-inset-bottom, 0px))` } : undefined;
 
   return (
     <div className="h-full w-full bg-slate-100 flex flex-col font-sans" style={{ touchAction: 'pan-y' }}>
@@ -716,9 +772,13 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
               recurringExpenses={recurringExpenses || []} 
               onNavigateToRecurring={() => { window.history.pushState({ modal: 'recurring' }, ''); setIsRecurringScreenOpen(true); }}
               onNavigateToHistory={() => { window.history.pushState({ modal: 'history' }, ''); setIsHistoryClosing(false); setIsHistoryScreenOpen(true); }}
+              onNavigateToIncomes={() => { window.history.pushState({ modal: 'income_history' }, ''); setIsIncomeHistoryClosing(false); setIsIncomeHistoryOpen(true); }}
+              onNavigateToAccounts={() => { window.history.pushState({ modal: 'accounts' }, ''); setIsAccountsScreenOpen(true); }}
               onReceiveSharedFile={handleSharedFile} 
               onImportFile={handleImportFile}
-              onSync={() => handleSyncFromCloud(false)} // PASSO LA FUNZIONE DI SYNC QUI
+              onSync={() => handleSyncFromCloud(false)}
+              isBalanceVisible={isBalanceVisible}
+              onToggleBalanceVisibility={handleToggleBalanceVisibility}
            />
            <PendingImages images={pendingImages} onAnalyze={handleAnalyzeImage} onDelete={async (id) => { await deleteImageFromQueue(id); refreshPendingImages(); }} isOnline={isOnline} syncingImageId={syncingImageId} />
         </div>
@@ -765,7 +825,41 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
 
       <MultipleExpensesModal isOpen={isMultipleExpensesModalOpen} onClose={closeModalWithHistory} expenses={multipleExpensesData} accounts={safeAccounts} onConfirm={(d) => { d.forEach(handleAddExpense); forceNavigateHome(); }} />
 
-      {isHistoryScreenOpen && <HistoryScreen expenses={expenses} accounts={safeAccounts} onClose={closeModalWithHistory} onCloseStart={() => setIsHistoryClosing(true)} onEditExpense={(e) => { setEditingExpense(e); window.history.pushState({ modal: 'form' }, ''); setIsFormOpen(true); }} onDeleteExpense={handleDeleteRequest} onDeleteExpenses={(ids) => { setExpenses(prev => (prev || []).filter(e => !ids.includes(e.id))); }} isEditingOrDeleting={isFormOpen || isConfirmDeleteModalOpen} isOverlayed={isFormOpen || isConfirmDeleteModalOpen} onDateModalStateChange={() => {}} onFilterPanelOpenStateChange={setIsHistoryFilterOpen} />}
+      {/* History Screen - Expenses Only */}
+      {isHistoryScreenOpen && (
+        <HistoryScreen 
+            expenses={expenses} 
+            accounts={safeAccounts} 
+            onClose={closeModalWithHistory} 
+            onCloseStart={() => setIsHistoryClosing(true)} 
+            onEditExpense={(e) => { setEditingExpense(e); window.history.pushState({ modal: 'form' }, ''); setIsFormOpen(true); }} 
+            onDeleteExpense={handleDeleteRequest} 
+            onDeleteExpenses={(ids) => { setExpenses(prev => (prev || []).filter(e => !ids.includes(e.id))); }} 
+            isEditingOrDeleting={isFormOpen || isConfirmDeleteModalOpen} 
+            isOverlayed={isFormOpen || isConfirmDeleteModalOpen} 
+            onDateModalStateChange={() => {}} 
+            onFilterPanelOpenStateChange={setIsHistoryFilterOpen} 
+            filterType="expense" // EXPENSES ONLY
+        />
+      )}
+
+      {/* History Screen - Income Only */}
+      {isIncomeHistoryOpen && (
+        <HistoryScreen 
+            expenses={expenses} 
+            accounts={safeAccounts} 
+            onClose={closeModalWithHistory} 
+            onCloseStart={() => setIsIncomeHistoryClosing(true)} 
+            onEditExpense={(e) => { setEditingExpense(e); window.history.pushState({ modal: 'form' }, ''); setIsFormOpen(true); }} 
+            onDeleteExpense={handleDeleteRequest} 
+            onDeleteExpenses={(ids) => { setExpenses(prev => (prev || []).filter(e => !ids.includes(e.id))); }} 
+            isEditingOrDeleting={isFormOpen || isConfirmDeleteModalOpen} 
+            isOverlayed={isFormOpen || isConfirmDeleteModalOpen} 
+            onDateModalStateChange={() => {}} 
+            onFilterPanelOpenStateChange={setIsHistoryFilterOpen} 
+            filterType="income" // INCOME ONLY
+        />
+      )}
       
       {(isRecurringScreenOpen || isRecurringClosing) && (
         <RecurringExpensesScreen 
@@ -779,11 +873,26 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
             onDeleteRecurringExpenses={(ids) => setRecurringExpenses(prev => (prev || []).filter(e => !ids.includes(e.id)))} 
         />
       )}
+
+      {isAccountsScreenOpen && (
+          <AccountsScreen 
+            accounts={safeAccounts}
+            expenses={expenses || []}
+            onClose={closeModalWithHistory}
+          />
+      )}
       
       <ShareQrModal isOpen={isQrModalOpen} onClose={closeModalWithHistory} />
       <InstallPwaModal isOpen={isInstallModalOpen} onClose={() => setIsInstallModalOpen(false)} />
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       {isParsingImage && <div className="fixed inset-0 bg-white/80 z-[100] flex items-center justify-center"><SpinnerIcon className="w-12 h-12 text-indigo-600"/></div>}
+      
+      <PinVerifierModal 
+          isOpen={isPinVerifierOpen}
+          onClose={() => setIsPinVerifierOpen(false)}
+          onSuccess={handlePinVerified}
+          email={currentEmail}
+      />
     </div>
   );
 };
