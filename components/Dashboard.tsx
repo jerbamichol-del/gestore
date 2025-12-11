@@ -446,11 +446,12 @@ const Dashboard: React.FC<DashboardProps> = ({
   
   return (
     <>
-        <div className="p-4 md:p-6 pb-32 md:pb-32 space-y-6" {...tapBridgeHandlers}>
+        {/* MODIFIED: Removed horizontal padding on mobile (p-4 -> md:p-6), kept vertical spacing */}
+        <div className="md:p-6 pb-32 md:pb-32 space-y-6" {...tapBridgeHandlers}>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-1 flex flex-col gap-4">
-                    {/* Modificato: Rimosso overflow-hidden dalla card principale */}
-                    <div className="bg-white p-6 rounded-2xl shadow-lg flex flex-col justify-between relative">
+                    {/* Modificato: Card full width su mobile (rounded-none, no border radius) */}
+                    <div className="bg-white p-6 md:rounded-2xl shadow-lg flex flex-col justify-between relative">
                         
                         {/* Totals Section (Spostata SOPRA i filtri) */}
                         <div className="text-center mb-2 relative z-10">
@@ -625,7 +626,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                         </div>
                     </div>
 
-                    {/* Pulsante Importa/Esporta File */}
+                    {/* Pulsante Importa/Esporta File - Modificato con margini laterali su mobile */}
                     <input
                         type="file"
                         ref={fileInputRef}
@@ -635,7 +636,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                     />
                     <button
                         onClick={openImportExportMenu}
-                        className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-indigo-50 text-indigo-700 font-bold rounded-2xl border border-indigo-100 shadow-sm hover:bg-indigo-100 transition-colors"
+                        className="w-auto mx-4 md:mx-0 flex items-center justify-center gap-3 py-3 px-4 bg-indigo-50 text-indigo-700 font-bold rounded-2xl border border-indigo-100 shadow-sm hover:bg-indigo-100 transition-colors"
                     >
                         <ArrowsUpDownIcon className="w-6 h-6" />
                         Imp/Exp (CSV/Excel/JSON)
@@ -643,7 +644,8 @@ const Dashboard: React.FC<DashboardProps> = ({
                 </div>
 
                 <div className="lg:col-span-2 flex flex-col gap-6">
-                    <div className="bg-white p-6 rounded-2xl shadow-lg flex flex-col">
+                    {/* Modificato: Card full width su mobile */}
+                    <div className="bg-white p-6 md:rounded-2xl shadow-lg flex flex-col">
                         <div className="mb-4">
                             <h3 className="text-xl font-bold text-slate-700">Riepilogo Categorie</h3>
                             <p className="text-sm text-slate-500 font-medium capitalize">{dateRangeLabel}</p>
@@ -677,7 +679,8 @@ const Dashboard: React.FC<DashboardProps> = ({
                 </div>
             </div>
 
-            <div className="bg-white p-6 rounded-2xl shadow-lg">
+            {/* Modificato: Card full width su mobile */}
+            <div className="bg-white p-6 md:rounded-2xl shadow-lg">
                 <div className="mb-2 text-center">
                     <h3 className="text-xl font-bold text-slate-700">Spese per Categoria</h3>
                     <p className="text-sm text-slate-500 font-medium capitalize">{dateRangeLabel}</p>
