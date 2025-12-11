@@ -9,6 +9,7 @@ import React, {
 } from 'react';
 import { Expense, Account } from '../types';
 import { getCategoryStyle } from '../utils/categoryStyles';
+import { getAccountIcon } from '../utils/accountIcons';
 import { formatCurrency } from '../components/icons/formatters';
 import { TrashIcon } from '../components/icons/TrashIcon';
 import { HistoryFilterCard } from '../components/HistoryFilterCard';
@@ -37,6 +38,7 @@ interface ExpenseItemProps {
   isSelected: boolean;
   onToggleSelection: (id: string) => void;
   onLongPress: (id: string) => void;
+  isIncomeMode: boolean;
 }
 
 const ACTION_WIDTH = 72;
@@ -53,10 +55,18 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
   isSelected,
   onToggleSelection,
   onLongPress,
+  isIncomeMode,
 }) => {
   const style = getCategoryStyle(expense.category);
-  const accountName =
-    accounts.find((a) => a.id === expense.accountId)?.name || 'Sconosciuto';
+  const account = accounts.find((a) => a.id === expense.accountId);
+  const accountName = account?.name || 'Sconosciuto';
+  
+  // Per entrate, usa l'icona del conto (fallback su ID se icon manca, override per paypal/crypto/revolut/poste). Per le spese, usa la categoria.
+  const iconKey = account 
+    ? (['paypal', 'crypto', 'revolut', 'poste'].includes(account.id) ? account.id : (account.icon || account.id)) 
+    : 'default';
+  const AccountIcon = isIncomeMode ? getAccountIcon(iconKey) : null;
+
   const itemRef = useRef<HTMLDivElement>(null);
   const tapBridge = useTapBridge();
 
@@ -283,7 +293,9 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
         {isSelected ? (
              <span className={`w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center bg-indigo-600 text-white transition-transform duration-200 transform scale-100`}>
                 <CheckIcon className="w-6 h-6" strokeWidth={3} />
-                     </span>
+             </span>
+        ) : isIncomeMode && AccountIcon ? (
+             <AccountIcon className="w-10 h-10 text-green-600 flex-shrink-0 transition-transform duration-200" />
         ) : (
             <span
               className={`w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center ${style.bgColor} transition-transform duration-200`}>
@@ -302,8 +314,8 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
             {expense.description || 'Senza descrizione'}
           </p>
         </div>
-        <p className={`font-bold text-lg text-right shrink-0 whitespace-nowrap min-w-[90px] ${isSelected ? 'text-indigo-900' : 'text-slate-900'}`}>
-          {formatCurrency(Number(expense.amount) || 0)}
+        <p className={`font-bold text-lg text-right shrink-0 whitespace-nowrap min-w-[90px] ${isSelected ? 'text-indigo-900' : isIncomeMode ? 'text-green-600' : 'text-slate-900'}`}>
+          {isIncomeMode ? '+' : ''}{formatCurrency(Number(expense.amount) || 0)}
         </p>
       </div>
     </div>
@@ -323,6 +335,7 @@ interface HistoryScreenProps {
   onCloseStart?: () => void; // Added property
   onFilterPanelOpenStateChange: (isOpen: boolean) => void;
   isOverlayed: boolean;
+  filterType?: 'expense' | 'income'; // NEW PROP
 }
 
 interface ExpenseGroup {
@@ -392,10 +405,13 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
   onCloseStart,
   onFilterPanelOpenStateChange,
   isOverlayed,
+  filterType = 'expense' // Default to 'expense'
 }) => {
   const [isAnimatingIn, setIsAnimatingIn] = useState(false);
   const tapBridge = useTapBridge();
   
+  const isIncomeMode = filterType === 'income';
+
   // Date Filtering State
   const [activeFilterMode, setActiveFilterMode] = useState<ActiveFilterMode>('quick');
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
@@ -494,7 +510,12 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
   }, [isSortMenuOpen]);
 
   const filteredExpenses = useMemo(() => {
-    let result = expenses || [];
+    // START FILTER: Apply type filter first
+    let result = (expenses || []).filter(e => {
+        if (filterType === 'income') return e.type === 'income';
+        if (filterType === 'expense') return e.type !== 'income';
+        return true;
+    });
 
     // 1. Date Filter
     if (activeFilterMode === 'period') {
@@ -593,7 +614,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
     }
 
     return result;
-  }, [expenses, activeFilterMode, dateFilter, customRange, periodType, periodDate, filterAccount, filterCategories, filterDescription, filterAmountRange]);
+  }, [expenses, activeFilterMode, dateFilter, customRange, periodType, periodDate, filterAccount, filterCategories, filterDescription, filterAmountRange, filterType]);
 
   const groupedExpenses = useMemo(() => {
     const sorted = [...(filteredExpenses || [])].sort((a, b) => {
@@ -623,7 +644,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
     // For "make it work for all weeks", a single flat list of the sorted items is the most direct interpretation.
     if (sortOption !== 'date') {
         const total = sorted.reduce((acc, e) => acc + (Number(e.amount) || 0), 0);
-        let label = 'Tutte le spese';
+        let label = 'Tutte le transazioni';
         if (sortOption === 'amount-desc') label = 'Per Importo (Decrescente)';
         if (sortOption === 'amount-asc') label = 'Per Importo (Crescente)';
         if (sortOption === 'category') label = 'Per Categoria';
@@ -775,7 +796,9 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
                 >
                   <ArrowLeftIcon className="w-6 h-6 text-slate-700" />
                 </button>
-                <h1 className="text-xl font-bold text-slate-800 flex-1">Storico Spese</h1>
+                <h1 className="text-xl font-bold text-slate-800 flex-1">
+                    {isIncomeMode ? 'Storico Entrate' : 'Storico Spese'}
+                </h1>
                 
                 {/* Sort Button Container */}
                 <div className="relative">
@@ -845,7 +868,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
                         {group.dateRange}
                     </span>
                   </h2>
-                  <p className="font-bold text-indigo-600 text-xl">
+                  <p className={`font-bold text-xl ${isIncomeMode ? 'text-green-600' : 'text-indigo-600'}`}>
                     {formatCurrency(group.total)}
                   </p>
                 </div>
@@ -867,6 +890,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
                         isSelected={selectedIds.has(expense.id)}
                         onToggleSelection={handleToggleSelection}
                         onLongPress={handleLongPress}
+                        isIncomeMode={isIncomeMode}
                       />
                     </React.Fragment>
                   ))}
@@ -875,9 +899,11 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
             ))
           ) : (
             <div className="text-center text-slate-500 pt-20 px-6">
-              <p className="text-lg font-semibold">Nessuna spesa trovata</p>
+              <p className="text-lg font-semibold">
+                  {isIncomeMode ? 'Nessuna entrata trovata' : 'Nessuna spesa trovata'}
+              </p>
               <p className="mt-2">
-                Prova a modificare i filtri o aggiungi una nuova spesa dalla
+                Prova a modificare i filtri o aggiungi una nuova {isIncomeMode ? 'entrata' : 'spesa'} dalla
                 schermata Home.
               </p>
             </div>
