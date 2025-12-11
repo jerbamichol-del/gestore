@@ -97,6 +97,9 @@ const AccountsScreen: React.FC<AccountsScreenProps> = ({ accounts, expenses, onC
                 );
             })}
         </div>
+        
+        {/* Spacer per evitare che l'ultimo elemento sia coperto dal FAB */}
+        <div className="h-24" />
       </main>
     </div>
   );
