@@ -589,7 +589,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                                 <button
                                     onClick={handleNavigateToRecurring}
                                     style={{ touchAction: 'manipulation' }}
-                                    className="flex-none flex items-center justify-center gap-2 py-2 px-5 text-center font-semibold text-slate-900 bg-amber-100 rounded-full hover:bg-amber-200 focus:outline-none active:scale-95 active:bg-amber-200 active:ring-2 active:ring-offset-2 active:ring-amber-500 transition-all border border-amber-400"
+                                    className="flex-none flex items-center justify-center gap-2 py-1 px-3 text-center font-semibold text-slate-900 bg-amber-100 rounded-full hover:bg-amber-200 focus:outline-none active:scale-95 active:bg-amber-200 active:ring-2 active:ring-offset-2 active:ring-amber-500 transition-all border border-amber-400"
                                 >
                                     <ProgrammateDetailedIcon className="w-7 h-7" />
                                     <span className="text-sm">Programmate</span>
@@ -598,7 +598,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                                 <button
                                     onClick={handleNavigateToHistory}
                                     style={{ touchAction: 'manipulation' }}
-                                    className="flex-none flex items-center justify-center gap-2 py-2 px-5 text-center font-semibold text-indigo-900 bg-indigo-100 rounded-full hover:bg-indigo-200 focus:outline-none active:scale-95 active:bg-indigo-200 active:ring-2 active:ring-offset-2 active:ring-indigo-500 transition-all border border-indigo-200"
+                                    className="flex-none flex items-center justify-center gap-2 py-1 px-3 text-center font-semibold text-indigo-900 bg-indigo-100 rounded-full hover:bg-indigo-200 focus:outline-none active:scale-95 active:bg-indigo-200 active:ring-2 active:ring-offset-2 active:ring-indigo-500 transition-all border border-indigo-200"
                                 >
                                     <ExpensesDetailedIcon className="w-7 h-7" />
                                     <span className="text-sm">Spese</span>
@@ -607,7 +607,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                                 <button
                                     onClick={handleNavigateToIncomes}
                                     style={{ touchAction: 'manipulation' }}
-                                    className="flex-none flex items-center justify-center gap-2 py-2 px-5 text-center font-semibold text-emerald-900 bg-emerald-100 rounded-full hover:bg-emerald-200 focus:outline-none active:scale-95 active:bg-emerald-200 active:ring-2 active:ring-offset-2 active:ring-emerald-500 transition-all border border-emerald-200"
+                                    className="flex-none flex items-center justify-center gap-2 py-1 px-3 text-center font-semibold text-emerald-900 bg-emerald-100 rounded-full hover:bg-emerald-200 focus:outline-none active:scale-95 active:bg-emerald-200 active:ring-2 active:ring-offset-2 active:ring-emerald-500 transition-all border border-emerald-200"
                                 >
                                     <IncomeDetailedIcon className="w-7 h-7" />
                                     <span className="text-sm">Entrate</span>
@@ -616,7 +616,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                                 <button
                                     onClick={handleNavigateToAccounts}
                                     style={{ touchAction: 'manipulation' }}
-                                    className="flex-none flex items-center justify-center gap-2 py-2 px-5 text-center font-semibold text-sky-900 bg-sky-100 rounded-full hover:bg-sky-200 focus:outline-none active:scale-95 active:bg-sky-200 active:ring-2 active:ring-offset-2 active:ring-sky-500 transition-all border border-sky-200"
+                                    className="flex-none flex items-center justify-center gap-2 py-1 px-3 text-center font-semibold text-sky-900 bg-sky-100 rounded-full hover:bg-sky-200 focus:outline-none active:scale-95 active:bg-sky-200 active:ring-2 active:ring-offset-2 active:ring-sky-500 transition-all border border-sky-200"
                                 >
                                     <AccountsDetailedIcon className="w-7 h-7" />
                                     <span className="text-sm">Conti</span>
