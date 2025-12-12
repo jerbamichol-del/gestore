@@ -39,5 +39,6 @@ export const CATEGORIES: Record<string, string[]> = {
   'Salute': ['Farmacia', 'Visite Mediche', 'Assicurazione'],
   'Istruzione': ['Corsi', 'Libri', 'Tasse Scolastiche'],
   'Lavoro': ['Pasti', 'Materiale Ufficio'],
+  'Beneficienza': ['Donazione', 'Adozione a distanza', 'Elemosina'],
   'Altro': [],
 };
