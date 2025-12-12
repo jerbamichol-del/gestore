@@ -609,7 +609,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                                 <button
                                     onClick={handleNavigateToIncomes}
                                     style={{ touchAction: 'manipulation' }}
-                                    className="flex-none flex items-center justify-center gap-2 py-1 px-3 text-center font-semibold text-emerald-900 bg-emerald-100 rounded-full hover:bg-emerald-200 focus:outline-none active:scale-95 active:bg-emerald-200 active:ring-2 active:ring-offset-2 active:ring-emerald-500 transition-all border border-emerald-200"
+                                    className={`flex-none flex items-center justify-center gap-2 py-1 px-3 text-center font-semibold text-emerald-900 bg-emerald-100 rounded-full hover:bg-emerald-200 focus:outline-none active:scale-95 active:bg-emerald-200 active:ring-2 active:ring-offset-2 active:ring-emerald-500 transition-all border border-emerald-200 ${!isBalanceVisible ? 'opacity-50 grayscale' : ''}`}
                                 >
                                     <IncomeDetailedIcon className="w-7 h-7" />
                                     <span className="text-sm">Entrate</span>
@@ -618,7 +618,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                                 <button
                                     onClick={handleNavigateToAccounts}
                                     style={{ touchAction: 'manipulation' }}
-                                    className="flex-none flex items-center justify-center gap-2 py-1 px-3 text-center font-semibold text-sky-900 bg-sky-100 rounded-full hover:bg-sky-200 focus:outline-none active:scale-95 active:bg-sky-200 active:ring-2 active:ring-offset-2 active:ring-sky-500 transition-all border border-sky-200"
+                                    className={`flex-none flex items-center justify-center gap-2 py-1 px-3 text-center font-semibold text-sky-900 bg-sky-100 rounded-full hover:bg-sky-200 focus:outline-none active:scale-95 active:bg-sky-200 active:ring-2 active:ring-offset-2 active:ring-sky-500 transition-all border border-sky-200 ${!isBalanceVisible ? 'opacity-50 grayscale' : ''}`}
                                 >
                                     <AccountsDetailedIcon className="w-7 h-7" />
                                     <span className="text-sm">Conti</span>
