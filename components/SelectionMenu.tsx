@@ -131,10 +131,8 @@ const SelectionMenu: React.FC<SelectionMenuProps> = ({ isOpen, onClose, title, o
                     }`}
                   >
                     <span className="flex items-center gap-4 min-w-0">
-                      {option.Icon && option.bgColor && (
-                        <span className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${option.bgColor}`}>
-                          <option.Icon className={`w-7 h-7 ${option.color}`} />
-                        </span>
+                      {option.Icon && (
+                        <option.Icon className="w-12 h-12 flex-shrink-0" />
                       )}
                       <span className={`font-medium text-lg truncate ${isSelected ? 'text-indigo-700' : 'text-slate-800'}`}>
                         {option.label}
