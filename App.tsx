@@ -772,8 +772,25 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
               recurringExpenses={recurringExpenses || []} 
               onNavigateToRecurring={() => { window.history.pushState({ modal: 'recurring' }, ''); setIsRecurringScreenOpen(true); }}
               onNavigateToHistory={() => { window.history.pushState({ modal: 'history' }, ''); setIsHistoryClosing(false); setIsHistoryScreenOpen(true); }}
-              onNavigateToIncomes={() => { window.history.pushState({ modal: 'income_history' }, ''); setIsIncomeHistoryClosing(false); setIsIncomeHistoryOpen(true); }}
-              onNavigateToAccounts={() => { window.history.pushState({ modal: 'accounts' }, ''); setIsAccountsScreenOpen(true); }}
+              onNavigateToIncomes={() => {
+                  if (!isBalanceVisible) {
+                      showToast({ message: "Inserisci il PIN per sbloccare il Saldo", type: "info" });
+                      setIsPinVerifierOpen(true);
+                  } else {
+                      window.history.pushState({ modal: 'income_history' }, ''); 
+                      setIsIncomeHistoryClosing(false); 
+                      setIsIncomeHistoryOpen(true);
+                  }
+              }}
+              onNavigateToAccounts={() => {
+                  if (!isBalanceVisible) {
+                      showToast({ message: "Inserisci il PIN per sbloccare il Saldo", type: "info" });
+                      setIsPinVerifierOpen(true);
+                  } else {
+                      window.history.pushState({ modal: 'accounts' }, ''); 
+                      setIsAccountsScreenOpen(true);
+                  }
+              }}
               onReceiveSharedFile={handleSharedFile} 
               onImportFile={handleImportFile}
               onSync={() => handleSyncFromCloud(false)}
