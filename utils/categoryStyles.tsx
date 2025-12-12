@@ -29,62 +29,62 @@ export const categoryStyles: Record<string, CategoryStyle> = {
     'Alimentari': {
         label: 'Alimentari',
         Icon: FoodIcon,
-        color: 'text-green-600',
-        bgColor: 'bg-green-100',
+        color: 'text-lime-600', // Verde Chiaro (Lime)
+        bgColor: 'bg-lime-100',
     },
     'Trasporti': {
         label: 'Trasporti',
         Icon: TransportIcon,
-        color: 'text-blue-600',
-        bgColor: 'bg-blue-100',
+        color: 'text-slate-600', // Grigio (Slate)
+        bgColor: 'bg-slate-100',
     },
     'Casa': {
         label: 'Casa',
         Icon: HomeIcon,
-        color: 'text-orange-600',
-        bgColor: 'bg-orange-100',
+        color: 'text-blue-900', // Blu scuro
+        bgColor: 'bg-blue-100',
     },
     'Shopping': {
         label: 'Shopping',
         Icon: ShoppingIcon,
-        color: 'text-pink-600',
-        bgColor: 'bg-pink-100',
+        color: 'text-purple-600', // Viola
+        bgColor: 'bg-purple-100',
     },
     'Tempo Libero': {
         label: 'Tempo Libero',
         Icon: LeisureIcon,
-        color: 'text-purple-600',
-        bgColor: 'bg-purple-100',
+        color: 'text-yellow-600', // Giallo
+        bgColor: 'bg-yellow-100',
     },
     'Salute': {
         label: 'Salute',
         Icon: HealthIcon,
-        color: 'text-red-600',
-        bgColor: 'bg-red-100',
+        color: 'text-cyan-600', // Azzurro (Cyan)
+        bgColor: 'bg-cyan-100',
     },
     'Istruzione': {
         label: 'Istruzione',
         Icon: EducationIcon,
-        color: 'text-yellow-600',
-        bgColor: 'bg-yellow-100',
+        color: 'text-green-600', // Verde
+        bgColor: 'bg-green-100',
     },
     'Lavoro': {
         label: 'Lavoro',
         Icon: WorkIcon,
-        color: 'text-indigo-600',
-        bgColor: 'bg-indigo-100',
+        color: 'text-blue-600', // Blu
+        bgColor: 'bg-blue-100',
     },
     'Beneficienza': {
         label: 'Beneficienza',
         Icon: CharityIcon,
-        color: 'text-cyan-600',
-        bgColor: 'bg-cyan-100',
+        color: 'text-red-600', // Rosso
+        bgColor: 'bg-red-100',
     },
     'Altro': {
         label: 'Altro',
         Icon: OtherIcon,
-        color: 'text-gray-600',
-        bgColor: 'bg-gray-200',
+        color: 'text-amber-900', // Marrone (Amber-900 is brownish)
+        bgColor: 'bg-amber-100',
     },
 };
 
