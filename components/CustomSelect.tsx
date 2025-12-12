@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { ChevronDownIcon } from './icons/ChevronDownIcon';
 
@@ -60,10 +61,8 @@ const CustomSelect: React.FC<CustomSelectProps> = ({ options, selectedValue, onS
         >
             {selectedOption ? (
                  <span className="flex items-center gap-3">
-                    {selectedOption.Icon && selectedOption.bgColor && (
-                        <span className={`w-6 h-6 rounded-md flex items-center justify-center ${selectedOption.bgColor}`}>
-                            <selectedOption.Icon className={`w-4 h-4 ${selectedOption.color}`} />
-                        </span>
+                    {selectedOption.Icon && (
+                        <selectedOption.Icon className="w-6 h-6 flex-shrink-0" />
                     )}
                     <span className="text-slate-900">{selectedOption.label}</span>
                 </span>
@@ -87,10 +86,8 @@ const CustomSelect: React.FC<CustomSelectProps> = ({ options, selectedValue, onS
                       isSelected ? 'bg-indigo-500 text-white' : 'text-slate-700 hover:bg-slate-100'
                     }`}
                   >
-                     {option.Icon && option.bgColor && (
-                        <span className={`w-6 h-6 rounded-md flex items-center justify-center ${isSelected ? 'bg-white/20' : option.bgColor}`}>
-                            <option.Icon className={`w-4 h-4 ${isSelected ? 'text-white' : option.color}`} />
-                        </span>
+                     {option.Icon && (
+                        <option.Icon className="w-6 h-6 flex-shrink-0" />
                      )}
                     {option.label}
                   </button>
