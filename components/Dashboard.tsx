@@ -32,18 +32,18 @@ import { EyeIcon } from './icons/EyeIcon';
 import { EyeSlashIcon } from './icons/EyeSlashIcon';
 
 const categoryHexColors: Record<string, string> = {
-    'Alimentari': '#16a34a', // green-600
-    'Trasporti': '#2563eb', // blue-600
-    'Casa': '#ea580c', // orange-600
-    'Shopping': '#db2777', // pink-600
-    'Tempo Libero': '#9333ea', // purple-600
-    'Salute': '#dc2626', // red-600
-    'Istruzione': '#ca8a04', // yellow-600
-    'Lavoro': '#4f46e5', // indigo-600
-    'Beneficienza': '#0891b2', // cyan-600
-    'Altro': '#4b5563', // gray-600
+    'Trasporti': '#64748b', // Grigio
+    'Casa': '#1e3a8a', // Blu Scuro
+    'Shopping': '#9333ea', // Viola
+    'Alimentari': '#84cc16', // Verde Chiaro (Lime)
+    'Salute': '#06b6d4', // Azzurro (Cyan)
+    'Altro': '#78350f', // Marrone (Amber-900)
+    'Beneficienza': '#dc2626', // Rosso
+    'Lavoro': '#2563eb', // Blu
+    'Istruzione': '#16a34a', // Verde
+    'Tempo Libero': '#eab308', // Giallo
 };
-const DEFAULT_COLOR = '#4b5563';
+const DEFAULT_COLOR = '#78350f'; // Default to "Altro" color
 
 const renderActiveShape = (props: any) => {
   const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, payload, percent } = props;
