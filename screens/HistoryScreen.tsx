@@ -297,10 +297,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
         ) : isIncomeMode && AccountIcon ? (
              <AccountIcon className="w-10 h-10 text-green-600 flex-shrink-0 transition-transform duration-200" />
         ) : (
-            <span
-              className={`w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center ${style.bgColor} transition-transform duration-200`}>
-              <style.Icon className={`w-6 h-6 ${style.color}`} />
-            </span>
+            <style.Icon className="w-10 h-10 flex-shrink-0 transition-transform duration-200" />
         )}
 
         <div className="flex-grow min-w-0">
