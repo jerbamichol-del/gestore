@@ -40,6 +40,7 @@ const categoryHexColors: Record<string, string> = {
     'Salute': '#dc2626', // red-600
     'Istruzione': '#ca8a04', // yellow-600
     'Lavoro': '#4f46e5', // indigo-600
+    'Beneficienza': '#0891b2', // cyan-600
     'Altro': '#4b5563', // gray-600
 };
 const DEFAULT_COLOR = '#4b5563';
