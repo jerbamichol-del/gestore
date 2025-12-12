@@ -658,9 +658,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                                     const percentage = totalExpenses > 0 ? (cat.value / totalExpenses) * 100 : 0;
                                     return (
                                         <div key={cat.name} className="flex items-center gap-4 text-base">
-                                            <span className={`w-10 h-10 rounded-xl flex items-center justify-center ${style.bgColor}`}>
-                                                <style.Icon className={`w-6 h-6 ${style.color}`} />
-                                            </span>
+                                            <style.Icon className="w-10 h-10 flex-shrink-0" />
                                             <div className="flex-grow">
                                                 <div className="flex justify-between items-center mb-1">
                                                     <span className="font-semibold text-slate-700">{style.label}</span>
@@ -733,9 +731,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                                 data-legend-item
                                 className={`flex items-center gap-3 p-2 rounded-full text-left transition-all duration-200 bg-slate-100 hover:bg-slate-200`}
                             >
-                                <span className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${style.bgColor}`}>
-                                    <style.Icon className={`w-4 h-4 ${style.color}`} />
-                                </span>
+                                <style.Icon className="w-8 h-8 flex-shrink-0" />
                                 <div className="min-w-0 pr-2">
                                     <p className={`font-semibold text-sm truncate text-slate-700`}>{style.label}</p>
                                 </div>
