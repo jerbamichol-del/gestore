@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { XMarkIcon } from './icons/XMarkIcon';
 import { BackspaceIcon } from './icons/BackspaceIcon';
+// Importiamo l'icona specifica del progetto
 import { FingerprintIcon } from './icons/FingerprintIcon'; 
 import { verifyPin } from '../utils/auth';
 import { unlockWithBiometric, isBiometricsAvailable } from '../services/biometrics'; 
@@ -132,7 +133,7 @@ const PinVerifierModal: React.FC<PinVerifierModalProps> = ({ isOpen, onClose, on
               </button>
             ))}
             
-            {/* Biometric Button */}
+            {/* Biometric Button (Usa FingerprintIcon) */}
             <div className="flex items-center justify-center">
               {isBioAvailable && (
                 <button 
