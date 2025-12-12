@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { XMarkIcon } from './icons/XMarkIcon';
 import { BackspaceIcon } from './icons/BackspaceIcon';
-// Importiamo l'icona specifica del progetto
 import { FingerprintIcon } from './icons/FingerprintIcon'; 
 import { verifyPin } from '../utils/auth';
 import { unlockWithBiometric, isBiometricsAvailable } from '../services/biometrics'; 
@@ -50,12 +49,12 @@ const PinVerifierModal: React.FC<PinVerifierModalProps> = ({ isOpen, onClose, on
   };
 
   const handleDigitClick = (digit: number) => {
-    if (pin.length < 5) {
+    if (pin.length < 4) { // CORRETTO: Limite a 4 cifre
       const newPin = pin + digit;
       setPin(newPin);
       setError(false);
       
-      if (newPin.length === 5) {
+      if (newPin.length === 4) { // CORRETTO: Verifica al 4° numero
         setTimeout(() => validatePin(newPin), 100);
       }
     }
@@ -101,9 +100,9 @@ const PinVerifierModal: React.FC<PinVerifierModalProps> = ({ isOpen, onClose, on
             Per visualizzare i dati sensibili
           </p>
 
-          {/* Pallini PIN più piccoli */}
+          {/* Pallini PIN (Ora sono 4) */}
           <div className="flex gap-3 mb-6">
-            {[0, 1, 2, 3, 4].map((i) => (
+            {[0, 1, 2, 3].map((i) => (
               <div
                 key={i}
                 className={`w-3 h-3 rounded-full transition-all duration-300 ${
@@ -133,7 +132,7 @@ const PinVerifierModal: React.FC<PinVerifierModalProps> = ({ isOpen, onClose, on
               </button>
             ))}
             
-            {/* Biometric Button (Usa FingerprintIcon) */}
+            {/* Biometric Button */}
             <div className="flex items-center justify-center">
               {isBioAvailable && (
                 <button 
