@@ -964,9 +964,7 @@ export const HistoryFilterCard: React.FC<HistoryFilterCardProps> = (props) => {
                                     className="flex items-center gap-3 flex-1 text-left min-w-0"
                                     onPointerDown={(e) => e.stopPropagation()}
                                 >
-                                     <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${style.bgColor}`}>
-                                        <style.Icon className={`w-5 h-5 ${style.color}`} />
-                                    </div>
+                                     <style.Icon className="w-10 h-10 flex-shrink-0" />
                                     <span className={`text-base font-bold truncate ${isParentVisuallyChecked ? 'text-indigo-800' : 'text-slate-700'}`}>{style.label}</span>
                                     {subcategories.length > 0 && (
                                         <ChevronDownIcon className={`w-5 h-5 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
