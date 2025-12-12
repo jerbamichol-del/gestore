@@ -5,7 +5,20 @@ import { Expense } from '../types';
 import { formatCurrency } from '../components/icons/formatters';
 import { getCategoryStyle } from '../utils/categoryStyles';
 
-const COLORS = ['#4f46e5', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#3b82f6', '#ef4444', '#d97706', '#6366f1', '#6b7280'];
+// Same map as Dashboard.tsx for consistency
+const categoryHexColors: Record<string, string> = {
+    'Trasporti': '#64748b', // Grigio
+    'Casa': '#1e3a8a', // Blu Scuro
+    'Shopping': '#9333ea', // Viola
+    'Alimentari': '#84cc16', // Verde Chiaro (Lime)
+    'Salute': '#06b6d4', // Azzurro (Cyan)
+    'Altro': '#78350f', // Marrone (Amber-900)
+    'Beneficienza': '#dc2626', // Rosso
+    'Lavoro': '#2563eb', // Blu
+    'Istruzione': '#16a34a', // Verde
+    'Tempo Libero': '#eab308', // Giallo
+};
+const DEFAULT_COLOR = '#78350f'; // Default to "Altro" color
 
 const renderActiveShape = (props: any) => {
   const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, payload, percent } = props;
@@ -107,7 +120,7 @@ const MonthlyTrendScreen: React.FC<MonthlyTrendScreenProps> = ({ expenses }) => 
                                     onClick={(_, index) => setSelectedIndex(prev => prev === index ? null : index)}
                                 >
                                     {monthlyData.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                        <Cell key={`cell-${index}`} fill={categoryHexColors[entry.name] || DEFAULT_COLOR} />
                                     ))}
                                 </Pie>
                             </PieChart>
