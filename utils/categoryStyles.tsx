@@ -9,6 +9,7 @@ import { LeisureIcon } from '../components/icons/categories/LeisureIcon';
 import { HealthIcon } from '../components/icons/categories/HealthIcon';
 import { EducationIcon } from '../components/icons/categories/EducationIcon';
 import { WorkIcon } from '../components/icons/categories/WorkIcon';
+import { CharityIcon } from '../components/icons/categories/CharityIcon';
 import { OtherIcon } from '../components/icons/categories/OtherIcon';
 
 interface CategoryStyle {
@@ -72,6 +73,12 @@ export const categoryStyles: Record<string, CategoryStyle> = {
         Icon: WorkIcon,
         color: 'text-indigo-600',
         bgColor: 'bg-indigo-100',
+    },
+    'Beneficienza': {
+        label: 'Beneficienza',
+        Icon: CharityIcon,
+        color: 'text-cyan-600',
+        bgColor: 'bg-cyan-100',
     },
     'Altro': {
         label: 'Altro',
