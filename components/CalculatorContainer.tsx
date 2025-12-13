@@ -204,6 +204,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   const { progress, isSwiping } = useSwipe(
     containerRef,
     {
+      // Abilita lo swipe a sinistra (verso dettagli) SOLO se NON è un trasferimento
       onSwipeLeft: (view === 'calculator' && formData.type !== 'transfer') ? () => navigateTo('details') : undefined,
       onSwipeRight: view === 'details' ? () => navigateTo('calculator') : undefined,
     },
@@ -211,6 +212,13 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
       enabled: swipeReady && !isDesktop && isOpen && !isMenuOpen && !keyboardOpen,
       threshold: 36,
       slop: 10,
+      // Impedisci il trascinamento visivo se è un trasferimento
+      disableDrag: (intent) => {
+          if (view === 'calculator' && intent === 'left' && formData.type === 'transfer') {
+              return true;
+          }
+          return false;
+      }
     }
   );
 
