@@ -718,6 +718,8 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
       // FIX NAVIGAZIONE: Se il form era aperto (es. da storico), torna indietro invece di andare alla home
       if (isFormOpen) {
           window.history.back();
+      } else if (isAccountsScreenOpen) {
+          // Do nothing, stay on accounts screen (balance adjustment)
       } else {
           forceNavigateHome();
       }
@@ -894,6 +896,7 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
             accounts={safeAccounts}
             expenses={expenses || []}
             onClose={closeModalWithHistory}
+            onAddTransaction={handleAddExpense}
           />
       )}
       
