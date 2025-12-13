@@ -212,9 +212,18 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
       enabled: swipeReady && !isDesktop && isOpen && !isMenuOpen && !keyboardOpen,
       threshold: 36,
       slop: 10,
-      // Impedisci il trascinamento visivo se è un trasferimento
+      // Impedisci il trascinamento visivo se l'azione non è consentita o non ha destinazione
       disableDrag: (intent) => {
+          // 1. Blocca swipe verso dettagli se è un trasferimento
           if (view === 'calculator' && intent === 'left' && formData.type === 'transfer') {
+              return true;
+          }
+          // 2. Blocca swipe a destra (indietro) se siamo già sulla calcolatrice (evita effetto elastico)
+          if (view === 'calculator' && intent === 'right') {
+              return true;
+          }
+          // 3. Blocca swipe a sinistra (avanti) se siamo già sui dettagli (fine corsa)
+          if (view === 'details' && intent === 'left') {
               return true;
           }
           return false;
