@@ -549,13 +549,13 @@ const Dashboard: React.FC<DashboardProps> = ({
                                 <div className="w-px h-12 bg-slate-200" /> {/* Divider */}
 
                                 <div className="flex-1 flex flex-col">
-                                    <div className="flex justify-between items-center h-5 mb-1">
+                                    <div className="flex justify-between items-center mb-1">
                                         <button 
                                             onClick={(e) => { e.stopPropagation(); onToggleBalanceVisibility(); }}
-                                            className="p-1 -ml-1 rounded-full text-slate-400 hover:text-indigo-600 hover:bg-slate-100 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                            className="p-2 -ml-2 rounded-full text-slate-400 hover:text-indigo-600 hover:bg-slate-100 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                             aria-label={isBalanceVisible ? "Nascondi saldo" : "Mostra saldo"}
                                         >
-                                            {isBalanceVisible ? <EyeSlashIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
+                                            {isBalanceVisible ? <EyeSlashIcon className="w-6 h-6" /> : <EyeIcon className="w-6 h-6" />}
                                         </button>
                                         
                                         <h4 className="text-sm font-medium text-slate-400 cursor-default select-none">Saldo</h4>
