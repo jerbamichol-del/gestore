@@ -1,4 +1,3 @@
-
 // CalculatorContainer.tsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Expense, Account } from '../types';
@@ -205,7 +204,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   const { progress, isSwiping } = useSwipe(
     containerRef,
     {
-      onSwipeLeft: view === 'calculator' ? () => navigateTo('details') : undefined,
+      onSwipeLeft: (view === 'calculator' && formData.type !== 'transfer') ? () => navigateTo('details') : undefined,
       onSwipeRight: view === 'details' ? () => navigateTo('calculator') : undefined,
     },
     {
@@ -255,11 +254,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
 
   const baseTranslate = view === 'calculator' ? 0 : -50;
   const dragTranslate = progress * 50;
-  let finalTranslate = baseTranslate + dragTranslate;
-
-  // Clamp translation to avoid overscroll showing empty background
-  if (finalTranslate > 0) finalTranslate = 0;
-  if (finalTranslate < -50) finalTranslate = -50;
+  const finalTranslate = baseTranslate + dragTranslate;
 
   const transformStyle = isDesktop ? {} : {
     transform: `translateX(${finalTranslate}%)`,
