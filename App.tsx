@@ -774,7 +774,6 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
               onNavigateToHistory={() => { window.history.pushState({ modal: 'history' }, ''); setIsHistoryClosing(false); setIsHistoryScreenOpen(true); }}
               onNavigateToIncomes={() => {
                   if (!isBalanceVisible) {
-                      showToast({ message: "Inserisci il PIN per sbloccare il Saldo", type: "info" });
                       setIsPinVerifierOpen(true);
                   } else {
                       window.history.pushState({ modal: 'income_history' }, ''); 
@@ -784,7 +783,6 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
               }}
               onNavigateToAccounts={() => {
                   if (!isBalanceVisible) {
-                      showToast({ message: "Inserisci il PIN per sbloccare il Saldo", type: "info" });
                       setIsPinVerifierOpen(true);
                   } else {
                       window.history.pushState({ modal: 'accounts' }, ''); 
