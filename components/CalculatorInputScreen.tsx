@@ -463,10 +463,10 @@ const CalculatorInputScreen = React.forwardRef<HTMLDivElement, CalculatorInputSc
             role="button"
             tabIndex={0}
             aria-label="Aggiungi dettagli"
-            aria-hidden={isDesktop}
+            aria-hidden={isDesktop || isTransfer}
             onClick={onNavigateToDetails}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onNavigateToDetails(); }}
-            className={`absolute top-1/2 -right-px w-8 h-[148px] flex items-center justify-center cursor-pointer ${isDesktop ? 'hidden' : ''}`}
+            className={`absolute top-1/2 -right-px w-8 h-[148px] flex items-center justify-center cursor-pointer ${isDesktop || isTransfer ? 'hidden' : ''}`}
             style={{ transform: 'translateY(calc(-50% + 2px))' }}
           >
             <div className="absolute inset-0 flex items-center justify-center">
