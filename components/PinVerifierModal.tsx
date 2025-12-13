@@ -3,7 +3,7 @@ import { XMarkIcon } from './icons/XMarkIcon';
 import { BackspaceIcon } from './icons/BackspaceIcon';
 import { FingerprintIcon } from './icons/FingerprintIcon'; 
 import { verifyPin } from '../utils/auth';
-import { unlockWithBiometric, isBiometricsAvailable } from '../services/biometrics'; 
+import { unlockWithBiometric, isBiometricsAvailable, isBiometricsEnabled } from '../services/biometrics'; 
 
 interface PinVerifierModalProps {
   isOpen: boolean;
@@ -27,9 +27,10 @@ const PinVerifierModal: React.FC<PinVerifierModalProps> = ({ isOpen, onClose, on
 
   const checkBiometrics = async () => {
     const available = await isBiometricsAvailable();
-    setIsBioAvailable(available);
+    const enabled = isBiometricsEnabled();
+    setIsBioAvailable(available && enabled);
     
-    if (available) {
+    if (available && enabled) {
       setTimeout(() => {
         handleBiometricScan();
       }, 300);
@@ -49,12 +50,12 @@ const PinVerifierModal: React.FC<PinVerifierModalProps> = ({ isOpen, onClose, on
   };
 
   const handleDigitClick = (digit: number) => {
-    if (pin.length < 4) { // CORRETTO: Limite a 4 cifre
+    if (pin.length < 4) {
       const newPin = pin + digit;
       setPin(newPin);
       setError(false);
       
-      if (newPin.length === 4) { // CORRETTO: Verifica al 4° numero
+      if (newPin.length === 4) {
         setTimeout(() => validatePin(newPin), 100);
       }
     }
@@ -66,13 +67,37 @@ const PinVerifierModal: React.FC<PinVerifierModalProps> = ({ isOpen, onClose, on
   };
 
   const validatePin = (inputPin: string) => {
-    if (verifyPin(inputPin)) {
-      onSuccess();
-    } else {
-      setError(true);
-      if (navigator.vibrate) navigator.vibrate(200);
-      setTimeout(() => setPin(''), 500);
-    }
+    // Note: In a real app, this should check against the user's stored PIN hash using email.
+    // For simplicity here, we assume it checks global or context auth.
+    // However, verifyPin requires hash/salt. 
+    // Since this modal is generic, we might need to fetch the user.
+    // BUT the original code simply called verifyPin(inputPin) which was wrong/incomplete in context of `utils/auth` signature.
+    // Assuming `verifyPin` is updated or used correctly elsewhere. 
+    // Let's assume for this specific modal, we need to fetch user data.
+    
+    // To keep it simple and consistent with existing `App.tsx` logic (which likely relies on successful PIN check),
+    // we need to fix how verifyPin is called if it requires hash/salt.
+    // `utils/api.ts` has `getUsers`.
+    
+    const users = import('../utils/api').then(mod => {
+        const userList = mod.getUsers();
+        const user = userList[email.toLowerCase()];
+        if (user) {
+             import('../utils/auth').then(authMod => {
+                 authMod.verifyPin(inputPin, user.pinHash, user.pinSalt).then(isValid => {
+                     if (isValid) {
+                         onSuccess();
+                     } else {
+                         setError(true);
+                         if (navigator.vibrate) navigator.vibrate(200);
+                         setTimeout(() => setPin(''), 500);
+                     }
+                 });
+             });
+        } else {
+             setError(true); // User not found
+        }
+    });
   };
 
   if (!isOpen) return null;
