@@ -1,0 +1,109 @@
+name: Sync from Secondary Repo & Restore Point
+
+on:
+  workflow_dispatch: # Avvio manuale dal tab Actions
+
+permissions:
+  contents: write
+
+jobs:
+  sync-and-backup:
+    runs-on: ubuntu-latest
+    steps:
+      # 1. Checkout della Repo Principale (Destinazione)
+      - name: Checkout Primary Repo
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.MY_PAT }} # Usa il token per poter pushare
+          fetch-depth: 0 # Scarica tutta la storia per creare il branch
+
+      # 2. Configurazione Git
+      - name: Setup Git User
+        run: |
+          git config --global user.name "Sync Bot"
+          git config --global user.email "bot@github.com"
+
+      # 3. CREAZIONE PUNTO DI RIPRISTINO (Backup Branch)
+      - name: Create Restore Point
+        run: |
+          TIMESTAMP=$(date +'%Y%m%d-%H%M%S')
+          BACKUP_BRANCH="backup/pre-sync-$TIMESTAMP"
+          echo "Creazione punto di ripristino: $BACKUP_BRANCH"
+          git checkout -b $BACKUP_BRANCH
+          git push origin $BACKUP_BRANCH
+          # Torna al main per applicare le modifiche
+          git checkout main
+
+      # 4. Checkout della Repo Secondaria (Sorgente) in una cartella temporanea
+      - name: Checkout Secondary Repo
+        uses: actions/checkout@v4
+        with:
+          repository: jerbamichol-del/prova # <--- INSERISCI QUI IL NOME
+          token: ${{ secrets.MY_PAT }}
+          path: temp-source # Scarica in una sottocartella
+
+      # 5. Trasferimento Chirurgico dei File
+      - name: Copy Specific Files
+        run: |
+          # Funzione per copiare un file se esiste
+          copy_file() {
+            if [ -f "temp-source/src/$1" ]; then
+              # Crea la cartella di destinazione se non esiste
+              mkdir -p "src/$(dirname "$1")"
+              cp "temp-source/src/$1" "src/$1"
+              echo "✅ Copiato: $1"
+            else
+              echo "⚠️ File non trovato nella sorgente: $1"
+            fi
+          }
+
+          # LISTA FILE DA AGGIORNARE
+          echo "Inizio trasferimento file..."
+          
+          # Root files
+          copy_file "App.tsx"
+          
+          # Components
+          copy_file "components/CalculatorContainer.tsx"
+          copy_file "components/ExpenseList.tsx"
+          copy_file "components/ImageParserModal.tsx"
+          copy_file "components/CategoryFilter.tsx"
+          copy_file "components/TrapezoidTab.tsx"
+          copy_file "components/TrapezoidTabRight.tsx"
+          copy_file "components/SoftTab.tsx"
+          copy_file "components/SoftBumpBaseline.tsx"
+          copy_file "components/EdgeSwipeCatcher.tsx"
+          copy_file "components/Dashboard.tsx"
+          copy_file "components/TransactionDetailPage.tsx"
+          copy_file "components/ExpenseForm.tsx"
+          
+          # Hooks
+          copy_file "hooks/useLeftSwipeFromRightEdge.ts"
+          copy_file "hooks/useLeftSwipeFromRightEdge_v2.ts"
+          copy_file "hooks/useSwipeDownCloseAtTop.ts"
+          copy_file "hooks/useLongPress.ts"
+          copy_file "hooks/useRecurringExpenseGenerator.ts"
+          copy_file "hooks/useCloudSync.ts"
+          copy_file "hooks/usePendingImages.ts"
+          copy_file "hooks/useInstallPrompt.ts"
+          copy_file "hooks/usePrivacyGate.ts"
+          copy_file "hooks/useBackNavigation.ts"
+          
+          # Utils & Types
+          copy_file "utils/date.ts"
+          copy_file "utils/cloud.ts"
+          copy_file "types/navigation.ts"
+          
+          # Screens
+          copy_file "screens/HistoryScreen.tsx"
+          copy_file "screens/RecurringExpensesScreen.tsx"
+
+          # Pulizia
+          rm -rf temp-source
+
+      # 6. Commit e Push delle modifiche
+      - name: Commit and Push Changes
+        run: |
+          git add .
+          git commit -m "🔄 Sync automatico da Repo Secondaria" || echo "Nessuna modifica da committare"
+          git push origin main
