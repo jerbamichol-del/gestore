@@ -38,23 +38,21 @@ jobs:
       - name: Checkout Secondary Repo
         uses: actions/checkout@v4
         with:
-          repository: jerbamichol-del/prova  # <--- TUA REPO SECONDARIA
+          repository: jerbamichol-del/prova  # <--- ASSICURATI CHE IL NOME SIA GIUSTO
           token: ${{ secrets.MY_PAT }}
           path: temp-source
 
       # 5. Trasferimento Chirurgico dei File
       - name: Copy Specific Files
         run: |
-          # Funzione di copia
+          # Funzione di copia diretta (Senza SRC)
           copy_file() {
+            # $1 è il percorso del file (es. "components/Dashboard.tsx")
             SOURCE_FILE="temp-source/$1"
-            DEST_FILE="src/$1"
-            # Se è App.tsx è nella root di src, se è altro mantiene il path
-            if [ "$1" == "App.tsx" ]; then
-                DEST_FILE="src/App.tsx"
-            fi
+            DEST_FILE="$1"  # <--- CORRETTO: Copia nella radice, non in src/
 
             if [ -f "$SOURCE_FILE" ]; then
+              # Crea la cartella di destinazione se non esiste (es. components/)
               mkdir -p "$(dirname "$DEST_FILE")"
               cp "$SOURCE_FILE" "$DEST_FILE"
               echo "✅ Copiato: $1"
@@ -121,5 +119,5 @@ jobs:
       - name: Commit and Push Changes
         run: |
           git add .
-          git commit -m "🔄 Sync Completo da Repo Secondaria (Nuova Struttura)" || echo "Nessuna modifica da committare"
+          git commit -m "🔄 Sync Completo da Repo Secondaria (Struttura Flat)" || echo "Nessuna modifica da committare"
           git push origin main
