@@ -383,18 +383,24 @@ const Dashboard: React.FC<DashboardProps> = ({
         }
     }
     
+    // Filter transactions for the selected period
     const periodTransactions = validExpenses.filter(e => {
         const expenseDate = parseLocalYYYYMMDD(e.date);
         return expenseDate >= start && expenseDate <= end;
     });
         
-    // Calculate Totals by Type (ignoring Transfers in global budget for now, focusing on in/out flow)
+    // Calculate Totals by Type
     const periodExpenses = periodTransactions.filter(e => e.type === 'expense');
     const periodIncome = periodTransactions.filter(e => e.type === 'income');
+    // Important: Adjustments must be included in the net budget calculation!
+    const periodAdjustments = periodTransactions.filter(e => e.type === 'adjustment');
 
     const totalExp = periodExpenses.reduce((acc, e) => acc + Number(e.amount), 0);
     const totalInc = periodIncome.reduce((acc, e) => acc + Number(e.amount), 0);
-    const budget = totalInc - totalExp;
+    // Adjustments are signed amounts (+ or -), so we just add them
+    const totalAdj = periodAdjustments.reduce((acc, e) => acc + Number(e.amount), 0);
+    
+    const budget = totalInc - totalExp + totalAdj;
     
     // Recurring count logic (only count expenses)
     let recurringCount = 0;
