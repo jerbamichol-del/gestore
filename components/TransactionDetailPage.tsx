@@ -16,6 +16,7 @@ import { formatCurrency } from './icons/formatters';
 import SelectionMenu from './SelectionMenu';
 import { useTapBridge } from '../hooks/useTapBridge';
 import { pickImage, processImageFile } from '../utils/fileHelper';
+import { parseLocalYYYYMMDD, toYYYYMMDD } from '../utils/date';
 
 interface TransactionDetailPageProps {
   formData: Partial<Omit<Expense, 'id'>>;
@@ -27,19 +28,6 @@ interface TransactionDetailPageProps {
   onMenuStateChange: (isOpen: boolean) => void;
   dateError: boolean;
 }
-
-const toYYYYMMDD = (date: Date) => {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-};
-
-const parseLocalYYYYMMDD = (s?: string | null) => {
-  if (!s) return null;
-  const [Y, M, D] = s.split('-').map(Number);
-  return new Date(Date.UTC(Y, M - 1, D));
-};
 
 const recurrenceLabels = {
   daily: 'Giornaliera',
@@ -567,12 +555,10 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
           <div className="flex justify-center items-center py-0">
             <div className={`relative flex items-baseline justify-center ${isIncome ? 'text-green-600' : isTransfer ? 'text-sky-600' : isAdjustment ? 'text-slate-600' : 'text-indigo-600'}`}>
                 <span className="text-[2.6rem] leading-none font-bold tracking-tighter relative z-10">
-                    {/* For adjustment, we want to see the sign if it's negative */}
                     {isAdjustment 
                       ? formatCurrency(formData.amount || 0).replace(/[€\s]/g, '')
                       : formatCurrency(Math.abs(formData.amount || 0)).replace(/[^0-9,.]/g, '')}
                 </span>
-                {/* Prefix for standard types */}
                 {!isAdjustment && (
                   <span className={`text-3xl font-medium opacity-70 absolute ${isIncome ? 'text-green-400' : isTransfer ? 'text-sky-400' : 'text-indigo-400'}`} style={{ right: '100%', marginRight: '8px', top: '4px' }}>
                       {isIncome ? '+' : isTransfer ? '' : '-'}

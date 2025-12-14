@@ -1,3 +1,4 @@
+
 // CalculatorContainer.tsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Expense, Account } from '../types';
@@ -5,6 +6,7 @@ import CalculatorInputScreen from './CalculatorInputScreen';
 import TransactionDetailPage from './TransactionDetailPage';
 import { useSwipe } from '../hooks/useSwipe';
 import { useTapBridge } from '../hooks/useTapBridge';
+import { toYYYYMMDD } from '../utils/date';
 
 interface CalculatorContainerProps {
   isOpen: boolean;
@@ -30,14 +32,6 @@ const useMediaQuery = (query: string) => {
   return matches;
 };
 
-// Local time utilities to prevent date shifting
-const toYYYYMMDD = (date: Date) => {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-};
-
 const getCurrentTime = () =>
   new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
 
@@ -51,20 +45,11 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   const [isAnimating, setIsAnimating] = useState(false);
   const [view, setView] = useState<'calculator' | 'details'>('calculator');
   const [keyboardOpen, setKeyboardOpen] = useState(false);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [dateError, setDateError] = useState(false);
-  
-  // Lock state for UI feedback
-  const [isSubmitting, setIsSubmitting] = useState(false); 
-  // Lock ref for synchronous blocking of duplicate events
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const submittingRef = useRef(false);
-
-  // NEW: gate per riattivare lo swipe a ogni apertura
   const [swipeReady, setSwipeReady] = useState(false);
-  
-  // NEW: track if entry animation is finished to prevent inner transition artifacts
   const [isEntryAnimationFinished, setIsEntryAnimationFinished] = useState(false);
-
   const timeoutsRef = useRef<number[]>([]);
   const tapBridgeHandlers = useTapBridge();
 
@@ -90,6 +75,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
       recurrenceEndType: 'forever',
       recurrenceEndDate: undefined,
       recurrenceCount: undefined,
+      type: 'expense'
     }),
     [accounts]
   );
@@ -97,14 +83,10 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   const [formData, setFormData] = useState<Partial<Omit<Expense, 'id'>>>(resetFormData);
   const isDesktop = useMediaQuery('(min-width: 768px)');
 
-  // VisualViewport per tastiera
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv || !isOpen) return;
-
-    // reset stato tastiera all'apertura
     setKeyboardOpen(false);
-
     const handleResize = () => {
       const isKeyboardVisible = window.innerHeight - vv.height > 120;
       setKeyboardOpen(isKeyboardVisible);
@@ -113,30 +95,19 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
     return () => vv.removeEventListener('resize', handleResize);
   }, [isOpen]);
 
-  // Animazioni + reset + (NEW) swipeReady
   useEffect(() => {
     if (isOpen) {
       setFormData(resetFormData());
       setDateError(false);
-      
-      // Reset submission locks
-      setIsSubmitting(false); 
+      setIsSubmitting(false);
       submittingRef.current = false;
-
       setView('calculator');
-      // gate: disabilita e riabilita swipe dopo breve delay per forzare rebind
       setSwipeReady(false);
-      setIsEntryAnimationFinished(false); // Disable transitions initially
-
+      setIsEntryAnimationFinished(false);
       const t1 = addTimeout(window.setTimeout(() => setIsAnimating(true), 10));
       const t2 = addTimeout(window.setTimeout(() => setSwipeReady(true), 50));
       const t3 = addTimeout(window.setTimeout(() => setIsEntryAnimationFinished(true), 300));
-
-      return () => {
-        clearTimeout(t1);
-        clearTimeout(t2);
-        clearTimeout(t3);
-      };
+      return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
     } else {
       setIsAnimating(false);
       setSwipeReady(false);
@@ -151,186 +122,90 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
     }
   }, [isOpen, resetFormData, addTimeout]);
 
-  // Handle browser back button for internal navigation (Calculator <-> Details)
   useEffect(() => {
     if (!isOpen) return;
-
     const handlePopState = (event: PopStateEvent) => {
-        if (view === 'details') {
-            const state = event.state;
-            if (!state || state.modal !== 'calculator_details') {
-                setView('calculator');
-            }
+      if (view === 'details') {
+        const state = event.state;
+        if (!state || state.modal !== 'calculator_details') {
+          setView('calculator');
         }
+      }
     };
-
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, [isOpen, view]);
 
-  // Cleanup timeouts
-  useEffect(() => {
-    return () => timeoutsRef.current.forEach(clearTimeout);
-  }, []);
+  useEffect(() => { return () => timeoutsRef.current.forEach(clearTimeout); }, []);
 
   const containerRef = useRef<HTMLDivElement>(null);
 
   const navigateTo = useCallback((next: 'calculator' | 'details') => {
     if (view === next) return;
     (document.activeElement as HTMLElement | null)?.blur?.();
-    
-    if (next === 'details') {
-        window.history.pushState({ modal: 'calculator_details' }, '');
-    } else if (next === 'calculator' && view === 'details') {
-        window.history.back();
-        return; 
-    }
-
+    if (next === 'details') { window.history.pushState({ modal: 'calculator_details' }, ''); }
+    else if (next === 'calculator' && view === 'details') { window.history.back(); return; }
     setView(next);
     window.dispatchEvent(new CustomEvent('page-activated', { detail: next }));
-    
     setTimeout(() => {
       const vv: any = (window as any).visualViewport;
       const start = Date.now();
-      const check = () => {
-        if (!vv || Date.now() - start > 200) return;
-        requestAnimationFrame(check);
-      };
+      const check = () => { if (!vv || Date.now() - start > 200) return; requestAnimationFrame(check); };
       check();
     }, 0);
   }, [view]);
 
-  // Swipe handler (abilitato solo quando swipeReady è true)
   const { progress, isSwiping } = useSwipe(
     containerRef,
     {
-      // Abilita lo swipe a sinistra (verso dettagli) SOLO se NON è un trasferimento
       onSwipeLeft: (view === 'calculator' && formData.type !== 'transfer') ? () => navigateTo('details') : undefined,
       onSwipeRight: view === 'details' ? () => navigateTo('calculator') : undefined,
     },
-    {
-      enabled: swipeReady && !isDesktop && isOpen && !isMenuOpen && !keyboardOpen,
-      threshold: 36,
-      slop: 10,
-      // Impedisci il trascinamento visivo se l'azione non è consentita o non ha destinazione
-      disableDrag: (intent) => {
-          // 1. Blocca swipe verso dettagli se è un trasferimento
-          if (view === 'calculator' && intent === 'left' && formData.type === 'transfer') {
-              return true;
-          }
-          // 2. Blocca swipe a destra (indietro) se siamo già sulla calcolatrice (evita effetto elastico)
-          if (view === 'calculator' && intent === 'right') {
-              return true;
-          }
-          // 3. Blocca swipe a sinistra (avanti) se siamo già sui dettagli (fine corsa)
-          if (view === 'details' && intent === 'left') {
-              return true;
-          }
-          return false;
-      }
-    }
+    { threshold: 60, slop: 10, enabled: swipeReady }
   );
 
-  useEffect(() => {
-    onMenuStateChange(isMenuOpen || keyboardOpen);
-  }, [isMenuOpen, keyboardOpen, onMenuStateChange]);
-
-  const handleFormChange = useCallback((patch: Partial<Omit<Expense, 'id'>>) => {
-    if ('date' in patch && patch.date) setDateError(false);
-    setFormData(prev => ({ ...prev, ...patch }));
+  const handleFormChange = useCallback((newData: Partial<Omit<Expense, 'id'>>) => {
+    setFormData(prev => ({ ...prev, ...newData }));
   }, []);
 
-  const handleAttemptSubmit = useCallback((data: Omit<Expense, 'id'>) => {
-    // Synchronous check to prevent double submission
-    if (submittingRef.current) return;
-
-    if (!data.date) {
-      navigateTo('details');
-      setDateError(true);
-      const t = addTimeout(window.setTimeout(() => document.getElementById('date')?.focus(), 150));
-      return;
-    }
-    
-    // Lock immediately
-    submittingRef.current = true;
+  const handleSubmit = useCallback((data: Omit<Expense, 'id'>) => {
+    if (isSubmitting || submittingRef.current) return;
     setIsSubmitting(true);
-    setDateError(false);
-    
-    // IF we are in details view, pop that state first so parent close works as expected
-    if (view === 'details') {
-         window.history.back(); // Pop 'details' state
-         // onSubmit typically closes the modal, which will eventually unmount this component
-         // or reset state via the isOpen prop change.
-         onSubmit(data); 
-    } else {
-         onSubmit(data);
-    }
-  }, [view, navigateTo, onSubmit, addTimeout]);
+    submittingRef.current = true;
+    onSubmit(data);
+  }, [isSubmitting, onSubmit]);
 
-  if (!isOpen) return null;
-
-  const baseTranslate = view === 'calculator' ? 0 : -50;
-  const dragTranslate = progress * 50;
-  const finalTranslate = baseTranslate + dragTranslate;
-
-  const transformStyle = isDesktop ? {} : {
-    transform: `translateX(${finalTranslate}%)`,
-    transition: (isSwiping || !isEntryAnimationFinished) ? 'none' : 'transform 0.25s ease-out',
-    willChange: 'transform',
-  };
+  if (!isOpen && !isAnimating) return null;
 
   return (
     <div
-      className={`fixed inset-0 z-[5000] bg-slate-100 transform transition-transform duration-300 ease-in-out ${
-        isAnimating ? 'translate-y-0' : 'translate-y-full'
-      }`}
-      aria-modal="true"
-      role="dialog"
-      style={{ touchAction: 'pan-y' }}
+      ref={containerRef}
+      className={`fixed inset-0 z-[5000] flex flex-col bg-slate-100 transition-transform duration-300 ease-in-out ${isAnimating ? 'translate-y-0' : 'translate-y-full'}`}
       {...tapBridgeHandlers}
     >
-      <div
-        ref={containerRef}
-        className="relative h-full w-full overflow-hidden"
-        style={{ touchAction: 'pan-y' }}
-      >
-        <div
-          className="absolute inset-0 flex w-[200%] md:w-full md:grid md:grid-cols-2"
-          style={transformStyle}
-        >
-          <div
-            className={`w-1/2 md:w-auto h-full relative overflow-hidden ${view === 'calculator' ? 'z-10' : 'z-0'}`}
-            aria-hidden={!isDesktop && view !== 'calculator'}
-          >
-            <CalculatorInputScreen
-              formData={formData}
-              onFormChange={handleFormChange}
-              onClose={onClose}
-              onSubmit={handleAttemptSubmit}
-              accounts={accounts}
-              onNavigateToDetails={() => navigateTo('details')}
-              onMenuStateChange={setIsMenuOpen}
-              isDesktop={isDesktop}
-            />
-          </div>
-
-          <div
-            className={`w-1/2 md:w-auto h-full relative overflow-hidden ${view === 'details' ? 'z-10' : 'z-0'}`}
-            aria-hidden={!isDesktop && view !== 'details'}
-          >
-            <TransactionDetailPage
-              formData={formData}
-              onFormChange={handleFormChange}
-              accounts={accounts}
-              onClose={() => navigateTo('calculator')}
-              onSubmit={handleAttemptSubmit}
-              isDesktop={isDesktop}
-              onMenuStateChange={setIsMenuOpen}
-              dateError={dateError}
-            />
-          </div>
-        </div>
-      </div>
+      {view === 'calculator' ? (
+        <CalculatorInputScreen
+          onClose={onClose}
+          onSubmit={handleSubmit}
+          accounts={accounts}
+          formData={formData}
+          onFormChange={handleFormChange}
+          onMenuStateChange={onMenuStateChange}
+          isDesktop={isDesktop}
+          onNavigateToDetails={() => navigateTo('details')}
+        />
+      ) : (
+        <TransactionDetailPage
+          formData={formData}
+          onFormChange={handleFormChange}
+          accounts={accounts}
+          onClose={() => navigateTo('calculator')}
+          onSubmit={handleSubmit}
+          isDesktop={isDesktop}
+          onMenuStateChange={onMenuStateChange}
+          dateError={dateError}
+        />
+      )}
     </div>
   );
 };

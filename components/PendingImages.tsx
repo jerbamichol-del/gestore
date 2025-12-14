@@ -1,9 +1,9 @@
+
 import React, { useState } from 'react';
 import { OfflineImage } from '../utils/db';
 import { SpinnerIcon } from './icons/SpinnerIcon';
 import { TrashIcon } from './icons/TrashIcon';
 import { ChevronDownIcon } from './icons/ChevronDownIcon';
-import { useTapBridge } from '../hooks/useTapBridge';
 
 interface PendingImagesProps {
   images: OfflineImage[];
@@ -15,7 +15,6 @@ interface PendingImagesProps {
 
 const PendingImages: React.FC<PendingImagesProps> = ({ images, onAnalyze, onDelete, isOnline, syncingImageId }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const tapBridge = useTapBridge();
 
   if (!images || images.length === 0) {
     return null;
@@ -29,7 +28,6 @@ const PendingImages: React.FC<PendingImagesProps> = ({ images, onAnalyze, onDele
         className="w-full flex items-center justify-between p-6 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 rounded-2xl"
         onClick={() => setIsOpen(!isOpen)}
         aria-expanded={isOpen}
-        {...tapBridge}
       >
         <div className="flex items-center gap-3">
             <h2 className="text-xl font-bold text-slate-700">Immagini in Attesa</h2>
@@ -67,7 +65,6 @@ const PendingImages: React.FC<PendingImagesProps> = ({ images, onAnalyze, onDele
                       disabled={!isOnline || isAnalyzing}
                       className="flex-1 px-2 py-1.5 text-xs font-semibold text-white bg-indigo-600 rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors disabled:bg-indigo-400 disabled:cursor-not-allowed"
                       title={!isOnline ? "Connettiti a internet per analizzare" : "Analizza immagine"}
-                      {...tapBridge}
                     >
                       Analizza
                     </button>
@@ -76,7 +73,6 @@ const PendingImages: React.FC<PendingImagesProps> = ({ images, onAnalyze, onDele
                       disabled={isAnalyzing}
                       className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-100 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       aria-label="Elimina immagine in attesa"
-                      {...tapBridge}
                     >
                       <TrashIcon className="w-5 h-5" />
                     </button>

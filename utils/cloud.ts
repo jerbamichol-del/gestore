@@ -1,7 +1,9 @@
+
 import { Expense, Account } from '../types';
 
-// Sostituisci con il tuo URL se è cambiato, altrimenti lascia quello che hai
-const CLOUD_API_URL = 'https://script.google.com/macros/s/AKfycbzuAtweyuib21-BX4dQszoxEL5BW-nzVN2Vyum4UZvWH-TzP3GLZB5He1jFkrO6242JPA/exec';
+// Use environment variable if available, otherwise fallback to the hardcoded URL
+// This ensures identical behavior while allowing configuration
+const CLOUD_API_URL = (import.meta as any).env?.VITE_GOOGLE_SCRIPT_URL || 'https://script.google.com/macros/s/AKfycbzuAtweyuib21-BX4dQszoxEL5BW-nzVN2Vyum4UZvWH-TzP3GLZB5He1jFkrO6242JPA/exec';
 
 export interface AppData {
   expenses: Expense[];
@@ -33,7 +35,6 @@ export const checkUserInCloud = async (email: string): Promise<boolean> => {
   } catch (e) {
     console.error("Errore check user:", e);
     return false;
-    // Se c'è errore, assumiamo che non esista per non bloccare, o gestisci diversamente
   }
 };
 
@@ -47,7 +48,7 @@ export const saveToCloud = async (
     fetch(CLOUD_API_URL, {
       method: 'POST',
       mode: 'no-cors',
-      keepalive: true, // <--- MODIFICA FONDAMENTALE PER SALVATAGGIO IN USCITA
+      keepalive: true, // Fondamentale per salvataggio in uscita
       headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify({
         action: 'save',

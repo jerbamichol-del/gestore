@@ -1,3 +1,4 @@
+
 // components/ExpenseForm.tsx
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
@@ -19,6 +20,7 @@ import { PaperClipIcon } from './icons/PaperClipIcon';
 import { CameraIcon } from './icons/CameraIcon';
 import { PhotoIcon } from './icons/PhotoIcon';
 import { pickImage, processImageFile } from '../utils/fileHelper';
+import { parseLocalYYYYMMDD, toYYYYMMDD } from '../utils/date';
 
 interface ExpenseFormProps {
   isOpen: boolean;
@@ -29,13 +31,6 @@ interface ExpenseFormProps {
   accounts: Account[];
   isForRecurringTemplate?: boolean;
 }
-
-const toYYYYMMDD = (date: Date) => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-};
 
 const getCurrentTime = () => new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
 const getTodayString = () => toYYYYMMDD(new Date());
@@ -59,14 +54,6 @@ const FormInput = React.memo(React.forwardRef<HTMLInputElement, FormInputProps>(
   );
 }));
 FormInput.displayName = 'FormInput';
-
-// ... (Rest of existing utility functions: parseLocalYYYYMMDD, recurrenceLabels, etc.) ...
-// Omitted for brevity since they are unchanged, but they MUST remain in the file.
-const parseLocalYYYYMMDD = (dateString: string | null): Date | null => {
-  if (!dateString) return null;
-  const parts = dateString.split('-').map(Number);
-  return new Date(parts[0], parts[1] - 1, parts[2]);
-};
 
 const recurrenceLabels: Record<'daily' | 'weekly' | 'monthly' | 'yearly', string> = { daily: 'Giornaliera', weekly: 'Settimanale', monthly: 'Mensile', yearly: 'Annuale' };
 const daysOfWeekLabels = { 0: 'Dom', 1: 'Lun', 2: 'Mar', 3: 'Mer', 4: 'Gio', 5: 'Ven', 6: 'Sab' };
@@ -169,7 +156,6 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
   const isIncome = formData.type === 'income';
   const isTransfer = formData.type === 'transfer';
   
-  // ... (useMemo for dynamicMonthlyDayOfWeekLabel and resetForm logic same as before) ...
   const dynamicMonthlyDayOfWeekLabel = useMemo(() => {
     const dateString = formData.date;
     if (!dateString) return "Seleziona una data di inizio valida";
@@ -269,7 +255,6 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
     }
   }, [isOpen, initialData, prefilledData, resetForm, safeAccounts, isForRecurringTemplate]);
   
-  // ... (useEffect for modals animation same as before) ...
   useEffect(() => {
     if (isRecurrenceModalOpen) {
       setTempRecurrence(formData.recurrence || 'monthly');
@@ -349,7 +334,6 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
     setActiveMenu(null);
   };
 
-  // ... (handleFrequencyOptionSelect, handleCloseRecurrenceModal, handleApplyRecurrence, handleRecurrenceEndTypeSelect, handleToggleDay, handleCloseReceiptMenu, handlePickReceipt, handleRemoveReceipt same as before) ...
   const handleFrequencyOptionSelect = (value: 'none' | 'single' | 'recurring') => {
       const updates: Partial<Omit<Expense, 'id'>> = {};
       if (value === 'none') {
@@ -510,7 +494,6 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
     el.blur();
   }, []);
 
-  // ... (renderImageViewer same as before) ...
   const renderImageViewer = () => {
       if (!viewingImage) return null;
       return createPortal(
@@ -561,7 +544,6 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
       label: acc.name,
   }));
 
-  // Options for destination account (exclude current source account)
   const toAccountOptions = safeAccounts
     .filter(acc => acc.id !== formData.accountId)
     .map(acc => ({
@@ -618,322 +600,43 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ isOpen, onClose, onSubmit, in
   
   return (
     <>
-    <div
-      className={`fixed inset-0 z-[5000] transition-opacity duration-300 ease-in-out ${isAnimating ? 'opacity-100' : 'opacity-0'} bg-slate-900/60 backdrop-blur-sm`}
-      onClick={handleBackdropClick}
-      aria-modal="true"
-      role="dialog"
-    >
-      <div
-        className={`bg-slate-50 w-full h-full flex flex-col absolute bottom-0 transform transition-transform duration-300 ease-in-out ${isAnimating ? 'translate-y-0' : 'translate-y-full'}`}
-        onClick={(e) => e.stopPropagation()}
-        style={{ touchAction: 'pan-y' }}
-      >
-        <header className="flex justify-between items-center p-6 border-b border-slate-200 flex-shrink-0">
-          <h2 ref={titleRef} tabIndex={-1} className="text-2xl font-bold text-slate-800 focus:outline-none">
-              {isEditing 
-                ? (isTransfer ? 'Modifica Trasferimento' : isIncome ? 'Modifica Entrata' : 'Modifica Spesa') 
-                : (isTransfer ? 'Nuovo Trasferimento' : isIncome ? 'Aggiungi Entrata' : 'Aggiungi Spesa')}
-          </h2>
-          <button
-            type="button"
-            onClick={handleClose}
-            className="text-slate-500 hover:text-slate-800 transition-colors p-1 rounded-full hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            aria-label="Chiudi"
-          >
-            <XMarkIcon className="w-6 h-6" />
-          </button>
-        </header>
+    <div className={`fixed inset-0 z-[5000] transition-opacity duration-300 ease-in-out ${isAnimating ? 'opacity-100' : 'opacity-0'} bg-slate-900/60 backdrop-blur-sm`} onClick={handleBackdropClick} aria-modal="true" role="dialog">
+      <div className={`bg-slate-50 w-full h-full flex flex-col absolute bottom-0 transform transition-transform duration-300 ease-in-out ${isAnimating ? 'translate-y-0' : 'translate-y-full'}`} onClick={(e) => e.stopPropagation()} style={{ touchAction: 'pan-y' }}>
+        <header className="flex justify-between items-center p-6 border-b border-slate-200 flex-shrink-0"><h2 ref={titleRef} tabIndex={-1} className="text-2xl font-bold text-slate-800 focus:outline-none">{isEditing ? (isTransfer ? 'Modifica Trasferimento' : isIncome ? 'Modifica Entrata' : 'Modifica Spesa') : (isTransfer ? 'Nuovo Trasferimento' : isIncome ? 'Aggiungi Entrata' : 'Aggiungi Spesa')}</h2><button type="button" onClick={handleClose} className="text-slate-500 hover:text-slate-800 transition-colors p-1 rounded-full hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500" aria-label="Chiudi"><XMarkIcon className="w-6 h-6" /></button></header>
         <form onSubmit={handleSubmit} noValidate className="flex-1 flex flex-col overflow-hidden">
           <div className="p-6 space-y-4 flex-1 overflow-y-auto">
-               <FormInput
-                 ref={descriptionInputRef}
-                 id="description"
-                 name="description"
-                 label="Descrizione (opzionale)"
-                 value={formData.description || ''}
-                 onChange={handleInputChange}
-                 icon={<DocumentTextIcon className="h-5 w-5 text-slate-400" />}
-                 type="text"
-                 placeholder="Es. Caffè al bar"
-               />
-
-               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                 <FormInput
-                     ref={amountInputRef}
-                     id="amount"
-                     name="amount"
-                     label="Importo"
-                     value={formData.amount || ''}
-                     onChange={handleInputChange}
-                     onKeyDown={handleAmountEnter}
-                     icon={<CurrencyEuroIcon className="h-5 w-5 text-slate-400" />}
-                     type="text"
-                     inputMode="decimal"
-                     pattern="[0-9]*[.,]?[0-9]*"
-                     placeholder="0.00"
-                     required
-                     autoComplete="off"
-                 />
-                 <div className={`grid ${formData.frequency === 'recurring' ? 'grid-cols-1' : 'grid-cols-2'} gap-2`}>
-                     <div>
-                         <label htmlFor="date" className="block text-base font-medium text-slate-700 mb-1">{isSingleRecurring ? 'Data del Pagamento' : formData.frequency === 'recurring' ? 'Data di Inizio' : 'Data'}</label>
-                         <div className="relative">
-                             <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                                 <CalendarIcon className="h-5 w-5 text-slate-400" />
-                             </div>
-                             <input
-                                 id="date"
-                                 name="date"
-                                 value={formData.date || ''}
-                                 onChange={handleInputChange}
-                                 className="block w-full rounded-md border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-base"
-                                 type="date"
-                             />
-                         </div>
-                     </div>
-                     {formData.frequency !== 'recurring' && (
-                       <div>
-                           <label htmlFor="time" className="block text-base font-medium text-slate-700 mb-1">Ora (opz.)</label>
-                           <div className="relative">
-                               <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                                   <ClockIcon className="h-5 w-5 text-slate-400" />
-                               </div>
-                               <input
-                                   id="time"
-                                   name="time"
-                                   value={formData.time || ''}
-                                   onChange={handleInputChange}
-                                   className="block w-full rounded-md border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-base"
-                                   type="time"
-                               />
-                           </div>
-                       </div>
-                     )}
-                 </div>
-               </div>
+               <FormInput ref={descriptionInputRef} id="description" name="description" label="Descrizione (opzionale)" value={formData.description || ''} onChange={handleInputChange} icon={<DocumentTextIcon className="h-5 w-5 text-slate-400" />} type="text" placeholder="Es. Caffè al bar"/>
+               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><FormInput ref={amountInputRef} id="amount" name="amount" label="Importo" value={formData.amount || ''} onChange={handleInputChange} onKeyDown={handleAmountEnter} icon={<CurrencyEuroIcon className="h-5 w-5 text-slate-400" />} type="text" inputMode="decimal" pattern="[0-9]*[.,]?[0-9]*" placeholder="0.00" required autoComplete="off"/>
+                 <div className={`grid ${formData.frequency === 'recurring' ? 'grid-cols-1' : 'grid-cols-2'} gap-2`}><div><label htmlFor="date" className="block text-base font-medium text-slate-700 mb-1">{isSingleRecurring ? 'Data del Pagamento' : formData.frequency === 'recurring' ? 'Data di Inizio' : 'Data'}</label><div className="relative"><div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3"><CalendarIcon className="h-5 w-5 text-slate-400" /></div><input id="date" name="date" value={formData.date || ''} onChange={handleInputChange} className="block w-full rounded-md border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-base" type="date"/></div></div>
+                     {formData.frequency !== 'recurring' && (<div><label htmlFor="time" className="block text-base font-medium text-slate-700 mb-1">Ora (opz.)</label><div className="relative"><div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3"><ClockIcon className="h-5 w-5 text-slate-400" /></div><input id="time" name="time" value={formData.time || ''} onChange={handleInputChange} className="block w-full rounded-md border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-base" type="time"/></div></div>)}</div></div>
               
-              {isTransfer ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <SelectionButton 
-                        label="Da Conto"
-                        value={selectedAccountLabel}
-                        onClick={() => setActiveMenu('account')}
-                        placeholder="Seleziona"
-                        ariaLabel="Seleziona conto di origine"
-                        icon={<CreditCardIcon className="h-7 w-7" />}
-                        />
-                      <SelectionButton 
-                        label="A Conto"
-                        value={selectedToAccountLabel}
-                        onClick={() => setActiveMenu('toAccount')}
-                        placeholder="Seleziona"
-                        ariaLabel="Seleziona conto di destinazione"
-                        icon={<CreditCardIcon className="h-7 w-7" />}
-                        />
-                  </div>
-              ) : isIncome ? (
-                  <div className="grid grid-cols-1 gap-4">
-                      <SelectionButton 
-                        label="Conto"
-                        value={selectedAccountLabel}
-                        onClick={() => setActiveMenu('account')}
-                        placeholder="Seleziona"
-                        ariaLabel="Seleziona conto di accredito"
-                        icon={<CreditCardIcon className="h-7 w-7" />}
-                        />
-                  </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <SelectionButton 
-                    label="Conto"
-                    value={selectedAccountLabel}
-                    onClick={() => setActiveMenu('account')}
-                    placeholder="Seleziona"
-                    ariaLabel="Seleziona conto di pagamento"
-                    icon={<CreditCardIcon className="h-7 w-7" />}
-                    />
-                    <SelectionButton 
-                    label="Categoria (opzionale)"
-                    value={selectedCategoryLabel}
-                    onClick={() => setActiveMenu('category')}
-                    placeholder="Seleziona"
-                    ariaLabel="Seleziona categoria"
-                    icon={<TagIcon className="h-5 w-5" />}
-                    />
-                    <SelectionButton 
-                    label="Sottocategoria (opzionale)"
-                    value={formData.subcategory}
-                    onClick={() => setActiveMenu('subcategory')}
-                    placeholder="Seleziona"
-                    ariaLabel="Seleziona sottocategoria"
-                    disabled={isSubcategoryDisabled}
-                    icon={<TagIcon className="h-5 w-5" />}
-                    />
-                </div>
-              )}
+              {isTransfer ? (<div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><SelectionButton label="Da Conto" value={selectedAccountLabel} onClick={() => setActiveMenu('account')} placeholder="Seleziona" ariaLabel="Seleziona conto di origine" icon={<CreditCardIcon className="h-7 w-7" />} /><SelectionButton label="A Conto" value={selectedToAccountLabel} onClick={() => setActiveMenu('toAccount')} placeholder="Seleziona" ariaLabel="Seleziona conto di destinazione" icon={<CreditCardIcon className="h-7 w-7" />} /></div>) : isIncome ? (<div className="grid grid-cols-1 gap-4"><SelectionButton label="Conto" value={selectedAccountLabel} onClick={() => setActiveMenu('account')} placeholder="Seleziona" ariaLabel="Seleziona conto di accredito" icon={<CreditCardIcon className="h-7 w-7" />} /></div>) : (<div className="grid grid-cols-1 sm:grid-cols-3 gap-4"><SelectionButton label="Conto" value={selectedAccountLabel} onClick={() => setActiveMenu('account')} placeholder="Seleziona" ariaLabel="Seleziona conto di pagamento" icon={<CreditCardIcon className="h-7 w-7" />} /><SelectionButton label="Categoria (opzionale)" value={selectedCategoryLabel} onClick={() => setActiveMenu('category')} placeholder="Seleziona" ariaLabel="Seleziona categoria" icon={<TagIcon className="h-5 w-5" />} /><SelectionButton label="Sottocategoria (opzionale)" value={formData.subcategory} onClick={() => setActiveMenu('subcategory')} placeholder="Seleziona" ariaLabel="Seleziona sottocategoria" disabled={isSubcategoryDisabled} icon={<TagIcon className="h-5 w-5" />} /></div>)}
               
-              {/* Ricevute Section - Nascosta per le entrate e i trasferimenti */}
-              {!isIncome && !isTransfer && (
-                  <div className="animate-fade-in-up">
-                      <label className="block text-base font-medium text-slate-700 mb-1">Ricevute</label>
-                      {formData.receipts && formData.receipts.length > 0 && (
-                          <div className="grid grid-cols-2 gap-3 mb-3">
-                              {formData.receipts.map((receipt, index) => (
-                                  <div 
-                                    key={index} 
-                                    className="relative rounded-lg overflow-hidden border border-slate-200 shadow-sm aspect-video bg-slate-50 cursor-pointer hover:border-indigo-300 transition-colors"
-                                    onClick={() => setViewingImage(receipt)}
-                                  >
-                                      <img 
-                                          src={`data:image/png;base64,${receipt}`} 
-                                          alt="Ricevuta" 
-                                          className="w-full h-full object-cover"
-                                      />
-                                      <button 
-                                          type="button"
-                                          onClick={(e) => { 
-                                              e.stopPropagation(); 
-                                              handleRemoveReceipt(index); 
-                                          }}
-                                          onPointerDown={(e) => e.stopPropagation()}
-                                          className="absolute top-1 right-1 p-1 bg-white/90 text-red-600 rounded-full shadow-md hover:bg-red-50 hover:text-red-700 transition-colors z-10 flex items-center justify-center"
-                                          aria-label="Rimuovi ricevuta"
-                                      >
-                                          <XMarkIcon className="w-5 h-5" />
-                                      </button>
-                                  </div>
-                              ))}
-                          </div>
-                      )}
-                      <button
-                          type="button"
-                          onClick={() => {
-                              if (Date.now() - receiptMenuCloseTimeRef.current < 500) return;
-                              setIsReceiptMenuOpen(true);
-                          }}
-                          className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-base rounded-lg border border-dashed border-indigo-300 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:border-indigo-400 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                      >
-                          <PaperClipIcon className="w-5 h-5" />
-                          <span>{formData.receipts && formData.receipts.length > 0 ? 'Aggiungi un\'altra ricevuta' : 'Allega Ricevuta'}</span>
-                      </button>
-                  </div>
-              )}
-              
-              {isForRecurringTemplate && !isIncome && !isTransfer && (
-                 <div className="bg-white p-4 rounded-lg border border-slate-200 space-y-4">
-                   <div>
-                       <label className="block text-base font-medium text-slate-700 mb-1">Frequenza</label>
-                        <button
-                           type="button"
-                           onClick={() => setActiveMenu('frequency')}
-                           className="w-full flex items-center justify-between text-left gap-2 px-3 py-2.5 text-base rounded-lg border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors bg-white border-slate-300 text-slate-800 hover:bg-slate-50"
-                       >
-                         <span className="truncate flex-1 capitalize">
-                           {isSingleRecurring ? 'Singolo' : formData.frequency !== 'recurring' ? 'Nessuna' : 'Ricorrente'}
-                         </span>
-                         <ChevronDownIcon className="w-5 h-5 text-slate-500" />
-                       </button>
-                   </div>
-
-                   {formData.frequency === 'recurring' && !isSingleRecurring && (
-                     <div className="animate-fade-in-up">
-                       <label className="block text-base font-medium text-slate-700 mb-1">Ricorrenza</label>
-                       <button
-                         type="button"
-                         onClick={() => setIsRecurrenceModalOpen(true)}
-                         className="w-full flex items-center justify-between text-left gap-2 px-3 py-2.5 text-base rounded-lg border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors bg-white border-slate-300 text-slate-800 hover:bg-slate-50"
-                       >
-                         <span className="truncate flex-1">
-                           {getRecurrenceSummary(formData as Partial<Expense>)}
-                         </span>
-                         <ChevronDownIcon className="w-5 h-5 text-slate-500" />
-                       </button>
-                     </div>
-                   )}
-                 </div>
-              )}
-
+              {!isIncome && !isTransfer && (<div className="animate-fade-in-up"><label className="block text-base font-medium text-slate-700 mb-1">Ricevute</label>{formData.receipts && formData.receipts.length > 0 && (<div className="grid grid-cols-2 gap-3 mb-3">{formData.receipts.map((receipt, index) => (<div key={index} className="relative rounded-lg overflow-hidden border border-slate-200 shadow-sm aspect-video bg-slate-50 cursor-pointer hover:border-indigo-300 transition-colors" onClick={() => setViewingImage(receipt)}><img src={`data:image/png;base64,${receipt}`} alt="Ricevuta" className="w-full h-full object-cover"/><button type="button" onClick={(e) => { e.stopPropagation(); handleRemoveReceipt(index); }} onPointerDown={(e) => e.stopPropagation()} className="absolute top-1 right-1 p-1 bg-white/90 text-red-600 rounded-full shadow-md hover:bg-red-50 hover:text-red-700 transition-colors z-10 flex items-center justify-center" aria-label="Rimuovi ricevuta"><XMarkIcon className="w-5 h-5" /></button></div>))}</div>)}<button type="button" onClick={() => { if (Date.now() - receiptMenuCloseTimeRef.current < 500) return; setIsReceiptMenuOpen(true); }} className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-base rounded-lg border border-dashed border-indigo-300 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:border-indigo-400 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"><PaperClipIcon className="w-5 h-5" /><span>{formData.receipts && formData.receipts.length > 0 ? 'Aggiungi un\'altra ricevuta' : 'Allega Ricevuta'}</span></button></div>)}
+              {isForRecurringTemplate && !isIncome && !isTransfer && (<div className="bg-white p-4 rounded-lg border border-slate-200 space-y-4"><div><label className="block text-base font-medium text-slate-700 mb-1">Frequenza</label><button type="button" onClick={() => setActiveMenu('frequency')} className="w-full flex items-center justify-between text-left gap-2 px-3 py-2.5 text-base rounded-lg border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors bg-white border-slate-300 text-slate-800 hover:bg-slate-50"><span className="truncate flex-1 capitalize">{isSingleRecurring ? 'Singolo' : formData.frequency !== 'recurring' ? 'Nessuna' : 'Ricorrente'}</span><ChevronDownIcon className="w-5 h-5 text-slate-500" /></button></div>{formData.frequency === 'recurring' && !isSingleRecurring && (<div className="animate-fade-in-up"><label className="block text-base font-medium text-slate-700 mb-1">Ricorrenza</label><button type="button" onClick={() => setIsRecurrenceModalOpen(true)} className="w-full flex items-center justify-between text-left gap-2 px-3 py-2.5 text-base rounded-lg border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors bg-white border-slate-300 text-slate-800 hover:bg-slate-50"><span className="truncate flex-1">{getRecurrenceSummary(formData as Partial<Expense>)}</span><ChevronDownIcon className="w-5 h-5 text-slate-500" /></button></div>)}</div>)}
                {error && <p className="text-base text-red-600 bg-red-100 p-3 rounded-md">{error}</p>}
           </div>
           <footer className={`px-6 py-4 bg-slate-100 border-t border-slate-200 flex flex-shrink-0 ${isEditing && !hasChanges ? 'justify-stretch' : 'justify-end gap-3'}`}>
               {isEditing && !hasChanges ? (
-                  <button
-                    type="button"
-                    onClick={handleClose}
-                    className="w-full px-4 py-2 text-base font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg shadow-sm hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors"
-                  >
-                    Chiudi
-                  </button>
+                  <button type="button" onClick={handleClose} className="w-full px-4 py-2 text-base font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg shadow-sm hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors">Chiudi</button>
               ) : (
                 <>
-                  <button
-                    type="button"
-                    onClick={handleClose}
-                    className="px-4 py-2 text-base font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg shadow-sm hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors"
-                  >
-                    Annulla
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 text-base font-semibold text-white bg-indigo-600 rounded-lg shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors"
-                  >
-                    {isEditing ? (isTransfer ? 'Salva Trasferimento' : isIncome ? 'Salva Entrata' : 'Salva Spesa') : (isTransfer ? 'Conferma Trasferimento' : isIncome ? 'Aggiungi Entrata' : 'Aggiungi Spesa')}
-                  </button>
+                  <button type="button" onClick={handleClose} className="px-4 py-2 text-base font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg shadow-sm hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors">Annulla</button>
+                  <button type="submit" className="px-4 py-2 text-base font-semibold text-white bg-indigo-600 rounded-lg shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors">{isEditing ? (isTransfer ? 'Salva Trasferimento' : isIncome ? 'Salva Entrata' : 'Salva Spesa') : (isTransfer ? 'Conferma Trasferimento' : isIncome ? 'Aggiungi Entrata' : 'Aggiungi Spesa')}</button>
                 </>
               )}
           </footer>
         </form>
       </div>
 
-      <SelectionMenu 
-        isOpen={activeMenu === 'account'}
-        onClose={() => setActiveMenu(null)}
-        title="Seleziona un Conto"
-        options={accountOptions}
-        selectedValue={formData.accountId || ''}
-        onSelect={(value: string) => handleSelectChange('accountId', value)}
-      />
-      
-      <SelectionMenu 
-        isOpen={activeMenu === 'toAccount'}
-        onClose={() => setActiveMenu(null)}
-        title="Trasferisci A"
-        options={toAccountOptions}
-        selectedValue={formData.toAccountId || ''}
-        onSelect={(value: string) => handleSelectChange('toAccountId', value)}
-      />
-
-      <SelectionMenu 
-        isOpen={activeMenu === 'category'}
-        onClose={() => setActiveMenu(null)}
-        title="Seleziona una Categoria"
-        options={categoryOptions}
-        selectedValue={formData.category || ''}
-        onSelect={(value: string) => handleSelectChange('category', value)}
-      />
-
-      <SelectionMenu 
-        isOpen={activeMenu === 'subcategory'}
-        onClose={() => setActiveMenu(null)}
-        title="Seleziona Sottocategoria"
-        options={subcategoryOptions}
-        selectedValue={formData.subcategory || ''}
-        onSelect={(value: string) => handleSelectChange('subcategory', value)}
-      />
-
-      <SelectionMenu
-          isOpen={activeMenu === 'frequency'}
-          onClose={() => setActiveMenu(null)}
-          title="Imposta Frequenza"
-          options={frequencyOptions}
-          selectedValue={isSingleRecurring ? 'single' : formData.frequency !== 'recurring' ? 'none' : 'recurring'}
-          onSelect={handleFrequencyOptionSelect as (value: string) => void}
-      />
+      <SelectionMenu isOpen={activeMenu === 'account'} onClose={() => setActiveMenu(null)} title="Seleziona un Conto" options={accountOptions} selectedValue={formData.accountId || ''} onSelect={(value: string) => handleSelectChange('accountId', value)}/>
+      <SelectionMenu isOpen={activeMenu === 'toAccount'} onClose={() => setActiveMenu(null)} title="Trasferisci A" options={toAccountOptions} selectedValue={formData.toAccountId || ''} onSelect={(value: string) => handleSelectChange('toAccountId', value)}/>
+      <SelectionMenu isOpen={activeMenu === 'category'} onClose={() => setActiveMenu(null)} title="Seleziona una Categoria" options={categoryOptions} selectedValue={formData.category || ''} onSelect={(value: string) => handleSelectChange('category', value)}/>
+      <SelectionMenu isOpen={activeMenu === 'subcategory'} onClose={() => setActiveMenu(null)} title="Seleziona Sottocategoria" options={subcategoryOptions} selectedValue={formData.subcategory || ''} onSelect={(value: string) => handleSelectChange('subcategory', value)}/>
+      <SelectionMenu isOpen={activeMenu === 'frequency'} onClose={() => setActiveMenu(null)} title="Imposta Frequenza" options={frequencyOptions} selectedValue={isSingleRecurring ? 'single' : formData.frequency !== 'recurring' ? 'none' : 'recurring'} onSelect={handleFrequencyOptionSelect as (value: string) => void}/>
       
       {isRecurrenceModalOpen && (
         <div className={`fixed inset-0 z-[60] flex justify-center items-center p-4 transition-opacity duration-300 ease-in-out ${isRecurrenceModalAnimating ? 'opacity-100' : 'opacity-0'} bg-slate-900/60 backdrop-blur-sm`} onClick={handleCloseRecurrenceModal} aria-modal="true" role="dialog">
-          {/* Recurrence modal content... same as before */}
           <div className={`bg-white rounded-lg shadow-xl w-full max-w-sm transform transition-all duration-300 ease-in-out ${isRecurrenceModalAnimating ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`} onClick={(e) => e.stopPropagation()}>
             <header className="flex justify-between items-center p-4 border-b border-slate-200"><h2 className="text-lg font-bold text-slate-800">Imposta Ricorrenza</h2><button type="button" onClick={handleCloseRecurrenceModal} className="text-slate-500 hover:text-slate-800 transition-colors p-1 rounded-full hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500" aria-label="Chiudi"><XMarkIcon className="w-6 h-6" /></button></header>
             <main className="p-4 space-y-4">
