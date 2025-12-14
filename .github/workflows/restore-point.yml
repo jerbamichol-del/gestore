@@ -1,0 +1,27 @@
+name: Create Restore Point
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    branches:
+      - main
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create restore tag
+        run: |
+          TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
+          git tag restore-point-$TIMESTAMP
+          git push origin restore-point-$TIMESTAMP
+      
+      - name: Create backup branch
+        run: |
+          git branch backup-before-merge
+          git push origin backup-before-merge --force
