@@ -31,10 +31,10 @@ export interface Expense {
 }
 
 export const CATEGORIES: Record<string, string[]> = {
-  'Alimentari': ['Supermercato', 'Ristorante', 'Bar', 'Caffè'],
+  'Alimentari': ['Ristorante', 'Bar', 'Autogrill'],
   'Trasporti': ['Mezzi Pubblici', 'Carburante', 'Taxi', 'Assicurazione',  'Manutenzione Auto', 'Pedaggio'],
   'Casa': ['Affitto/Mutuo', 'Bollette', 'Manutenzione', 'Arredamento'],
-  'Shopping': ['Abbigliamento', 'Elettronica', 'Libri', 'Regali'],
+  'Shopping': ['Supermercato', 'Abbigliamento', 'Elettronica', 'Libri', 'Regali'],
   'Tempo Libero': ['Cinema', 'Concerti', 'Sport', 'Viaggi'],
   'Salute': ['Farmacia', 'Visite Mediche', 'Assicurazione'],
   'Istruzione': ['Corsi', 'Libri', 'Tasse Scolastiche'],
