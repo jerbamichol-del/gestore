@@ -7,7 +7,7 @@ export interface Account {
 
 export interface Expense {
   id:string;
-  type: 'expense' | 'income' | 'transfer'; // Added transfer
+  type: 'expense' | 'income' | 'transfer' | 'adjustment'; // Added adjustment
   description: string;
   amount: number;
   date: string; 
