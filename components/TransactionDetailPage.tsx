@@ -77,7 +77,6 @@ const Modal = memo<{
         e.stopPropagation();
         onClose();
       }}
-      // Stop bubbling per isolare il modal dal TapBridge sottostante
       onPointerDown={(e) => e.stopPropagation()}
       onPointerUp={(e) => e.stopPropagation()}
       onPointerMove={(e) => e.stopPropagation()}
@@ -207,10 +206,8 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
   const [isReceiptMenuOpen, setIsReceiptMenuOpen] = useState(false);
   const [isReceiptMenuAnimating, setIsReceiptMenuAnimating] = useState(false);
   
-  // Ghost click protection for receipt menu
   const receiptMenuCloseTimeRef = useRef(0);
 
-  // --- NUOVO: Stato per immagine a schermo intero ---
   const [viewingImage, setViewingImage] = useState<string | null>(null);
 
   const [tempRecurrence, setTempRecurrence] = useState(formData.recurrence);
@@ -223,22 +220,20 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
 
   const isIncome = formData.type === 'income';
   const isTransfer = formData.type === 'transfer';
+  const isAdjustment = formData.type === 'adjustment';
 
   const isSingleRecurring =
     formData.frequency === 'recurring' &&
     formData.recurrenceEndType === 'count' &&
     formData.recurrenceCount === 1;
 
-  // Inizializza time in useEffect per evitare hydration mismatch
   useEffect(() => {
     if (!formData.time && !formData.frequency) {
       const time = new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
       onFormChange({ time });
     }
-  }, []); // Solo al mount
+  }, []); 
 
-  // ... (handleKeyboardClose logic) ...
-  // Debounced keyboard close handler
   const handleKeyboardClose = useRef<(() => void) | null>(null);
   
   useEffect(() => {
@@ -267,14 +262,11 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     return () => vv.removeEventListener('resize', handleResize);
   }, []);
 
-  // blocca swipe container quando modali/menu aperti
   useEffect(() => {
     const anyOpen = !!(activeMenu || isFrequencyModalOpen || isRecurrenceModalOpen || isReceiptMenuOpen);
     onMenuStateChange(anyOpen);
   }, [activeMenu, isFrequencyModalOpen, isRecurrenceModalOpen, isReceiptMenuOpen, onMenuStateChange]);
 
-  // ... (modal animations hooks) ...
-  // animazioni modali
   useEffect(() => {
     if (isFrequencyModalOpen) {
       const t = setTimeout(() => setIsFrequencyModalAnimating(true), 10);
@@ -338,7 +330,6 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     setActiveMenu(null);
   };
 
-  // ... (handleFrequencySelect, handleApplyRecurrence, receipt handlers) ...
   const handleFrequencySelect = (frequency: 'none' | 'single' | 'recurring') => {
     const up: Partial<Expense> = {};
     if (frequency === 'none') {
@@ -387,7 +378,6 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     setIsRecurrenceModalAnimating(false);
   };
   
-  // Safe helper to close Receipt Menu and update timestamp for cooldown
   const handleCloseReceiptMenu = useCallback(() => {
       setIsReceiptMenuOpen(false);
       setIsReceiptMenuAnimating(false);
@@ -440,7 +430,6 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     return 'Per sempre';
   };
   
-  // --- VIEWER A SCHERMO INTERO ---
   const renderImageViewer = () => {
       if (!viewingImage) return null;
       return createPortal(
@@ -551,8 +540,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
     </div>
   );
 
-  // Sezione Ricevuta - attiva solo se NON è un'entrata e NON è un trasferimento
-  const canAttachReceipt = !isIncome && !isTransfer;
+  const canAttachReceipt = !isIncome && !isTransfer && !isAdjustment;
 
   return (
     <div
@@ -577,13 +565,19 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
       <main className="flex-1 p-4 flex flex-col overflow-y-auto" style={{ touchAction: 'pan-y' }}>
         <div className="space-y-2">
           <div className="flex justify-center items-center py-0">
-            <div className={`relative flex items-baseline justify-center ${isIncome ? 'text-green-600' : isTransfer ? 'text-sky-600' : 'text-indigo-600'}`}>
+            <div className={`relative flex items-baseline justify-center ${isIncome ? 'text-green-600' : isTransfer ? 'text-sky-600' : isAdjustment ? 'text-slate-600' : 'text-indigo-600'}`}>
                 <span className="text-[2.6rem] leading-none font-bold tracking-tighter relative z-10">
-                    {formatCurrency(formData.amount || 0).replace(/[^0-9,.]/g, '')}
+                    {/* For adjustment, we want to see the sign if it's negative */}
+                    {isAdjustment 
+                      ? formatCurrency(formData.amount || 0).replace(/[€\s]/g, '')
+                      : formatCurrency(Math.abs(formData.amount || 0)).replace(/[^0-9,.]/g, '')}
                 </span>
-                <span className={`text-3xl font-medium opacity-70 absolute ${isIncome ? 'text-green-400' : isTransfer ? 'text-sky-400' : 'text-indigo-400'}`} style={{ right: '100%', marginRight: '8px', top: '4px' }}>
-                    {isIncome ? '+' : isTransfer ? '' : '-'}
-                </span>
+                {/* Prefix for standard types */}
+                {!isAdjustment && (
+                  <span className={`text-3xl font-medium opacity-70 absolute ${isIncome ? 'text-green-400' : isTransfer ? 'text-sky-400' : 'text-indigo-400'}`} style={{ right: '100%', marginRight: '8px', top: '4px' }}>
+                      {isIncome ? '+' : isTransfer ? '' : '-'}
+                  </span>
+                )}
             </div>
           </div>
 
@@ -652,7 +646,6 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
 
           {!isFrequencySet && DateTimeInputs}
           
-          {/* Sezione Ricevuta - Nascosta per le entrate e i trasferimenti */}
           {canAttachReceipt && (
               <div>
                   <label className="block text-base font-medium text-slate-700 mb-1">Ricevuta</label>
@@ -701,8 +694,7 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
               </div>
           )}
 
-          {/* Sezione Frequenza - Nascosta per le entrate e i trasferimenti */}
-          {!isIncome && !isTransfer && (
+          {!isIncome && !isTransfer && !isAdjustment && (
             <div className="bg-white p-4 rounded-lg border border-slate-200 space-y-4">
                 <div>
                 <label className="block text-base font-medium text-slate-700 mb-1">Frequenza</label>
@@ -745,16 +737,18 @@ const TransactionDetailPage: React.FC<TransactionDetailPageProps> = ({
           <button
             type="button"
             onClick={() => onSubmit(formData as Omit<Expense, 'id'>)}
-            disabled={(formData.amount ?? 0) <= 0 || (isTransfer && (!formData.toAccountId || formData.toAccountId === formData.accountId))}
+            disabled={(Math.abs(formData.amount ?? 0) <= 0 && !isAdjustment) || (isTransfer && (!formData.toAccountId || formData.toAccountId === formData.accountId))}
             className={`w-full px-4 py-3 text-base font-semibold text-white rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 ${
                 isIncome 
                 ? 'bg-green-600 hover:bg-green-700 focus:ring-green-500 disabled:bg-green-300'
                 : isTransfer
                 ? 'bg-sky-600 hover:bg-sky-700 focus:ring-sky-500 disabled:bg-sky-300' 
+                : isAdjustment
+                ? 'bg-slate-600 hover:bg-slate-700 focus:ring-slate-500'
                 : 'bg-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500 disabled:bg-indigo-300'
             }`}
           >
-            {isTransfer ? 'Conferma Trasferimento' : isIncome ? 'Aggiungi Entrata' : 'Aggiungi Spesa'}
+            {isTransfer ? 'Conferma Trasferimento' : isIncome ? 'Aggiungi Entrata' : isAdjustment ? 'Salva Rettifica' : 'Aggiungi Spesa'}
           </button>
         </div>
       </main>
