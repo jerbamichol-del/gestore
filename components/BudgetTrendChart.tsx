@@ -59,6 +59,17 @@ const CustomTooltip = ({ active, payload, label }: any) => {
                 <span className="text-indigo-600 font-bold">Saldo:</span>
                 <span className="font-bold text-slate-800">{formatCurrency(data.balance)}</span>
             </div>
+            
+            {/* Mostra Rettifica solo se presente */}
+            {data.adjustment !== 0 && (
+                <div className="flex items-center justify-between gap-4">
+                    <span className="text-slate-500 font-medium">Rettifica:</span>
+                    <span className={`font-semibold ${data.adjustment >= 0 ? "text-slate-700" : "text-red-400"}`}>
+                        {data.adjustment > 0 ? '+' : ''}{formatCurrency(data.adjustment)}
+                    </span>
+                </div>
+            )}
+
             <div className="flex items-center justify-between gap-4">
                 <span className={data.net >= 0 ? "text-emerald-600" : "text-rose-600"}>
                     Flusso Netto:
@@ -161,7 +172,7 @@ export const BudgetTrendChart: React.FC<BudgetTrendChartProps> = ({
     const diffTime = Math.abs(end.getTime() - start.getTime());
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     
-    const dataMap = new Map<string, { date: string; income: number; expense: number; net: number; balance: number }>();
+    const dataMap = new Map<string, { date: string; income: number; expense: number; adjustment: number; net: number; balance: number }>();
     // Group by month only if range is huge AND we aren't zoomed into specific days near today
     const isYearly = diffDays > 60; 
 
@@ -172,7 +183,7 @@ export const BudgetTrendChart: React.FC<BudgetTrendChartProps> = ({
             const key = `${curr.getFullYear()}-${String(curr.getMonth() + 1).padStart(2, '0')}`;
             const sortKey = `${curr.getFullYear()}-${String(curr.getMonth() + 1).padStart(2, '0')}-01`;
             if (!dataMap.has(sortKey)) {
-                dataMap.set(sortKey, { date: sortKey, income: 0, expense: 0, net: 0, balance: 0 });
+                dataMap.set(sortKey, { date: sortKey, income: 0, expense: 0, adjustment: 0, net: 0, balance: 0 });
             }
             curr.setMonth(curr.getMonth() + 1);
         }
@@ -180,7 +191,7 @@ export const BudgetTrendChart: React.FC<BudgetTrendChartProps> = ({
         let curr = new Date(start);
         while (curr <= end) {
             const key = toYYYYMMDD(curr);
-            dataMap.set(key, { date: key, income: 0, expense: 0, net: 0, balance: 0 });
+            dataMap.set(key, { date: key, income: 0, expense: 0, adjustment: 0, net: 0, balance: 0 });
             curr.setDate(curr.getDate() + 1);
         }
     }
@@ -196,15 +207,20 @@ export const BudgetTrendChart: React.FC<BudgetTrendChartProps> = ({
             
             if (dataMap.has(key)) {
                 const entry = dataMap.get(key)!;
-                // CRITICO: Math.abs assicura che l'importo sia trattato come grandezza positiva
-                const amt = Math.abs(Number(e.amount) || 0);
+                const rawAmt = Number(e.amount) || 0;
+                const absAmt = Math.abs(rawAmt);
                 
                 if (e.type === 'income') {
-                    entry.income += amt;
-                } else {
-                    entry.expense += amt;
+                    entry.income += absAmt;
+                } else if (e.type === 'expense') {
+                    entry.expense += absAmt;
+                } else if (e.type === 'adjustment') {
+                    // Adjustments don't count as income/expense bars, but they do affect the balance
+                    // We keep the raw signed amount for adjustment
+                    entry.adjustment += rawAmt;
                 }
                 
+                // Net is strictly Income - Expense (for the bars/daily flow context)
                 entry.net = entry.income - entry.expense;
             }
         }
@@ -218,12 +234,12 @@ export const BudgetTrendChart: React.FC<BudgetTrendChartProps> = ({
 
     const result = sortedKeys.map(key => {
         const item = dataMap.get(key)!;
-        runningBalance += item.net;
+        // Balance = previous + (Income - Expense + Adjustments)
+        runningBalance += (item.income - item.expense + item.adjustment);
         return { 
             ...item, 
             balance: runningBalance,
             // CRITICO: Convertiamo le spese in negativo per il grafico
-            // Poiché abbiamo usato Math.abs sopra, -item.expense è GARANTITO negativo
             negExpense: -item.expense
         };
     });
