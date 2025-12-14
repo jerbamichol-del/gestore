@@ -42,47 +42,66 @@ jobs:
           token: ${{ secrets.MY_PAT }}
           path: temp-source
 
-      # 5. Trasferimento Chirurgico dei File (CORRETTO SENZA SRC)
+      # 5. Trasferimento Chirurgico dei File
       - name: Copy Specific Files
         run: |
-          # Funzione corretta: Cerca nella root di temp-source, copia in src/ della principale
+          # Funzione di copia
           copy_file() {
-            # $1 è il percorso relativo (es. "components/Dashboard.tsx")
-            
-            SOURCE_FILE="temp-source/$1"  # <--- MODIFICA QUI: Tolto /src/
-            DEST_FILE="src/$1"            # Destinazione rimane in src/
+            SOURCE_FILE="temp-source/$1"
+            DEST_FILE="src/$1"
+            # Se è App.tsx è nella root di src, se è altro mantiene il path
+            if [ "$1" == "App.tsx" ]; then
+                DEST_FILE="src/App.tsx"
+            fi
 
             if [ -f "$SOURCE_FILE" ]; then
-              # Crea la cartella di destinazione se non esiste
               mkdir -p "$(dirname "$DEST_FILE")"
               cp "$SOURCE_FILE" "$DEST_FILE"
               echo "✅ Copiato: $1"
             else
-              echo "⚠️ File non trovato nella sorgente: $1 (Cercato in: $SOURCE_FILE)"
+              echo "⚠️ File non trovato nella sorgente: $1"
             fi
           }
 
           echo "Inizio trasferimento file..."
           
-          # --- LISTA FILE ---
-          
-          # Root (App.tsx va in src/App.tsx)
+          # --- LISTA COMPLETA FILE DA AGGIORNARE ---
+
+          # Core
           copy_file "App.tsx"
-          
-          # Components
-          copy_file "components/CalculatorContainer.tsx"
+
+          # Components - Core & UI
+          copy_file "components/Dashboard.tsx"
+          copy_file "components/ExpenseForm.tsx"
           copy_file "components/ExpenseList.tsx"
+          copy_file "components/TransactionDetailPage.tsx"
+          copy_file "components/CalculatorContainer.tsx"
+          copy_file "components/InteractiveLegend.tsx"
+          copy_file "components/BottomNavigationBar.tsx"
           copy_file "components/ImageParserModal.tsx"
           copy_file "components/CategoryFilter.tsx"
+          copy_file "components/PendingImages.tsx"
+          
+          # Components - Tabs & Effects
           copy_file "components/TrapezoidTab.tsx"
           copy_file "components/TrapezoidTabRight.tsx"
           copy_file "components/SoftTab.tsx"
           copy_file "components/SoftBumpBaseline.tsx"
           copy_file "components/EdgeSwipeCatcher.tsx"
-          copy_file "components/Dashboard.tsx"
-          copy_file "components/TransactionDetailPage.tsx"
-          copy_file "components/ExpenseForm.tsx"
-          
+
+          # Screens
+          copy_file "screens/HistoryScreen.tsx"
+          copy_file "screens/RecurringExpensesScreen.tsx"
+          copy_file "screens/CategoryDetailScreen.tsx"
+          copy_file "screens/ForgotEmailScreen.tsx"
+
+          # Utils
+          copy_file "utils/cloud.ts"
+          copy_file "utils/date.ts"
+
+          # Types
+          copy_file "types/navigation.ts"
+
           # Hooks
           copy_file "hooks/useLeftSwipeFromRightEdge.ts"
           copy_file "hooks/useLeftSwipeFromRightEdge_v2.ts"
@@ -94,15 +113,6 @@ jobs:
           copy_file "hooks/useInstallPrompt.ts"
           copy_file "hooks/usePrivacyGate.ts"
           copy_file "hooks/useBackNavigation.ts"
-          
-          # Utils & Types
-          copy_file "utils/date.ts"
-          copy_file "utils/cloud.ts"
-          copy_file "types/navigation.ts"
-          
-          # Screens
-          copy_file "screens/HistoryScreen.tsx"
-          copy_file "screens/RecurringExpensesScreen.tsx"
 
           # Pulizia
           rm -rf temp-source
@@ -111,6 +121,5 @@ jobs:
       - name: Commit and Push Changes
         run: |
           git add .
-          # Se non ci sono differenze, non fallisce
-          git commit -m "🔄 Sync automatico da Repo Secondaria (Root Fix)" || echo "Nessuna modifica da committare"
+          git commit -m "🔄 Sync Completo da Repo Secondaria (Nuova Struttura)" || echo "Nessuna modifica da committare"
           git push origin main
