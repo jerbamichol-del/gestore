@@ -61,7 +61,6 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
   const account = accounts.find((a) => a.id === expense.accountId);
   const accountName = account?.name || 'Sconosciuto';
   
-  // Per entrate, usa l'icona del conto (fallback su ID se icon manca, override per paypal/crypto/revolut/poste). Per le spese, usa la categoria.
   const iconKey = account 
     ? (['paypal', 'crypto', 'revolut', 'poste'].includes(account.id) ? account.id : (account.icon || account.id)) 
     : 'default';
@@ -71,16 +70,20 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
   const tapBridge = useTapBridge();
 
   const isRecurringInstance = !!expense.recurringExpenseId;
+  const isAdjustment = expense.type === 'adjustment';
+
   const itemBgClass = isSelected 
     ? 'bg-indigo-50 ring-1 ring-inset ring-indigo-200' 
     : isRecurringInstance 
       ? 'bg-amber-50' 
-      : 'bg-white';
+      : isAdjustment
+        ? 'bg-slate-50 opacity-90'
+        : 'bg-white';
 
   // Long press logic
   const longPressTimer = useRef<number | null>(null);
   const handlePointerDownItem = (e: React.PointerEvent) => {
-    if (isSelectionMode) return; // No long press needed if already selecting
+    if (isSelectionMode) return; 
     longPressTimer.current = window.setTimeout(() => {
         onLongPress(expense.id);
         if (navigator.vibrate) navigator.vibrate(50);
@@ -123,7 +126,6 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
     handlePointerDownItem(e);
     if ((e.target as HTMLElement).closest('button') || !itemRef.current) return;
 
-    // Disable swipe in selection mode
     if (isSelectionMode) return;
 
     itemRef.current.style.transition = 'none';
@@ -153,21 +155,19 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
   const handlePointerMove = (e: React.PointerEvent) => {
     const ds = dragState.current;
     
-    // Cancel long press on significant move
     if (longPressTimer.current) {
         const dist = Math.hypot(e.clientX - ds.startX, e.clientY - ds.startY);
         if (dist > 10) cancelLongPress();
     }
 
     if (ds.pointerId !== e.pointerId) return;
-    if (isSelectionMode) return; // Disable swipe in selection mode
+    if (isSelectionMode) return; 
 
     const dx = e.clientX - ds.startX;
     const dy = e.clientY - ds.startY;
 
     if (!ds.isDragging) {
       if (Math.hypot(dx, dy) > 8) {
-        // Slop
         ds.isDragging = true;
         ds.isLocked = Math.abs(dx) > Math.abs(dy) * 2;
         if (!ds.isLocked) {
@@ -207,7 +207,6 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
     const wasDragging = ds.isDragging;
     const wasHorizontal = ds.wasHorizontal;
 
-    // Reset state early per gestione click
     ds.isDragging = false;
     ds.pointerId = null;
 
@@ -224,7 +223,6 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
       setTranslateX(shouldOpen ? -ACTION_WIDTH : 0, true);
     }
 
-    // Evita click subito dopo swipe
     setTimeout(() => {
       dragState.current.wasHorizontal = false;
     }, 0);
@@ -245,7 +243,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
   };
 
   const handleClick = (e: React.MouseEvent) => {
-    e.stopPropagation(); // Importante: evita che il click raggiunga il container e chiuda la spesa
+    e.stopPropagation();
     if (dragState.current.isDragging || dragState.current.wasHorizontal) return;
     
     if (isSelectionMode) {
@@ -255,6 +253,52 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
     } else {
         onEdit(expense);
     }
+  };
+
+  // Icon logic for Adjustment
+  const renderIcon = () => {
+      if (isSelected) {
+          return (
+             <span className="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center bg-indigo-600 text-white transition-transform duration-200 transform scale-100">
+                <CheckIcon className="w-6 h-6" strokeWidth={3} />
+             </span>
+          );
+      }
+      if (isAdjustment) {
+          return (
+             <span className="w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center bg-slate-200 text-slate-500">
+                <ArrowsUpDownIcon className="w-6 h-6" />
+             </span>
+          );
+      }
+      if (isIncomeMode && AccountIcon) {
+          return <AccountIcon className="w-10 h-10 text-green-600 flex-shrink-0 transition-transform duration-200" />;
+      }
+      return <style.Icon className="w-10 h-10 flex-shrink-0 transition-transform duration-200" />;
+  };
+
+  // Amount display
+  const renderAmount = () => {
+      const amt = Number(expense.amount) || 0;
+      // Adjustments have signed amounts naturally.
+      // Expenses are positive but mean negative flow.
+      // Incomes are positive.
+      
+      if (isAdjustment) {
+          // Keep the sign from the amount, color it neutral/gray
+          return (
+              <span className={`font-bold text-lg text-right shrink-0 whitespace-nowrap min-w-[90px] ${isSelected ? 'text-indigo-900' : 'text-slate-500'}`}>
+                  {formatCurrency(amt)}
+              </span>
+          );
+      }
+      
+      // Standard Expenses/Incomes
+      return (
+        <p className={`font-bold text-lg text-right shrink-0 whitespace-nowrap min-w-[90px] ${isSelected ? 'text-indigo-900' : isIncomeMode ? 'text-green-600' : 'text-slate-900'}`}>
+          {isIncomeMode ? '+' : ''}{formatCurrency(amt)}
+        </p>
+      );
   };
 
   return (
@@ -281,7 +325,7 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
         className={`relative flex items-center gap-4 py-3 px-4 ${itemBgClass} z-10 cursor-pointer transition-colors duration-200 select-none`}
         style={{ touchAction: 'pan-y' }}
       >
-        {isRecurringInstance && !isSelectionMode && (
+        {isRecurringInstance && !isSelectionMode && !isAdjustment && (
           <span 
             className="absolute top-1.5 right-1.5 w-5 h-5 text-slate-900 bg-amber-100 border border-amber-400 text-[10px] font-bold rounded-full flex items-center justify-center z-20" 
             title="Spesa Programmata"
@@ -290,19 +334,11 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
           </span>
         )}
         
-        {isSelected ? (
-             <span className={`w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center bg-indigo-600 text-white transition-transform duration-200 transform scale-100`}>
-                <CheckIcon className="w-6 h-6" strokeWidth={3} />
-             </span>
-        ) : isIncomeMode && AccountIcon ? (
-             <AccountIcon className="w-10 h-10 text-green-600 flex-shrink-0 transition-transform duration-200" />
-        ) : (
-            <style.Icon className="w-10 h-10 flex-shrink-0 transition-transform duration-200" />
-        )}
+        {renderIcon()}
 
         <div className="flex-grow min-w-0">
-          <p className={`font-semibold truncate ${isSelected ? 'text-indigo-900' : 'text-slate-800'}`}>
-            {isIncomeMode ? accountName : `${expense.subcategory || style.label} • ${accountName}`}
+          <p className={`font-semibold truncate ${isSelected ? 'text-indigo-900' : isAdjustment ? 'text-slate-600' : 'text-slate-800'}`}>
+            {isAdjustment ? 'Rettifica Saldo' : isIncomeMode ? accountName : `${expense.subcategory || style.label} • ${accountName}`}
           </p>
           <p
             className={`text-sm truncate ${isSelected ? 'text-indigo-700' : 'text-slate-500'}`}
@@ -311,9 +347,8 @@ const ExpenseItem: React.FC<ExpenseItemProps> = ({
             {expense.description || 'Senza descrizione'}
           </p>
         </div>
-        <p className={`font-bold text-lg text-right shrink-0 whitespace-nowrap min-w-[90px] ${isSelected ? 'text-indigo-900' : isIncomeMode ? 'text-green-600' : 'text-slate-900'}`}>
-          {isIncomeMode ? '+' : ''}{formatCurrency(Number(expense.amount) || 0)}
-        </p>
+        
+        {renderAmount()}
       </div>
     </div>
   );
@@ -325,21 +360,21 @@ interface HistoryScreenProps {
   accounts: Account[];
   onEditExpense: (expense: Expense) => void;
   onDeleteExpense: (id: string) => void;
-  onDeleteExpenses: (ids: string[]) => void; // For bulk delete
+  onDeleteExpenses: (ids: string[]) => void; 
   isEditingOrDeleting: boolean;
   onDateModalStateChange: (isOpen: boolean) => void;
   onClose: () => void;
-  onCloseStart?: () => void; // Added property
+  onCloseStart?: () => void; 
   onFilterPanelOpenStateChange: (isOpen: boolean) => void;
   isOverlayed: boolean;
-  filterType?: 'expense' | 'income'; // NEW PROP
+  filterType?: 'expense' | 'income'; 
 }
 
 interface ExpenseGroup {
   year: number;
   week: number;
   label: string;
-  dateRange: string; // Separated date range for styling
+  dateRange: string;
   expenses: Expense[];
   total: number;
 }
@@ -402,7 +437,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
   onCloseStart,
   onFilterPanelOpenStateChange,
   isOverlayed,
-  filterType = 'expense' // Default to 'expense'
+  filterType = 'expense'
 }) => {
   const [isAnimatingIn, setIsAnimatingIn] = useState(false);
   const tapBridge = useTapBridge();
@@ -451,7 +486,7 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
 
   const handleClose = () => {
     setOpenItemId(null);
-    if (onCloseStart) onCloseStart(); // Signal start of closing animation
+    if (onCloseStart) onCloseStart();
     setIsAnimatingIn(false);
     setTimeout(onClose, 300);
   };
@@ -464,7 +499,6 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
     [onDateModalStateChange],
   );
 
-  // Quando finisce modifica/eliminazione (OK o Annulla), resettiamo card aperta
   useEffect(() => {
     if (prevOpRef.current && !isEditingOrDeleting) {
       setOpenItemId(null);
@@ -488,7 +522,6 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
     };
   }, [openItemId, isEditingOrDeleting]);
 
-  // Click outside for sort menu
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
         if (
@@ -508,10 +541,11 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
 
   const filteredExpenses = useMemo(() => {
     // START FILTER: Apply type filter first
+    // STRICT FILTERING: Adjustments are hidden from both "Income" and "Expense" tabs.
     let result = (expenses || []).filter(e => {
         if (filterType === 'income') return e.type === 'income';
-        if (filterType === 'expense') return e.type !== 'income';
-        return true;
+        if (filterType === 'expense') return e.type === 'expense'; // Only expenses, no adjustments
+        return true; // Fallback
     });
 
     // 1. Date Filter
@@ -580,7 +614,6 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
         result = result.filter(e => e.accountId === filterAccount);
     }
 
-    // New Multi-Category Filter Logic
     if (filterCategories.size > 0) {
         result = result.filter(e => {
             const wholeCategoryKey = e.category;
@@ -600,13 +633,15 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
     if (filterAmountRange.min) {
         const min = parseFloat(filterAmountRange.min);
         if (!isNaN(min)) {
-            result = result.filter(e => e.amount >= min);
+            // For adjustments, consider absolute magnitude or just the raw amount?
+            // Usually users filter by magnitude.
+            result = result.filter(e => Math.abs(e.amount) >= min);
         }
     }
     if (filterAmountRange.max) {
         const max = parseFloat(filterAmountRange.max);
         if (!isNaN(max)) {
-            result = result.filter(e => e.amount <= max);
+            result = result.filter(e => Math.abs(e.amount) <= max);
         }
     }
 
@@ -616,9 +651,9 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
   const groupedExpenses = useMemo(() => {
     const sorted = [...(filteredExpenses || [])].sort((a, b) => {
         if (sortOption === 'amount-desc') {
-            return b.amount - a.amount;
+            return Math.abs(b.amount) - Math.abs(a.amount);
         } else if (sortOption === 'amount-asc') {
-            return a.amount - b.amount;
+            return Math.abs(a.amount) - Math.abs(b.amount);
         } else if (sortOption === 'category') {
             return a.category.localeCompare(b.category);
         } else {
@@ -637,10 +672,11 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
         }
     });
 
-    // If not sorting by date, we want a single "global" list (or grouped by category if we implemented that).
-    // For "make it work for all weeks", a single flat list of the sorted items is the most direct interpretation.
     if (sortOption !== 'date') {
-        const total = sorted.reduce((acc, e) => acc + (Number(e.amount) || 0), 0);
+        const total = sorted.reduce((acc, e) => {
+            if (e.type === 'adjustment') return acc; // Don't include adjustments in totals
+            return acc + (Number(e.amount) || 0);
+        }, 0);
         let label = 'Tutte le transazioni';
         if (sortOption === 'amount-desc') label = 'Per Importo (Decrescente)';
         if (sortOption === 'amount-asc') label = 'Per Importo (Crescente)';
@@ -648,8 +684,8 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
 
         return {
             'global': {
-                year: 0, // Irrelevant for single group
-                week: 0, // Irrelevant for single group
+                year: 0,
+                week: 0,
                 label: label,
                 dateRange: `${sorted.length} risultati`,
                 expenses: sorted,
@@ -674,7 +710,10 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
         };
       }
       acc[key].expenses.push(e);
-      acc[key].total += Number(e.amount) || 0;
+      // Exclude adjustments from the group total displayed in the header
+      if (e.type !== 'adjustment') {
+          acc[key].total += Number(e.amount) || 0;
+      }
       return acc;
     }, {});
   }, [filteredExpenses, sortOption]);
@@ -735,7 +774,6 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
 
   const handleSortOptionSelect = (value: 'date' | 'amount' | 'category') => {
       if (value === 'amount') {
-          // Toggle logic: desc -> asc -> desc
           setSortOption(prev => prev === 'amount-desc' ? 'amount-asc' : 'amount-desc');
       } else {
           setSortOption(value);
@@ -751,14 +789,12 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
       style={{ 
           touchAction: 'pan-y', 
           willChange: 'transform',
-          // Explicit visibility transition: visible immediately when opening, hidden AFTER transform ends when closing
           visibility: isAnimatingIn ? 'visible' : 'hidden',
           transitionProperty: 'transform, visibility',
           transitionDuration: '300ms, 0s',
           transitionDelay: isAnimatingIn ? '0s, 0s' : '0s, 300ms' 
       }}
       onClick={() => {
-        // Tapping anywhere in the container (that isn't stopped by children) closes any open section
         if (openItemId) {
             setOpenItemId(null);
         }
@@ -797,7 +833,6 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
                     {isIncomeMode ? 'Storico Entrate' : 'Storico Spese'}
                 </h1>
                 
-                {/* Sort Button Container */}
                 <div className="relative">
                     <button
                         ref={sortButtonRef}
@@ -808,13 +843,12 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
                         <ArrowsUpDownIcon className="w-6 h-6" />
                     </button>
                     
-                    {/* Dropdown Menu - Positioned right below the arrow */}
                     {isSortMenuOpen && (
                         <div 
                             ref={sortMenuRef}
                             className="absolute top-full right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-slate-100 z-50 overflow-hidden animate-fade-in-up"
                             style={{ animationDuration: '150ms' }}
-                            onPointerDown={(e) => e.stopPropagation()} // Prevent closing swipe when using menu
+                            onPointerDown={(e) => e.stopPropagation()}
                         >
                             <div className="py-1">
                                 <button
@@ -911,7 +945,6 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
       <HistoryFilterCard
         isActive={isAnimatingIn && !isInternalDateModalOpen && !isOverlayed && !isSelectionMode}
         
-        // Date Filter Props
         onSelectQuickFilter={(value) => {
           setDateFilter(value);
           setActiveFilterMode('quick');
@@ -940,7 +973,6 @@ const HistoryScreen: React.FC<HistoryScreenProps> = ({
         onActivatePeriodFilter={() => setActiveFilterMode('period')}
         onOpenStateChange={onFilterPanelOpenStateChange}
 
-        // Advanced Filter Props
         accounts={accounts}
         selectedAccountId={filterAccount}
         
