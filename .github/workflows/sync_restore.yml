@@ -1,7 +1,7 @@
 name: Sync from Secondary Repo & Restore Point
 
 on:
-  workflow_dispatch: # Avvio manuale dal tab Actions
+  workflow_dispatch: # Avvio manuale
 
 permissions:
   contents: write
@@ -14,8 +14,8 @@ jobs:
       - name: Checkout Primary Repo
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.MY_PAT }} # Usa il token per poter pushare
-          fetch-depth: 0 # Scarica tutta la storia per creare il branch
+          token: ${{ secrets.MY_PAT }}
+          fetch-depth: 0
 
       # 2. Configurazione Git
       - name: Setup Git User
@@ -34,33 +34,39 @@ jobs:
           # Torna al main per applicare le modifiche
           git checkout main
 
-      # 4. Checkout della Repo Secondaria (Sorgente) in una cartella temporanea
+      # 4. Checkout della Repo Secondaria (Sorgente)
       - name: Checkout Secondary Repo
         uses: actions/checkout@v4
         with:
-          repository: jerbamichol-del/prova # <--- INSERISCI QUI IL NOME
+          repository: jerbamichol-del/prova  # <--- TUA REPO SECONDARIA
           token: ${{ secrets.MY_PAT }}
-          path: temp-source # Scarica in una sottocartella
+          path: temp-source
 
-      # 5. Trasferimento Chirurgico dei File
+      # 5. Trasferimento Chirurgico dei File (CORRETTO SENZA SRC)
       - name: Copy Specific Files
         run: |
-          # Funzione per copiare un file se esiste
+          # Funzione corretta: Cerca nella root di temp-source, copia in src/ della principale
           copy_file() {
-            if [ -f "temp-source/src/$1" ]; then
+            # $1 è il percorso relativo (es. "components/Dashboard.tsx")
+            
+            SOURCE_FILE="temp-source/$1"  # <--- MODIFICA QUI: Tolto /src/
+            DEST_FILE="src/$1"            # Destinazione rimane in src/
+
+            if [ -f "$SOURCE_FILE" ]; then
               # Crea la cartella di destinazione se non esiste
-              mkdir -p "src/$(dirname "$1")"
-              cp "temp-source/src/$1" "src/$1"
+              mkdir -p "$(dirname "$DEST_FILE")"
+              cp "$SOURCE_FILE" "$DEST_FILE"
               echo "✅ Copiato: $1"
             else
-              echo "⚠️ File non trovato nella sorgente: $1"
+              echo "⚠️ File non trovato nella sorgente: $1 (Cercato in: $SOURCE_FILE)"
             fi
           }
 
-          # LISTA FILE DA AGGIORNARE
           echo "Inizio trasferimento file..."
           
-          # Root files
+          # --- LISTA FILE ---
+          
+          # Root (App.tsx va in src/App.tsx)
           copy_file "App.tsx"
           
           # Components
@@ -101,9 +107,10 @@ jobs:
           # Pulizia
           rm -rf temp-source
 
-      # 6. Commit e Push delle modifiche
+      # 6. Commit e Push
       - name: Commit and Push Changes
         run: |
           git add .
-          git commit -m "🔄 Sync automatico da Repo Secondaria" || echo "Nessuna modifica da committare"
+          # Se non ci sono differenze, non fallisce
+          git commit -m "🔄 Sync automatico da Repo Secondaria (Root Fix)" || echo "Nessuna modifica da committare"
           git push origin main
