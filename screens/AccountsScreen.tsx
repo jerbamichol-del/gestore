@@ -56,6 +56,12 @@ const AccountsScreen: React.FC<AccountsScreenProps> = ({ accounts, expenses, onC
                 balances[e.toAccountId] += amt;
             }
         }
+        // Gestione Rettifica (Adjustment) - Importo può essere negativo o positivo
+        else if (e.type === 'adjustment') {
+            if (balances[e.accountId] !== undefined) {
+                balances[e.accountId] += amt;
+            }
+        }
     });
 
     return balances;
@@ -70,9 +76,6 @@ const AccountsScreen: React.FC<AccountsScreenProps> = ({ accounts, expenses, onC
       if (!onAddTransaction) return;
 
       setEditingAccountId(accountId);
-      // Pre-fill with current balance? Or empty? 
-      // Empty usually better for "setting new value" to avoid clearing.
-      // But maybe placeholder shows current.
       setNewBalanceValue('');
       
       // Animation & Focus
@@ -95,7 +98,6 @@ const AccountsScreen: React.FC<AccountsScreenProps> = ({ accounts, expenses, onC
       const targetBalance = parseFloat(newBalanceValue.replace(',', '.'));
 
       if (isNaN(targetBalance)) {
-          // Maybe show error or just return
           return;
       }
 
@@ -107,12 +109,13 @@ const AccountsScreen: React.FC<AccountsScreenProps> = ({ accounts, expenses, onC
       }
 
       // Create Adjustment Transaction
+      // Use 'adjustment' type so it doesn't affect Income/Expense reports
+      // Pass signed diff as amount directly
       const adjustment: Omit<Expense, 'id'> = {
-          amount: Math.abs(diff),
-          type: diff > 0 ? 'income' : 'expense',
+          amount: diff, 
+          type: 'adjustment',
           description: 'Rettifica manuale saldo',
           date: new Date().toISOString().split('T')[0],
-          // Important: set time to current time to appear at end of day list if sorted
           time: new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
           category: 'Altro', 
           accountId: editingAccountId,
