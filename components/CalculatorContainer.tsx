@@ -1,6 +1,6 @@
 
 // CalculatorContainer.tsx
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Expense, Account } from '../types';
 import CalculatorInputScreen from './CalculatorInputScreen';
 import TransactionDetailPage from './TransactionDetailPage';
@@ -175,37 +175,63 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
     onSubmit(data);
   }, [isSubmitting, onSubmit]);
 
+  const currentTransform = useMemo(() => {
+      let base = view === 'calculator' ? 0 : -50;
+      let shift = 0;
+
+      if (isSwiping) {
+          shift = progress * 50;
+          if (view === 'calculator') {
+              if (shift > 0) shift = 0;
+              if (formData.type === 'transfer' && shift < 0) shift = 0;
+          } else {
+              if (shift < 0) shift = 0;
+          }
+      }
+      
+      return `translateX(${base + shift}%)`;
+  }, [view, isSwiping, progress, formData.type]);
+
   if (!isOpen && !isAnimating) return null;
 
   return (
     <div
       ref={containerRef}
-      className={`fixed inset-0 z-[5000] flex flex-col bg-slate-100 transition-transform duration-300 ease-in-out ${isAnimating ? 'translate-y-0' : 'translate-y-full'}`}
+      className={`fixed inset-0 z-[5000] bg-slate-100 transition-transform duration-300 ease-in-out ${isAnimating ? 'translate-y-0' : 'translate-y-full'}`}
       {...tapBridgeHandlers}
     >
-      {view === 'calculator' ? (
-        <CalculatorInputScreen
-          onClose={onClose}
-          onSubmit={handleSubmit}
-          accounts={accounts}
-          formData={formData}
-          onFormChange={handleFormChange}
-          onMenuStateChange={onMenuStateChange}
-          isDesktop={isDesktop}
-          onNavigateToDetails={() => navigateTo('details')}
-        />
-      ) : (
-        <TransactionDetailPage
-          formData={formData}
-          onFormChange={handleFormChange}
-          accounts={accounts}
-          onClose={() => navigateTo('calculator')}
-          onSubmit={handleSubmit}
-          isDesktop={isDesktop}
-          onMenuStateChange={onMenuStateChange}
-          dateError={dateError}
-        />
-      )}
+      <div 
+        className="flex flex-row w-[200%] h-full will-change-transform"
+        style={{ 
+            transform: currentTransform,
+            transition: isSwiping ? 'none' : 'transform 0.12s ease-out'
+        }}
+      >
+        <div className="w-1/2 h-full shrink-0 relative">
+            <CalculatorInputScreen
+              onClose={onClose}
+              onSubmit={handleSubmit}
+              accounts={accounts}
+              formData={formData}
+              onFormChange={handleFormChange}
+              onMenuStateChange={onMenuStateChange}
+              isDesktop={isDesktop}
+              onNavigateToDetails={() => navigateTo('details')}
+            />
+        </div>
+        <div className="w-1/2 h-full shrink-0 relative">
+            <TransactionDetailPage
+              formData={formData}
+              onFormChange={handleFormChange}
+              accounts={accounts}
+              onClose={() => navigateTo('calculator')}
+              onSubmit={handleSubmit}
+              isDesktop={isDesktop}
+              onMenuStateChange={onMenuStateChange}
+              dateError={dateError}
+            />
+        </div>
+      </div>
     </div>
   );
 };
