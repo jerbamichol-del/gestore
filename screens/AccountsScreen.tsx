@@ -10,6 +10,7 @@ import { ChevronDownIcon } from '../components/icons/ChevronDownIcon';
 import { ArrowRightIcon } from '../components/icons/ArrowRightIcon';
 import { CheckIcon } from '../components/icons/CheckIcon';
 import { TrashIcon } from '../components/icons/TrashIcon';
+import { ArrowsUpDownIcon } from '../components/icons/ArrowsUpDownIcon';
 import { parseLocalYYYYMMDD } from '../utils/date';
 import { useTapBridge } from '../hooks/useTapBridge';
 import ConfirmationModal from '../components/ConfirmationModal';
@@ -22,6 +23,10 @@ interface AccountsScreenProps {
   onDeleteTransaction?: (id: string) => void;
   onDeleteTransactions?: (ids: string[]) => void;
 }
+
+// Separati i tipi per permettere la combinazione
+type SortOption = 'date' | 'amount-desc' | 'amount-asc';
+type FilterOption = 'all' | 'incoming' | 'outgoing';
 
 const ACTION_WIDTH = 72;
 
@@ -258,7 +263,30 @@ const AccountsScreen: React.FC<AccountsScreenProps> = ({ accounts, expenses, onC
   const [selectedTransferIds, setSelectedTransferIds] = useState<Set<string>>(new Set());
   const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
 
+  // State for Sorting & Filtering (Separated)
+  const [sortOption, setSortOption] = useState<SortOption>('date');
+  const [filterOption, setFilterOption] = useState<FilterOption>('all');
+  
+  const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
+  const sortMenuRef = useRef<HTMLDivElement>(null);
+  const sortButtonRef = useRef<HTMLButtonElement>(null);
+
   const isSelectionMode = selectedTransferIds.size > 0;
+
+  // Chiudi il menu se si clicca fuori
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+        if (isSortMenuOpen && 
+            sortMenuRef.current && 
+            !sortMenuRef.current.contains(event.target as Node) &&
+            sortButtonRef.current &&
+            !sortButtonRef.current.contains(event.target as Node)) {
+            setIsSortMenuOpen(false);
+        }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isSortMenuOpen]);
 
   const accountBalances = useMemo(() => {
     const balances: Record<string, number> = {};
@@ -316,13 +344,34 @@ const AccountsScreen: React.FC<AccountsScreenProps> = ({ accounts, expenses, onC
         .slice(0, 3);
   }, [expenses]);
 
-  // Calculate transfers for the specific account being edited
+  // Calculate transfers for the specific account being edited with filtering
   const accountSpecificTransfers = useMemo(() => {
       if (!editingAccountId) return [];
-      return expenses
-        .filter(e => e.type === 'transfer' && (e.accountId === editingAccountId || e.toAccountId === editingAccountId))
-        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [expenses, editingAccountId]);
+      
+      let filtered = expenses.filter(e => 
+          e.type === 'transfer' && 
+          (e.accountId === editingAccountId || e.toAccountId === editingAccountId)
+      );
+
+      // 1. Filtering Logic
+      if (filterOption === 'incoming') {
+          filtered = filtered.filter(e => e.toAccountId === editingAccountId);
+      } else if (filterOption === 'outgoing') {
+          filtered = filtered.filter(e => e.accountId === editingAccountId);
+      }
+
+      // 2. Sorting Logic
+      return filtered.sort((a, b) => {
+          if (sortOption === 'amount-desc') {
+              return b.amount - a.amount;
+          }
+          if (sortOption === 'amount-asc') {
+              return a.amount - b.amount;
+          }
+          // Default: Date Descending
+          return new Date(b.date).getTime() - new Date(a.date).getTime();
+      });
+  }, [expenses, editingAccountId, sortOption, filterOption]);
 
   // --- Handlers for Balance Modification ---
 
@@ -334,6 +383,8 @@ const AccountsScreen: React.FC<AccountsScreenProps> = ({ accounts, expenses, onC
       setNewBalanceValue('');
       setOpenTransferId(null);
       setSelectedTransferIds(new Set());
+      setSortOption('date'); // Reset sorting
+      setFilterOption('all'); // Reset filtering
       
       // Animation & Focus
       setTimeout(() => setIsModalAnimating(true), 10);
@@ -423,14 +474,26 @@ const AccountsScreen: React.FC<AccountsScreenProps> = ({ accounts, expenses, onC
       }
   };
 
+  const handleSortSelect = (option: SortOption) => {
+      setSortOption(option);
+      setIsSortMenuOpen(false);
+  };
+
+  const handleFilterSelect = (option: FilterOption) => {
+      setFilterOption(option);
+      setIsSortMenuOpen(false);
+  };
+
   const editingAccount = accounts.find(a => a.id === editingAccountId);
+  
+  const isFilterActive = sortOption !== 'date' || filterOption !== 'all';
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-100 flex flex-col animate-fade-in-up">
       <header className="sticky top-0 z-20 flex items-center gap-4 p-4 bg-white/80 backdrop-blur-sm shadow-sm h-[60px]">
         {isSelectionMode && !editingAccountId ? (
             <>
-                <button onClick={handleCancelSelection} className="p-2 -ml-2 rounded-full hover:bg-slate-200 transition-colors text-slate-600" aria-label="Annulla selezione"><ArrowLeftIcon className="w-6 h-6" /></button>
+                <button onClick={handleCancelSelection} className="p-2 -ml-2 rounded-full hover:bg-slate-100 text-slate-600 transition-colors" aria-label="Annulla selezione"><ArrowLeftIcon className="w-6 h-6" /></button>
                 <h1 className="text-xl font-bold text-indigo-800 flex-1">{selectedTransferIds.size} Selezionati</h1>
                 <button onClick={handleBulkDeleteClick} className="p-2 rounded-full hover:bg-red-100 text-red-600 transition-colors" aria-label="Elimina selezionati"><TrashIcon className="w-6 h-6" /></button>
             </>
@@ -471,18 +534,6 @@ const AccountsScreen: React.FC<AccountsScreenProps> = ({ accounts, expenses, onC
                             {recentTransfers.map(t => {
                                 const fromAcc = accounts.find(a => a.id === t.accountId)?.name || '???';
                                 const toAcc = accounts.find(a => a.id === t.toAccountId)?.name || '???';
-                                // In the main card, transfers are displayed somewhat simply. 
-                                // Implementing full swipe/select logic here might be complex due to the dark background.
-                                // For consistency, let's keep it simple here or apply similar logic but adapted for dark theme.
-                                // Given the requirement, let's allow selection but keep the simplified view for now, 
-                                // or better, use the SwipableTransferRow but styled for this container? 
-                                // The requirement says "maintain consistency". Using the standard white rows here might look odd.
-                                // Let's stick to the current view but make it selectable if needed, OR redirect users to manage transfers inside accounts.
-                                // However, to fulfill "selection in transfer sections", let's make these rows swipable/selectable too.
-                                // But they need to look good on indigo bg. Let's use a modified SwipableTransferRow or just list them.
-                                // To avoid breaking the design, I'll keep this section as is (read-only/summary) or simple swipe. 
-                                // Actually, standard practice for "widgets" is read-only. Real management happens in the detail view. 
-                                // BUT, if I must:
                                 return (
                                     <div key={t.id} className="flex justify-between items-center text-sm">
                                         <div className="flex flex-col">
@@ -540,7 +591,7 @@ const AccountsScreen: React.FC<AccountsScreenProps> = ({ accounts, expenses, onC
             className={`fixed inset-0 z-[60] bg-white flex flex-col transition-all duration-300 ${isModalAnimating ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}
             onClick={(e) => { e.stopPropagation(); if(openTransferId) setOpenTransferId(null); }}
           >
-              <div className="flex justify-between items-center p-4 border-b border-slate-100 bg-white sticky top-0 z-10">
+              <div className="flex justify-between items-center p-4 border-b border-slate-100 bg-white sticky top-0 z-40">
                   {isSelectionMode ? (
                       <>
                         <button onClick={handleCancelSelection} className="p-2 -ml-2 rounded-full hover:bg-slate-100 text-slate-600 transition-colors">
@@ -556,10 +607,36 @@ const AccountsScreen: React.FC<AccountsScreenProps> = ({ accounts, expenses, onC
                         <button onClick={handleModalClose} className="p-2 -ml-2 rounded-full hover:bg-slate-100 text-slate-500">
                             <XMarkIcon className="w-6 h-6" />
                         </button>
-                        <h3 className="font-bold text-lg text-slate-800">
+                        <h3 className="font-bold text-lg text-slate-800 flex-1 ml-4 text-left">
                             {editingAccount?.name}
                         </h3>
-                        <div className="w-10"></div> 
+                        <div className="relative">
+                            <button
+                                ref={sortButtonRef}
+                                onClick={(e) => { e.stopPropagation(); setIsSortMenuOpen(!isSortMenuOpen); }}
+                                className={`p-2 rounded-full transition-colors ${isFilterActive ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-slate-100 text-slate-600'}`}
+                                aria-label="Ordina e Filtra"
+                            >
+                                <ArrowsUpDownIcon className="w-6 h-6" />
+                            </button>
+                            {isSortMenuOpen && (
+                                <div ref={sortMenuRef} className="absolute top-full right-0 mt-2 w-64 bg-white rounded-lg shadow-xl border border-slate-100 z-50 overflow-hidden animate-fade-in-up" onPointerDown={(e) => e.stopPropagation()}>
+                                    <div className="py-2">
+                                        <p className="px-4 py-1 text-xs font-bold text-slate-400 uppercase tracking-wider">Ordina per</p>
+                                        <button onClick={() => handleSortSelect('date')} className={`w-full text-left px-4 py-2.5 text-sm font-semibold flex items-center justify-between hover:bg-slate-50 ${sortOption === 'date' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-700'}`}><span>Data (Predefinito)</span>{sortOption === 'date' && <CheckIcon className="w-4 h-4" />}</button>
+                                        <button onClick={() => handleSortSelect('amount-desc')} className={`w-full text-left px-4 py-2.5 text-sm font-semibold flex items-center justify-between hover:bg-slate-50 ${sortOption === 'amount-desc' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-700'}`}><span>Importo (Decrescente)</span>{sortOption === 'amount-desc' && <CheckIcon className="w-4 h-4" />}</button>
+                                        <button onClick={() => handleSortSelect('amount-asc')} className={`w-full text-left px-4 py-2.5 text-sm font-semibold flex items-center justify-between hover:bg-slate-50 ${sortOption === 'amount-asc' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-700'}`}><span>Importo (Crescente)</span>{sortOption === 'amount-asc' && <CheckIcon className="w-4 h-4" />}</button>
+                                        
+                                        <div className="border-t border-slate-100 my-2"></div>
+                                        
+                                        <p className="px-4 py-1 text-xs font-bold text-slate-400 uppercase tracking-wider">Filtra per</p>
+                                        <button onClick={() => handleFilterSelect('all')} className={`w-full text-left px-4 py-2.5 text-sm font-semibold flex items-center justify-between hover:bg-slate-50 ${filterOption === 'all' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-700'}`}><span>Tutti</span>{filterOption === 'all' && <CheckIcon className="w-4 h-4" />}</button>
+                                        <button onClick={() => handleFilterSelect('incoming')} className={`w-full text-left px-4 py-2.5 text-sm font-semibold flex items-center justify-between hover:bg-slate-50 ${filterOption === 'incoming' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-700'}`}><span>Solo Entrate</span>{filterOption === 'incoming' && <CheckIcon className="w-4 h-4" />}</button>
+                                        <button onClick={() => handleFilterSelect('outgoing')} className={`w-full text-left px-4 py-2.5 text-sm font-semibold flex items-center justify-between hover:bg-slate-50 ${filterOption === 'outgoing' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-700'}`}><span>Solo Uscite</span>{filterOption === 'outgoing' && <CheckIcon className="w-4 h-4" />}</button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                       </>
                   )}
               </div>
@@ -620,7 +697,14 @@ const AccountsScreen: React.FC<AccountsScreenProps> = ({ accounts, expenses, onC
 
                       {/* Storico Trasferimenti */}
                       <div className="pt-6 border-t border-slate-100">
-                          <h4 className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-4">Storico Trasferimenti</h4>
+                          <div className="flex items-center justify-between mb-4">
+                              <h4 className="text-sm font-bold text-slate-500 uppercase tracking-wide">Storico Trasferimenti</h4>
+                              {isFilterActive && (
+                                  <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-full">
+                                      Filtro attivo
+                                  </span>
+                              )}
+                          </div>
                           
                           {accountSpecificTransfers.length > 0 ? (
                               <div className="space-y-3">
@@ -645,9 +729,14 @@ const AccountsScreen: React.FC<AccountsScreenProps> = ({ accounts, expenses, onC
                                           />
                                       );
                                   })}
+                                  <div className="h-24" />
                               </div>
                           ) : (
-                              <p className="text-center text-slate-400 text-sm py-4">Nessun trasferimento registrato per questo conto.</p>
+                              <p className="text-center text-slate-400 text-sm py-4">
+                                  {!isFilterActive 
+                                    ? 'Nessun trasferimento registrato per questo conto.' 
+                                    : 'Nessun trasferimento corrisponde ai filtri selezionati.'}
+                              </p>
                           )}
                       </div>
                   </div>
