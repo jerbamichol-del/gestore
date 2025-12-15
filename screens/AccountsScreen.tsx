@@ -493,7 +493,7 @@ const AccountsScreen: React.FC<AccountsScreenProps> = ({ accounts, expenses, onC
       <header className="sticky top-0 z-20 flex items-center gap-4 p-4 bg-white/80 backdrop-blur-sm shadow-sm h-[60px]">
         {isSelectionMode && !editingAccountId ? (
             <>
-                <button onClick={handleCancelSelection} className="p-2 -ml-2 rounded-full hover:bg-slate-100 text-slate-600 transition-colors" aria-label="Annulla selezione"><ArrowLeftIcon className="w-6 h-6" /></button>
+                <button onClick={handleCancelSelection} className="p-2 -ml-2 rounded-full hover:bg-slate-200 transition-colors text-slate-600" aria-label="Annulla selezione"><ArrowLeftIcon className="w-6 h-6" /></button>
                 <h1 className="text-xl font-bold text-indigo-800 flex-1">{selectedTransferIds.size} Selezionati</h1>
                 <button onClick={handleBulkDeleteClick} className="p-2 rounded-full hover:bg-red-100 text-red-600 transition-colors" aria-label="Elimina selezionati"><TrashIcon className="w-6 h-6" /></button>
             </>
@@ -620,7 +620,7 @@ const AccountsScreen: React.FC<AccountsScreenProps> = ({ accounts, expenses, onC
                                 <ArrowsUpDownIcon className="w-6 h-6" />
                             </button>
                             {isSortMenuOpen && (
-                                <div ref={sortMenuRef} className="absolute top-full right-0 mt-2 w-64 bg-white rounded-lg shadow-xl border border-slate-100 z-50 overflow-hidden animate-fade-in-up" onPointerDown={(e) => e.stopPropagation()}>
+                                <div ref={sortMenuRef} className="absolute top-full right-0 mt-2 w-52 bg-white rounded-lg shadow-xl border border-slate-100 z-50 overflow-hidden animate-fade-in-up" onPointerDown={(e) => e.stopPropagation()}>
                                     <div className="py-2">
                                         <p className="px-4 py-1 text-xs font-bold text-slate-400 uppercase tracking-wider">Ordina per</p>
                                         <button onClick={() => handleSortSelect('date')} className={`w-full text-left px-4 py-2.5 text-sm font-semibold flex items-center justify-between hover:bg-slate-50 ${sortOption === 'date' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-700'}`}><span>Data (Predefinito)</span>{sortOption === 'date' && <CheckIcon className="w-4 h-4" />}</button>
