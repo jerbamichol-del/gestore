@@ -261,8 +261,10 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
       
       if (nav.isFormOpen) {
           window.history.back();
+      } else if (nav.isCalculatorContainerOpen) {
+          nav.closeModalWithHistory();
       } else if (nav.isAccountsScreenOpen) {
-          // Do nothing, balance adjustment
+          // Do nothing, balance adjustment logic handles its own close
       } else {
           nav.forceNavigateHome();
       }
@@ -440,6 +442,8 @@ const App: React.FC<{ onLogout: () => void; currentEmail: string }> = ({ onLogou
             expenses={expenses || []}
             onClose={nav.closeModalWithHistory}
             onAddTransaction={handleAddExpense}
+            onDeleteTransaction={handleDeleteRequest}
+            onDeleteTransactions={(ids) => { setExpenses(prev => (prev || []).filter(e => !ids.includes(e.id))); }}
           />
       )}
       
