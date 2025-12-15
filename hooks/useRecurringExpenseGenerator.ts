@@ -1,5 +1,5 @@
 
-import { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { Expense } from '../types';
 import { parseLocalYYYYMMDD, toYYYYMMDD } from '../utils/date';
 
