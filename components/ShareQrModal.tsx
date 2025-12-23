@@ -9,8 +9,16 @@ interface ShareQrModalProps {
 
 const ShareQrModal: React.FC<ShareQrModalProps> = ({ isOpen, onClose }) => {
   const [isAnimating, setIsAnimating] = useState(false);
-  // Legge l'URL attuale del browser per generare il QR
-  const url = typeof window !== 'undefined' ? window.location.href : '';
+  const [showNativeQr, setShowNativeQr] = useState(false);
+  
+  // URL PWA (attuale)
+  const pwaUrl = typeof window !== 'undefined' ? window.location.href : '';
+  
+  // URL APK da GitHub Releases (sempre l'ultima versione)
+  const apkUrl = 'https://github.com/jerbamichol-del/gestore-capacitor/releases/latest/download/gestore-spese.apk';
+  
+  // URL da mostrare nel QR
+  const qrUrl = showNativeQr ? apkUrl : pwaUrl;
 
   useEffect(() => {
     if (isOpen) {
@@ -40,18 +48,68 @@ const ShareQrModal: React.FC<ShareQrModalProps> = ({ isOpen, onClose }) => {
             <XMarkIcon className="w-6 h-6" />
           </button>
         </div>
+
+        {/* Toggle PWA / APK */}
+        <div className="px-6 pt-6 flex gap-2">
+          <button
+            onClick={() => setShowNativeQr(false)}
+            className={`flex-1 py-2.5 px-4 rounded-lg font-medium text-sm transition-all ${
+              !showNativeQr
+                ? 'bg-indigo-600 text-white shadow-md'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+          >
+            📱 Web App (PWA)
+          </button>
+          <button
+            onClick={() => setShowNativeQr(true)}
+            className={`flex-1 py-2.5 px-4 rounded-lg font-medium text-sm transition-all ${
+              showNativeQr
+                ? 'bg-indigo-600 text-white shadow-md'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+          >
+            🤖 App Nativa (APK)
+          </button>
+        </div>
+
         <div className="p-8 flex flex-col items-center justify-center space-y-6">
-            <div className="p-4 bg-white border-2 border-slate-100 rounded-xl shadow-sm">
-                <QRCode 
-                    value={url} 
-                    size={200}
-                    style={{ height: "auto", maxWidth: "100%", width: "100%" }}
-                    viewBox={`0 0 256 256`}
-                />
+          <div className="p-4 bg-white border-2 border-slate-100 rounded-xl shadow-sm">
+            <QRCode
+              value={qrUrl}
+              size={200}
+              style={{ height: "auto", maxWidth: "100%", width: "100%" }}
+              viewBox={`0 0 256 256`}
+            />
+          </div>
+          
+          {showNativeQr ? (
+            <div className="text-center space-y-2">
+              <p className="text-slate-800 font-semibold text-sm">
+                📥 Scarica l'app nativa Android
+              </p>
+              <p className="text-slate-600 text-xs leading-relaxed">
+                Scansiona per scaricare l'APK.<br />
+                <span className="text-slate-500">Abilita "Installa da fonti sconosciute" se richiesto.</span>
+              </p>
             </div>
+          ) : (
             <p className="text-center text-slate-600 text-sm">
-                Scansiona questo codice per aprire e installare l'app su un altro dispositivo.
+              Scansiona questo codice per aprire e installare l'app web su un altro dispositivo.
             </p>
+          )}
+
+          {/* Link diretto sotto il QR */}
+          <div className="w-full pt-4 border-t border-slate-100">
+            <a
+              href={qrUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block w-full py-2.5 px-4 bg-slate-50 hover:bg-slate-100 text-slate-700 text-center text-sm font-medium rounded-lg transition-colors"
+            >
+              {showNativeQr ? '📥 Download APK' : '🌐 Apri Link'}
+            </a>
+          </div>
         </div>
       </div>
     </div>
