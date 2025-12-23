@@ -1,4 +1,3 @@
-
 // CalculatorContainer.tsx
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Expense, Account } from '../types';
@@ -197,7 +196,7 @@ const CalculatorContainer: React.FC<CalculatorContainerProps> = ({
   return (
     <div
       ref={containerRef}
-      className={`fixed inset-0 z-[5000] bg-slate-100 transition-transform duration-300 ease-in-out ${isAnimating ? 'translate-y-0' : 'translate-y-full'}`}
+      className={`fixed inset-0 z-[5000] bg-slate-100 transition-transform duration-300 ease-in-out pb-[env(safe-area-inset-bottom)] ${isAnimating ? 'translate-y-0' : 'translate-y-full'}`}
       {...tapBridgeHandlers}
     >
       <div 
