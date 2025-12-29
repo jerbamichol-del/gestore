@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Apri Gestore Spese</title>
+    <style>
+      body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:0;padding:24px;background:#0f172a;color:#e2e8f0}
+      .card{max-width:520px;margin:0 auto;background:#111827;border:1px solid #334155;border-radius:16px;padding:18px}
+      h1{font-size:18px;margin:0 0 8px}
+      p{margin:8px 0;line-height:1.45;color:#cbd5e1}
+      .btn{display:inline-block;margin-top:10px;padding:12px 14px;border-radius:12px;background:#4f46e5;color:#fff;text-decoration:none;font-weight:700}
+      .btn.secondary{background:#334155}
+      code{word-break:break-all;background:#0b1220;border:1px solid #1f2a44;padding:10px;border-radius:10px;display:block;color:#e2e8f0}
+      .muted{font-size:12px;color:#94a3b8}
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Sto aprendo l’app…</h1>
+      <p>Se l’app è installata, si aprirà automaticamente per reimpostare il PIN.</p>
+      <p class="muted">Se non succede nulla, usa il pulsante “Apri app” qui sotto (o copia il link).</p>
+
+      <div id="fallback" style="display:none">
+        <a id="openApp" class="btn" href="#">Apri app</a>
+        <a id="copyLink" class="btn secondary" href="#">Copia link</a>
+        <p class="muted" style="margin-top:12px">Link usato:</p>
+        <code id="shownLink"></code>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const params = new URLSearchParams(location.search);
+        const resetToken = params.get('resetToken') || '';
+        const email = params.get('email') || '';
+
+        // Link https “canonical” (serve a mantenere compatibilità con l’handler già presente in AuthGate)
+        const httpsUrl = 'https://jerbamichol-del.github.io/gestore/?resetToken=' + encodeURIComponent(resetToken) +
+          '&email=' + encodeURIComponent(email);
+
+        // Intent URL: forza l’apertura dell’app Android specificando package
+        const intentUrl = 'intent://jerbamichol-del.github.io/gestore/?resetToken=' + encodeURIComponent(resetToken) +
+          '&email=' + encodeURIComponent(email) +
+          '#Intent;scheme=https;package=com.gestore.spese;end';
+
+        const fallback = document.getElementById('fallback');
+        const openApp = document.getElementById('openApp');
+        const copyLink = document.getElementById('copyLink');
+        const shownLink = document.getElementById('shownLink');
+
+        shownLink.textContent = intentUrl;
+        openApp.setAttribute('href', intentUrl);
+
+        copyLink.addEventListener('click', async (e) => {
+          e.preventDefault();
+          try {
+            await navigator.clipboard.writeText(intentUrl);
+            copyLink.textContent = 'Copiato';
+            setTimeout(() => (copyLink.textContent = 'Copia link'), 1200);
+          } catch {
+            // fallback: prompt
+            window.prompt('Copia questo link:', intentUrl);
+          }
+        });
+
+        // Tentativo automatico: prima intent://
+        // Se il browser lo blocca, mostriamo UI di fallback.
+        let didHide = false;
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'hidden') didHide = true;
+        });
+
+        // Mostra fallback dopo un attimo se non siamo usciti (app aperta)
+        setTimeout(() => {
+          if (!didHide) fallback.style.display = 'block';
+        }, 1200);
+
+        // Avvio automatico
+        try {
+          window.location.href = intentUrl;
+        } catch {
+          // Se intent:// non è gestibile, proviamo https (può aprire l’app grazie agli intent-filter)
+          window.location.href = httpsUrl;
+          setTimeout(() => {
+            if (!didHide) fallback.style.display = 'block';
+          }, 1200);
+        }
+      })();
+    </script>
+  </body>
+</html>
